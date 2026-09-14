@@ -89,6 +89,14 @@ export type ColumnResizePolicy = "unconstrained" | "all-columns" | "last-column"
   | "subsequent-columns" | "flex-next-column" | "flex-last-column";
 
 export interface TableViewOptions<T = unknown> {
+  /** Stable, unique entity identity. Preserves loaded selection/focus across accepted remote
+   * replacements and local resets. Duplicate or currently unloaded keys are not guessed or fetched.
+   */
+  readonly rowKey?: (row: T) => unknown;
+  /** Runs once after an accepted row request is applied to a measurable browser viewport. */
+  readonly onScrollTo?: (absoluteIndex: number) => void;
+  /** Runs once after an accepted column request is applied; index uses the then-current visible order. */
+  readonly onScrollToColumn?: (visibleColumnIndex: number) => void;
   /** Optional column chooser above the header. Requires a surrounding viewport. Default false. */
   readonly tableMenuButtonVisible?: Reactive<boolean>;
   /** Trigger text and menu accessible label. Default Columns. */
@@ -223,6 +231,9 @@ export function tableView<T, Q = unknown>(
       columnMenuText: options.columnMenuText,
       columnResizePolicy: options.columnResizePolicy,
       selectionMode: options.selectionMode,
+      rowKey: options.rowKey,
+      onScrollTo: options.onScrollTo,
+      onScrollToColumn: options.onScrollToColumn,
       row: options.row
         ? (row: Omit<TableRowContext<T>, "renderCells">, self: ComponentHandle, scope: ScopeHandle,
            cells: (scope: ScopeHandle) => void) => withScope(scope, self, () => options.row!({

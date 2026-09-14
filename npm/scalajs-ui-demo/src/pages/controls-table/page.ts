@@ -119,6 +119,7 @@ export function controlsTablePage(): void {
           column(translated("Year").get, (book) => text(String(book.year)), { prefWidth: 100, minWidth: 70, maxWidth: 300, sortable: true, sortKey: "year" }),
         ],
         {
+          rowKey: (book) => book.title,
           rowHeight: 40,
           tableMenuButtonVisible: true,
           columnMenuText: translated("Columns"),

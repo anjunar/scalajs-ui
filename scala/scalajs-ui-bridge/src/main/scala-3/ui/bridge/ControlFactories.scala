@@ -336,6 +336,19 @@ private[bridge] object TableViewFactory extends ComponentFactory {
           }
         )
       }
+      options.get("rowKey").foreach { callback =>
+        val key = callback.asInstanceOf[js.Function1[js.Any, js.Any]]
+        TableView.rowKey_=[js.Any](item => key(item))
+      }
+      options.get("onScrollTo").foreach { callback =>
+        val handler = callback.asInstanceOf[js.Function1[Int, Unit]]
+        TableView.onScrollTo[js.Any](index => handler(index))
+      }
+      options.get("onScrollToColumn").foreach { callback =>
+        val handler = callback.asInstanceOf[js.Function1[Int, Unit]]
+        val table   = summon[TableView[js.Any]]
+        TableView.onScrollToColumn[js.Any](column => handler(table.getVisibleLeafIndex(column)))
+      }
 
       columns.foreach { col =>
         TableColumn.column[js.Any, js.Any](col.text) {

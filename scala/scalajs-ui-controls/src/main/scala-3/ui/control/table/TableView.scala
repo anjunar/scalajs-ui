@@ -47,6 +47,10 @@ final class TableView[S] private (
 
   val columns: ListProperty[TableColumn[S, ?]]                          = new TableColumnList(this)
   val rowFactoryProperty: Property[Option[TableView[S] => TableRow[S]]] = Property(None)
+  /** Optional stable entity identity used to restore selection and focus after a source reset.
+    * Keys must be unique in a result. Resolution scans loaded values only and never fetches gaps.
+    */
+  val rowKeyProperty: Property[Option[S => Any]]                        = Property(None)
   private val rowRendererRevisionProperty                               = Property(0)
   private[table] val visibleColumns = ListProperty[TableColumn[S, ?]]()
   val visibleLeafColumns: ReadOnlyProperty[Vector[TableColumn[S, ?]]] =
@@ -75,6 +79,8 @@ final class TableView[S] private (
     selectionModel.selectedIndicesProperty
   val selectedItemsProperty: ReadOnlyProperty[Vector[S]] = selectionModel.selectedItemsProperty
   val rowDoubleClickHandlerProperty: Property[Option[S => Unit]] = Property(None)
+  val onScrollToProperty: Property[Option[Int => Unit]]           = Property(None)
+  val onScrollToColumnProperty: Property[Option[TableColumn[S, ?] => Unit]] = Property(None)
   val headerRowsProperty: Property[Int]                          = Property(0)
 
   private final class VisibleRow(val index: Int, val item: Option[S])
@@ -267,6 +273,7 @@ final class TableView[S] private (
             scrollLeftProperty.set(
               viewport.scrollLeft
             ) // Includes native clamping; sync header now.
+            onScrollToColumnProperty.get.foreach(_(column))
           }
       }
 
@@ -294,6 +301,7 @@ final class TableView[S] private (
             recomputeVisible() // Also loads a missing range when the offset did not change.
             viewport.scrollTop = next
             scrollTopProperty.set(viewport.scrollTop) // Keep the model in sync with DOM clamping.
+            onScrollToProperty.get.foreach(_(index))
           }
         }
       }
@@ -334,7 +342,9 @@ final class TableView[S] private (
 
   override protected def handleRemoteItemsChange(change: RemoteListChange[S]): Unit = {
     change match {
-      case RemoteListChange.Reset()            => clearSelection(); focusModel.focus(-1)
+      case RemoteListChange.Reset()            =>
+        selectionModel.reconcileReset(allowReferenceFallback = false)
+        focusModel.reconcileReset(allowReferenceFallback = false)
       case RemoteListChange.Structural(change) =>
         selectionModel.reconcile(change); focusModel.reconcile(change)
       case RemoteListChange.RangeLoaded(_, _) => ()
@@ -1071,6 +1081,10 @@ object TableView {
   def rowFactory_=[S](using table: TableView[S])(factory: TableView[S] => TableRow[S]): Unit =
     table.rowFactoryProperty.set(Option(factory))
 
+  def rowKey[S](using table: TableView[S]): Option[S => Any] = table.rowKeyProperty.get
+  def rowKey_=[S](using table: TableView[S])(key: S => Any): Unit =
+    table.rowKeyProperty.set(Option(key))
+
   def rowHeight(using table: TableView[?]): Double                = table.rowHeightProperty.get
   def rowHeight_=(value: Double)(using table: TableView[?]): Unit =
     table.rowHeightProperty.set(value)
@@ -1138,6 +1152,12 @@ object TableView {
 
   def onRowDoubleClick[S](handler: S => Unit)(using table: TableView[S]): Unit =
     table.setRowDoubleClickHandler(handler)
+
+  def onScrollTo[S](handler: Int => Unit)(using table: TableView[S]): Unit =
+    table.onScrollToProperty.set(Option(handler))
+
+  def onScrollToColumn[S](handler: TableColumn[S, ?] => Unit)(using table: TableView[S]): Unit =
+    table.onScrollToColumnProperty.set(Option(handler))
 
   def columns[S](using table: TableView[S]): ListProperty[TableColumn[S, ?]] = table.columns
 }

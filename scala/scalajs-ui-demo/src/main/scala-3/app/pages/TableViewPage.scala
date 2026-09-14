@@ -167,6 +167,7 @@ object TableViewPage {
 
               table = tableView[Book](books) {
                 style { height = "100%" }
+                rowKey = _.title
                 rowHeight = 44.0
                 crawlable = true
                 crawlId = "table"

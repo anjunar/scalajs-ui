@@ -46,7 +46,23 @@ final class TableFocusModel[S] private[table] (table: TableView[S]) {
       case ListDataSource.Patch(from, removed, inserted, _) =>
         splice(from, removed.length, inserted.length)
       case ListDataSource.Clear(_, _) => -1
-      case ListDataSource.Reset(_)    =>
+      case ListDataSource.Reset(_)    => resetIndex(old, allowReferenceFallback = true)
+      case _                          => old.index
+    }
+    focus(next)
+  }
+
+  private[table] def reconcileReset(allowReferenceFallback: Boolean): Unit =
+    if (!table.isDisposed) focus(resetIndex(state.get, allowReferenceFallback))
+
+  private def resetIndex(old: State, allowReferenceFallback: Boolean): Int =
+    table.rowKeyProperty.get match {
+      case Some(rowKey) =>
+        old.item
+          .flatMap(TableRowIdentity.keyOf(_, rowKey))
+          .flatMap(key => TableRowIdentity.locate(table.items, rowKey, Set(key)).get(key))
+          .getOrElse(-1)
+      case None if allowReferenceFallback =>
         // Preserve only a unique reference; equal records and duplicate occurrences are ambiguous.
         old.item.fold(-1) { item =>
           var found = -1
@@ -62,8 +78,6 @@ final class TableFocusModel[S] private[table] (table: TableView[S]) {
           }
           found
         }
-      case _ => old.index
+      case None => -1
     }
-    focus(next)
-  }
 }

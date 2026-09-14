@@ -154,7 +154,7 @@ describe("typechecking a consumer", () => {
       "  return renderToString(() => {",
       "    const rows = listProperty<Row>([{ name: \"a\" }]);",
       "    tabs([tab(\"One\", () => div(() => text(\"one\")))]);",
-      "    const options: TableViewOptions<Row> = { crawlable: true, crawlId: \"t\", row: (row: TableRowContext<Row>) => { const name: string | undefined = row.item.get?.name; row.renderCells(); } };",
+      "    const options: TableViewOptions<Row> = { crawlable: true, crawlId: \"t\", rowKey: row => row.name, row: (row: TableRowContext<Row>) => { const name: string | undefined = row.item.get?.name; row.renderCells(); } };",
       "    const table: TableViewHandle<Row> = tableView(rows, columns, options);",
       "    const menuOptions: TableViewOptions<Row> = { tableMenuButtonVisible: false, columnMenuText: \"Spalten\" };",
       "    if (!table.isDisposed) table.refresh();",

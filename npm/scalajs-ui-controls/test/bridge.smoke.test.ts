@@ -1064,6 +1064,42 @@ describe("table-view", () => {
     } finally { app.dispose(); }
   });
 
+  it("reports only row and column scroll requests that reach the browser viewport", () => {
+    const records = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    const rows: number[] = [];
+    const columns: number[] = [];
+    const root = document.createElement("div");
+    let table!: TableViewHandle<{ id: number }>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(records), [
+        valueColumn("ID", row => row.id, { prefWidth: 200 }),
+        valueColumn("Again", row => row.id, { prefWidth: 200 }),
+      ], {
+        paging: true,
+        columnResizePolicy: "unconstrained",
+        onScrollTo: index => rows.push(index),
+        onScrollToColumn: index => columns.push(index),
+      });
+    });
+    try {
+      const viewport = measureTable(root);
+      Object.defineProperty(viewport, "clientWidth", { value: 250 });
+      table.scrollToIndex(2);
+      table.scrollToIndex(-1);
+      table.scrollToItem(records[0]!);
+      table.scrollToItem({ id: 2 });
+      table.scrollToColumnIndex(1);
+      table.scrollToColumnIndex(9);
+      expect(rows).toEqual([2, 0]);
+      expect(columns).toEqual([1]);
+      app.dispose();
+      table.scrollToIndex(1);
+      table.scrollToColumnIndex(0);
+      expect(rows).toEqual([2, 0]);
+      expect(columns).toEqual([1]);
+    } finally { app.dispose(); }
+  });
+
   it("reveals the containing page and its clipped rows while keeping paging enabled", () => {
     const root = document.createElement("div");
     let table!: TableViewHandle<number>;
@@ -1422,6 +1458,39 @@ describe("table-view", () => {
     } finally {
       app.dispose();
     }
+  });
+
+  it("restores selection and focus by rowKey after a remote sort replacement", async () => {
+    type Row = { id: number; name: string };
+    type Query = { sorting: readonly SortSpec[] };
+    let resolve!: (page: RemotePage<Row, Query>) => void;
+    const source = remoteSource<Row, Query>({
+      initialQuery: { sorting: [] },
+      initial: [{ id: 1, name: "one" }, { id: 2, name: "two" }],
+      totalCount: 2,
+      sortQuery: (query, sorting) => ({ ...query, sorting }),
+      load: () => new Promise(done => { resolve = done; }),
+    });
+    const root = document.createElement("div");
+    let table!: TableViewHandle<Row>;
+    const app = mount(root, () => {
+      table = tableView(source, [valueColumn("Name", row => row.name, {
+        sortable: true, sortKey: "name",
+      })], { paging: true, rowKey: row => row.id });
+    });
+    try {
+      table.selectIndex(1);
+      table.focusIndex(1);
+      expect(table.toggleSort(0)).toBe(true);
+      resolve({
+        items: [{ id: 2, name: "new two" }, { id: 1, name: "new one" }],
+        totalCount: 2,
+      });
+      await vi.waitFor(() => expect(table.selectedIndex.get).toBe(0));
+      expect(table.selectedItem.get?.name).toBe("new two");
+      expect(table.focusedIndex.get).toBe(0);
+      expect(table.focusedItem.get?.name).toBe("new two");
+    } finally { app.dispose(); }
   });
 
   it("preserves a focused editor when another column is hidden or shown", () => {
