@@ -8,6 +8,7 @@ import ui.core.render.{Cursor, SsrCursor}
 import ui.core.state.{ListDataSource, ListProperty}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import scala.collection.mutable
 import scala.scalajs.js
 
 class TableFocusSpec extends AnyFlatSpec with Matchers {
@@ -156,12 +157,77 @@ class TableFocusSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "stop accepting focus operations after disposal" in {
-    val values                   = ListProperty(js.Array("a", "b"))
-    var table: TableView[String] = null
-    mounted(values) { current => table = current; current.focusModel.focus(1) }
+    val values                             = ListProperty(js.Array("a", "b"))
+    var table: TableView[String]           = null
+    var alternate: TableFocusModel[String] = null
+    mounted(values) { current =>
+      table = current
+      alternate = new TableFocusModel(current)
+      current.focusModel.focus(1)
+    }
+    table.focusModel = alternate
+    table.focusModel.focusedIndex shouldBe 1
     table.focusModel.focus(0); table.focusModel.focusPrevious()
     values.clear()
     table.focusedIndexProperty.get shouldBe 1
     table.focusedItemProperty.get shouldBe "b"
+  }
+
+  it should "replace the focus model and keep detached alternates reconciled" in {
+    val values = ListProperty(js.Array("a", "b", "c"))
+    mounted(values) { table =>
+      val original = table.focusModel
+      original.focus(1)
+
+      final class TrackingFocusModel(owner: TableView[String]) extends TableFocusModel(owner) {
+        var calls                            = 0
+        override def focus(index: Int): Unit = {
+          calls += 1
+          super.focus(index)
+        }
+      }
+
+      val replacement = new TrackingFocusModel(table)
+      replacement.focus(2)
+      val observed = mutable.ArrayBuffer.empty[Int]
+      val observer = table.focusedIndexProperty.observeWithoutInitial(observed += _)
+
+      table.focusModel = replacement
+      table.focusModel should be theSameInstanceAs replacement
+      table.focusModelProperty.get should be theSameInstanceAs replacement
+      table.focusedIndexProperty.get shouldBe 2
+      table.focusedItemProperty.get shouldBe "c"
+      observed.last shouldBe 2
+
+      original.focus(0)
+      table.focusedIndexProperty.get shouldBe 2
+      values.insert(0, "before")
+      table.focusedIndexProperty.get shouldBe 3
+      original.focusedIndex shouldBe 1
+
+      table.focusModel = original
+      table.focusedIndexProperty.get shouldBe 1
+      table.focusedItemProperty.get shouldBe "a"
+      replacement.calls shouldBe 1
+      observer.dispose()
+    }
+  }
+
+  it should "reject null and foreign focus models atomically" in {
+    mounted(ListProperty(js.Array("a"))) { table =>
+      val original = table.focusModel
+      an[IllegalArgumentException] should be thrownBy {
+        table.focusModel = null.asInstanceOf[TableFocusModel[String]]
+      }
+      table.focusModel should be theSameInstanceAs original
+
+      mounted(ListProperty(js.Array("other"))) { other =>
+        val foreign = new TableFocusModel(other)
+        an[IllegalArgumentException] should be thrownBy {
+          table.focusModel = foreign
+        }
+        table.focusModel should be theSameInstanceAs original
+      }
+    }
   }
 }

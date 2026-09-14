@@ -278,17 +278,27 @@ private[bridge] object TableViewFactory extends ComponentFactory {
         })
       }
       options.get("selectionMode").foreach { value =>
-        val table = summon[TableView[js.Any]]
-        table.addDisposable(ReactiveBridge.asProperty[String](value).observe { mode =>
+        val table  = summon[TableView[js.Any]]
+        val source = ReactiveBridge.asProperty[String](value)
+        table.addDisposable(source.observe { mode =>
           table.selectionModel.selectionMode = TableViewHandleBridge.parseSelectionMode(mode)
         })
+        table.addDisposable(
+          table.selectionModelProperty.observeWithoutInitial { model =>
+            model.selectionMode = TableViewHandleBridge.parseSelectionMode(source.get)
+          }
+        )
       }
       options.get("cellSelectionEnabled").foreach { value =>
-        val table = summon[TableView[js.Any]]
+        val table  = summon[TableView[js.Any]]
+        val source = ReactiveBridge.asProperty[Boolean](value)
         table.addDisposable(
-          ReactiveBridge
-            .asProperty[Boolean](value)
-            .observe(table.selectionModel.cellSelectionEnabled_=)
+          source.observe(table.selectionModel.cellSelectionEnabled_=)
+        )
+        table.addDisposable(
+          table.selectionModelProperty.observeWithoutInitial { model =>
+            model.cellSelectionEnabled = source.get
+          }
         )
       }
       options

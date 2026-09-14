@@ -1,6 +1,6 @@
 # TableView: Feature-Stand und Implementierungsplan
 
-Stand: 14.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltenbaum/Gruppenheader, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, stabile Zeilenschlüssel, RowFactory, Mehrfachauswahl, Zeilen-/Spaltennavigation samt Ereignissen, Spalten-Resizing, Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung sowie Remote-Mehrspaltensortierung · Referenz: JavaFX 26.
+Stand: 14.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltenbaum/Gruppenheader, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, stabile Zeilenschlüssel, RowFactory, Mehrfach- und Zell-/Rechteckauswahl, austauschbare Selection-/FocusModels, Zeilen-/Spaltennavigation samt Ereignissen, Spalten-Resizing, Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung sowie Remote-Mehrspaltensortierung · Referenz: JavaFX 26.
 
 Dieses Dokument beschreibt, welche Funktionen unsere TableView bereits unterstützt und wie wir die fehlenden Fähigkeiten der JavaFX-TableView ergänzen. Es ist ein Implementierungsplan; als **geplant** bezeichnete Modelle, Methoden und Dateien existieren noch nicht.
 
@@ -77,7 +77,7 @@ Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Er
 
 **Randfälle/Migration:** Wechsel auf Single behält nur den führenden Eintrag. Ein ungültiges `select(index)`/`selectIndex` löscht weiterhin wie bisher die Auswahl (UI-Kompatibilitätsregel); `selectIndices` ignoriert ungültige/duplizierte Indizes, Bereiche werden auf den gültigen Indexraum begrenzt. Ungültige JavaScript-Bereichsgrenzen wie Brüche/NaN werden ignoriert. `selectAll` ist im Single-Modus wirkungslos. Nach Unmount sind Mutationen wirkungslos. Alle abgeleiteten Properties können auch bei unverändertem Einzelwert benachrichtigen; Beobachter lesen stets einen kohärenten Modellzustand.
 
-**Weiter offen:** Austausch eigener SelectionModels, Zell-/Rechteckauswahl, Zellfokus/FocusModel-Austausch und vollständiger zugänglicher Grid-Vertrag. Maus-Mehrfachauswahl ist nicht gleichbedeutend mit abgeschlossener Accessibility-Abnahme. Referenz für Ergebnislisten und Bereichsoperationen: [MultipleSelectionModel, JavaFX 26](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/MultipleSelectionModel.html).
+**Damals weiter offen:** Austausch eigener SelectionModels, Zell-/Rechteckauswahl, Zellfokus/FocusModel-Austausch und vollständiger zugänglicher Grid-Vertrag. Die ersten drei Punkte sind inzwischen umgesetzt; Maus-Mehrfachauswahl ist weiterhin nicht gleichbedeutend mit abgeschlossener Accessibility-Abnahme. Referenz für Ergebnislisten und Bereichsoperationen: [MultipleSelectionModel, JavaFX 26](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/MultipleSelectionModel.html).
 
 ### Implementiert: programmatische Zeilennavigation
 
@@ -131,7 +131,7 @@ Für eigene Inhalte `renderCells` ersetzen oder ergänzen. TypeScript-Beispiel u
 
 | Baustein | Heutige Verantwortung und Befund |
 | --- | --- |
-| [TableView.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableView.scala) | Spaltenliste, feste Zeilenhöhe, Zeilenfenster, einfache Auswahl, Remote-Header-Sortierung und automatische Breitenverteilung. |
+| [TableView.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableView.scala) | Spaltenliste, feste Zeilenhöhe, Zeilenfenster, aktive austauschbare Auswahl-/Fokusmodelle, Remote-Header-Sortierung und automatische Breitenverteilung. |
 | [TableColumn.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableColumn.scala) | Text, bevorzugte Breite, bestehender Zeilenrenderer, beobachtbare Zellwerte, Zellfactory, Tabellenzuordnung, `sortable` und `sortKey`. [TableColumnList.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableColumnList.scala) validiert Listenänderungen vor ihrer Veröffentlichung. |
 | [TableRow.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableRow.scala) | Integrierte RowFactory, lesbarer Zeilenkontext und überschreibbares `renderContent`; optionale Standardzellen reagieren auf Spalten-/Rendereränderungen. Auswahl/Klick, Doppelklick und Lifecycle bleiben zentral. |
 | [TableCell.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableCell.scala) | Integrierter Zellkontext, beobachteter Wert, Default-Text oder eigener Inhalt über `renderContent`, Breitenbindung und Disposal. |
@@ -140,13 +140,13 @@ Für eigene Inhalte `renderCells` ersetzen oder ergänzen. TypeScript-Beispiel u
 | [ItemGeometry.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/virtualized/ItemGeometry.scala) | `FixedRowGeometry` und bereits vorhandene `MeasuredRowGeometry` als Grundlage für variable Zeilenhöhen. |
 | [ListDataSource.scala](scala/scalajs-ui-core/src/main/scala-3/ui/core/state/ListDataSource.scala), [ListProperty.scala](scala/scalajs-ui-core/src/main/scala-3/ui/core/state/ListProperty.scala) | Lesender Datenquellenvertrag und veränderbare lokale Liste. |
 | [RemoteListProperty.scala](scala/scalajs-ui-core/src/main/scala-3/ui/core/remote/RemoteListProperty.scala) | Lückenhaft geladene Daten, Bereichsabfragen, Sortierdeskriptoren und Schutz vor veralteten Ladeantworten. |
-| [TableSelectionModel.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableSelectionModel.scala) | Zentrales Einzel-/Mehrfachauswahlmodell mit kohärenten Ergebnislisten, führendem Eintrag, Shift-Anker und absoluter Datenänderungsabbildung. |
-| [table.ts](npm/scalajs-ui-controls/src/table.ts), [ControlFactories.scala](scala/scalajs-ui-bridge/src/main/scala-3/ui/bridge/ControlFactories.scala), [TableViewHandleBridge.scala](scala/scalajs-ui-bridge/src/main/scala-3/ui/bridge/TableViewHandleBridge.scala) | Deklarative TypeScript-Tabellenoptionen, reaktive Sichtbarkeit/Modus und typisiertes Handle für Einzel-/Mehrfachauswahl, Refresh und Lifecycle. Weitere Modelle und Operationen sind offen. |
+| [TableSelectionModel.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableSelectionModel.scala), [TableFocusModel.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableFocusModel.scala) | Austauschbare und erweiterbare Modelle für Einzel-/Mehrfach-/Zellauswahl sowie unabhängigen Zeilen-/Zellfokus; alle zur Tabelle gehörenden Instanzen folgen Daten- und Spaltenänderungen. |
+| [table.ts](npm/scalajs-ui-controls/src/table.ts), [ControlFactories.scala](scala/scalajs-ui-bridge/src/main/scala-3/ui/bridge/ControlFactories.scala), [TableViewHandleBridge.scala](scala/scalajs-ui-bridge/src/main/scala-3/ui/bridge/TableViewHandleBridge.scala) | Deklarative TypeScript-Tabellenoptionen, reaktive Sichtbarkeit/Modus und typisiertes Handle für Auswahl, Fokus, Navigation, Refresh und Lifecycle. Das Handle folgt einem Scala-seitig ausgetauschten Modell; eigene Modellklassen bleiben eine Scala-API. |
 
 ### Technische Voraussetzungen und Bearbeitungsstand
 
 1. **Zeilenlebensdauer – Scrollfenster behoben:** Der frühere `visibleRowsProperty.setAll(...)`-Reset wurde durch differenzielle Insert-/Remove-/Update-Ereignisse ersetzt. [Foreach.scala](scala/scalajs-ui-core/src/main/scala-3/ui/core/statement/Foreach.scala) behält dadurch überlappende Slots. Datensatzverschiebungen und Sortierpermutationen bleiben gesondert zu lösen.
-2. **Einzelauswahl – korrigiert:** Strukturänderungen erhalten das ausgewählte Vorkommen; Reset erhält ohne `rowKey` nur eindeutig wiedergefundene Instanzen. Index und Item werden gemeinsam normalisiert. Stabile Keys sind vorhanden; allgemeine Permutationsabbildung und Modellaustausch bleiben offen.
+2. **Auswahl/Fokus – korrigiert:** Strukturänderungen erhalten das ausgewählte beziehungsweise fokussierte Vorkommen; Reset erhält ohne `rowKey` nur eindeutig wiedergefundene Instanzen. Index, Item und Zellkoordinate werden gemeinsam normalisiert. Stabile Keys und Modellaustausch sind vorhanden; eine allgemeine Permutationsabbildung bleibt offen.
 3. **Spaltenlebensdauer – behoben:** Alle Listenänderungen durchlaufen Attach/Detach; entfernte Spalten verlieren die Tabellenlistener. Mehrfachzuordnungen werden vor der Mutation abgewiesen.
 4. **Sortierberechtigung – behoben:** Darstellung und `toggleRemoteSort()` verwenden jetzt beide `isRemoteSortable()`.
 5. **Remote-Koordinaten – expliziter Vertrag:** `itemAt(index)` und `observeIndexedChanges` verwenden absolute Positionen. Das ältere `observeChanges` bleibt ein dichter Cache-Ereignisstrom und darf nicht für Tabellenpositionen verwendet werden. Eigene Remote-Quellen müssen den neuen Vertrag implementieren; der Default invalidiert konservativ die Auswahl (siehe 4.3).
@@ -179,12 +179,12 @@ Referenzen: [TableViewSelectionModel](https://openui.io/javadoc/26/javafx.contro
 
 | ID | Funktion | Stand | Umsetzung |
 | --- | --- | --- | --- |
-| S01 | Einzelauswahl, selectedIndex/selectedItem | Teilweise | Zentrales `TableSelectionModel`, kohärenter lesbarer Zustand und Scala-/TypeScript-Operationen vorhanden. Austauschbarkeit des Modells bleibt offen. M2. |
+| S01 | Einzelauswahl, selectedIndex/selectedItem | Vorhanden | Zentrales, austauschbares und erweiterbares `TableSelectionModel`, kohärenter lesbarer Zustand und Scala-/TypeScript-Operationen vorhanden. M2. |
 | S02 | Mehrfachauswahl und beobachtbare Ergebnislisten | Vorhanden | Single/Multiple, selectedIndices/selectedItems, clear/selectAll/selectIndices/selectRange sowie erste/letzte/nächste/vorige Auswahl. Remote-Index-/Item-Semantik ausdrücklich dokumentiert. M2. |
 | S03 | Zellselektion und Bereiche | Vorhanden | `selectedCells`, `cellSelectionEnabled`, Scala-/TypeScript-Zelloperationen, inklusive Rechtecke sowie Ctrl/Cmd-/Shift-Maus- und Tastaturbedienung verwenden stabile `TablePosition`-Koordinaten. M2. |
-| S04 | Eigenständiges FocusModel | Teilweise | Unabhängiges TableFocusModel für Zeilen und stabile Blattspalten mit `TablePosition`, Richtungsoperationen und Daten-/Spaltenabgleich vorhanden. Modellaustausch fehlt. M2. |
+| S04 | Eigenständiges FocusModel | Vorhanden | Unabhängiges, austauschbares und erweiterbares `TableFocusModel` für Zeilen und stabile Blattspalten mit `TablePosition`, Richtungsoperationen und Daten-/Spaltenabgleich. M2. |
 | S05 | Maus-/Tastaturbedienung mit Modifikatoren | Teilweise | Zeilen und Zellen: Klick, Pfeile, Home/End, PageUp/PageDown, Ctrl/Cmd-Fokus bzw. Toggle, Shift-Ankerbereiche/Rechtecke, Space und SelectAll. Umfassende Accessibility-Abnahme fehlt. M2. |
-| S06 | Konsistenz bei Daten-/Spaltenänderungen | Teilweise | Einzel-/Mehrfach- und Zell-/Rechteckauswahl, Shift-Anker sowie Zeilen-/Zellfokus folgen Strukturänderungen; Reset, stabile optionale Keys, Spalten-Reordering/-Visibility, Duplikate, ungeladene Positionen und akzeptierter Querywechsel sind geregelt. Modellaustausch bleibt offen. M0/M2/M3. |
+| S06 | Konsistenz bei Daten-/Spaltenänderungen | Vorhanden | Einzel-/Mehrfach- und Zell-/Rechteckauswahl, Shift-Anker sowie Zeilen-/Zellfokus folgen Strukturänderungen; Reset, stabile optionale Keys, Spalten-Reordering/-Visibility, Duplikate, ungeladene Positionen, akzeptierter Querywechsel und inaktive austauschbare Modelle sind geregelt. M0/M2/M3. |
 
 ### 3.3 Spalten und Header
 
@@ -234,21 +234,21 @@ Referenzen: [Cell-Editierablauf](https://openui.io/javadoc/26/javafx.controls/ja
 | V02 | Variable Zeilenhöhen/fixedCellSize-Semantik | Teilweise | Heutiger Alias setzt nur rowHeight. Gemessene Zeilen ergänzen; positive feste Höhe von variabler Höhe unterscheiden. M6. |
 | V03 | `scrollTo(index/item)`, `onScrollTo` | Vorhanden | Zeilennavigation und Ausführungsbenachrichtigung in Scala/TypeScript, bekannte ungeladene Remote-Positionen, Paging, Header und Hydration vorhanden. M2. |
 | V04 | Horizontales Scrollen und Spaltennavigation | Teilweise | Header-Synchronisation, Policy-abhängiges overflow, Navigation und Ausführungsbenachrichtigung in Scala/TypeScript vorhanden. RTL fehlt. M2/M5. |
-| V05 | Zeilen-/Zellzustände und CSS-Anpassung | Teilweise | selected/odd/even/loading, Zeilen-focused und Zell-focused vorhanden; Zell-selected, editing/disabled und Spaltenstil ergänzen. M2/M4/M6. |
-| V06 | Zugänglicher Tabellen-/Grid-Vertrag | Teilweise | Rollen, Indizes/Zähler, aria-selected, Zeilen-/Zellfokus per vorhandener active-descendant-ID sowie primäres aria-sort, Richtungs-/Prioritätsbeschreibung und aria-busy vorhanden. Zellselektion und umfassende Screenreader-Abnahme fehlen. M2/M5/M6. |
+| V05 | Zeilen-/Zellzustände und CSS-Anpassung | Teilweise | selected/odd/even/loading, Zeilen-/Zell-focused und Zell-selected vorhanden; editing/disabled und Spaltenstil ergänzen. M2/M4/M6. |
+| V06 | Zugänglicher Tabellen-/Grid-Vertrag | Teilweise | Rollen, Indizes/Zähler, aria-selected für Zeilen/Zellen, Zeilen-/Zellfokus per vorhandener active-descendant-ID sowie primäres aria-sort, Richtungs-/Prioritätsbeschreibung und aria-busy vorhanden. Umfassende Screenreader-Abnahme fehlt. M2/M5/M6. |
 | V07 | Angepasste Darstellung, Menüs, Tooltips, RTL | Teilweise | Eigene Zellkomposition vorhanden. Zeilen-/Header-Slots, spiegelbare Navigation und Overlay-Integration vervollständigen. M5/M6. |
 
 ## 4. Wie wir es implementieren
 
-Die folgenden Bausteine beschreiben die Zielarchitektur. `TableSelectionModel`, `TableRow` und `TableCell` sind inzwischen in dem oben abgegrenzten Umfang integriert; die übrigen Modelle bleiben **Entwurfsvorschläge**.
+Die folgenden Bausteine beschreiben die Zielarchitektur. `TableSelectionModel`, `TableFocusModel`, `TableRow`, `TableCell` und Teile des Spalten-/Sortiermodells sind inzwischen in dem oben abgegrenzten Umfang integriert; die übrigen Modelle bleiben **Entwurfsvorschläge**.
 
 ### 4.1 Verantwortung und Modulgrenzen
 
 | Baustein / Zielmodell | Verantwortung |
 | --- | --- |
 | `TableColumnModel[S]` | Spaltenbaum, Ownership, stabile Spaltenidentität, sichtbare Blattliste und Indexabbildung. |
-| `TableSelectionModel[S]` | Implementiert für Modus, Shift-Anker und ausgewählte Zeilen mit lesbaren Ergebnis-Properties. Zellselektion und Modellaustausch bleiben offen. |
-| `TableFocusModel[S]` | Logische Fokusposition unabhängig von Auswahl und gemountetem DOM. |
+| `TableSelectionModel[S]` | Austauschbares, erweiterbares Modell für Modus, Shift-Anker sowie ausgewählte Zeilen/Zellen mit lesbaren Ergebnis-Properties. |
+| `TableFocusModel[S]` | Austauschbares, erweiterbares Modell für die logische Zeilen-/Zellposition unabhängig von Auswahl und gemountetem DOM. |
 | `TableSortModel[S]` | Sortierreihenfolge, Richtungen und Delegation der Sortierschlüssel an die Remote-Abfrage. |
 | `TableEditModel[S]` | Aktive Editiersitzung, Originalwert/Entwurf, Abschluss und Ereignisse. |
 | `TableColumnLayout` / `ColumnResizePolicy` | Seiteneffektfreie Breitenberechnung und Ergebnis pro sichtbarer Blattspalte. |
@@ -370,6 +370,12 @@ Gemountete fokussierte Zellen erhalten eine tabellenlokale Laufzeit-ID und werde
 Scala bietet überladene Zellvarianten von `select`, `clearAndSelect`, `clearSelection` und `isSelected` sowie den an beiden Enden inklusiven rechteckigen `selectRange`. TypeScript spiegelt dies mit `cellSelectionEnabled`, `selectedCells`, `setCellSelectionEnabled`, `selectCell`, `clearAndSelectCell`, `clearCell`, `isCellSelected` und `selectCellRange`. Eindimensionale Zeilenbereiche behalten ihr exklusives Ende. `selectAll` wählt im Mehrfach-Zellmodus den bekannten Zeilenraum mal sichtbare Blattspalten, ohne Remote-Lücken zu laden.
 
 Ein Zellklick wählt im Zellmodus die Zelle; Shift-Klick und Shift+Pfeil erweitern ab einem stabilen Zeilen-/Spaltenanker zu einem Rechteck, Ctrl/Cmd schaltet beziehungsweise bewegt nur den Fokus. Ausgewählte Zellen besitzen `selectedProperty`, `.ui-table-cell-selected` und `aria-selected`. Zeilenänderungen rebasieren jede Zellkoordinate; Reordering behält Spaltenobjekte und veröffentlicht neue sichtbare Indizes, verborgene oder entfernte Blätter löschen nur ihre betroffenen Zellen.
+
+**Umgesetzt im sechzehnten Ausbau – austauschbare Auswahl- und Fokusmodelle:** `TableSelectionModel[S]` und `TableFocusModel[S]` sind öffentlich konstruierbar und ableitbar. `TableView.selectionModelProperty`/`focusModelProperty`, Getter/Setter sowie die gleichnamigen Scala-DSL-Zuweisungen wechseln das aktive Modell. `null` und Modelle einer anderen Tabelle werden atomar abgewiesen; nach Disposal bleibt wie bei den übrigen Tabellenoperationen der letzte Zustand eingefroren.
+
+Jede Modellinstanz gehört dauerhaft genau zu ihrer Konstruktionstabelle. Auch ein aktuell nicht eingesetztes Alternativmodell wird deshalb bei lokalen und absoluten Remote-Strukturänderungen, Resets, Range-Loads, Refresh sowie Spalten-Reordering/-Visibility abgeglichen. Ein späterer Rückwechsel kann keine veralteten Zeilen- oder Spaltenkoordinaten wieder einblenden. Eigene Unterklassen können die öffentlichen Operationen und die geschützten Tabellen-Hooks gezielt überschreiben, ohne eine zweite Zustandsprojektion in `TableView` zu erzeugen.
+
+Alle abgeleiteten Auswahl-/Fokus-Properties, Rows, Cells, CSS-Klassen, ARIA-Attribute, Tastatur-/Pointerbefehle und das TypeScript-Handle folgen dem aktiven Modell. Reaktive TypeScript-Optionen für Auswahlmodus und Zellmodus werden bei einem Scala-seitigen Modellwechsel auf die neue Instanz angewendet; TypeScript selbst installiert keine Scala-Modellklasse. Dafür wurde auch `ReadOnlyProperty.flatMap(...).observeWithoutInitial` korrigiert: Es beobachtet nun sofort das aktuelle innere Property, meldet aber weiterhin keinen künstlichen Startwert, und hängt beim Austausch sauber um.
 
 Ein Modell besitzt den Zustand und veröffentlicht abgeleitete Properties. Die bisherigen ausgewählten Index-/Item-Zugänge werden über klar definierte kompatible Zugriffe angebunden. Keine zyklische Kette aus gegenseitig schreibenden Observern: Properties propagieren hier synchron.
 
@@ -530,9 +536,11 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 - [x] M1: `rowFactory` mit eigener Zeilenkomposition, lesbarem Kontext und TypeScript-Row-Renderer.
 - [x] M1: Spaltenbaum und Blattspaltenmodell sowie TypeScript-Zellwert-Lookups ergänzen.
 - [x] M2: Zell-/Rechteckauswahl, ausgewählte Positionen, Zell-/Zeilenmodus sowie Ctrl/Cmd-/Shift-Bedienung in Scala und TypeScript.
-- [ ] Verbleibendes M2: austauschbare Selection-/FocusModels; anschließend M4 und die offenen M5/M6-Punkte.
+- [x] M2: Austauschbare und erweiterbare Selection-/FocusModels einschließlich Ownership, Rebinding und Abgleich inaktiver Alternativen. M2 ist damit im vereinbarten Umfang abgeschlossen; anschließend M4 und die offenen M5/M6-Punkte.
 
 ## 6. Verifikation
+
+Abnahme des sechzehnten Ausbaus am 14.09.2026: vollständiges Scala-Gate mit **439 Tests**, Bridge-Full-Link und npm-Gates für Controls (79 Integrationstests + 3 Paket-Consumer), Core (114 + 8) sowie Demo (Typecheck, Client-/SSR-Builds, Eine-Runtime-Nachweis und 31 Routen) grün. Fünf neue Tabellenfälle prüfen eigene Unterklassen, Wechselbenachrichtigungen, Zustandsisolation, fortlaufenden Datenabgleich inaktiver Alternativen, Disposal, atomare Ablehnung von `null`/fremden Modellen und die tatsächliche Row-/Cell-/CSS-/ARIA-Umschaltung. Ein Core-Regressionstest sichert das korrekte Abonnieren und Umhängen von `flatMap(...).observeWithoutInitial`.
 
 Abnahme des fünfzehnten Ausbaus am 14.09.2026: vollständiges Scala-Gate mit **433 Tests**, Bridge-Full-Link und npm-Gates für Controls (79 Integrationstests + 3 Paket-Consumer), Core (114 + 8), CSS/Design sowie Demo (Typecheck, Client-/SSR-Builds, Eine-Runtime-Nachweis und 31 Routen) grün. Drei neue Scala-Fälle prüfen Modusprojektion, inklusive Rechtecke, Zeilen-Rebasing, stabile Spaltenidentität bei Reordering/Visibility und Mausanker; der neue Bridge-Fall deckt öffentliche Zelloperationen, unabhängige Snapshots, Pointer-/Tastaturrechtecke und reaktive Modi ab. Der Paket-Consumer kompiliert die vollständige TypeScript-API strikt.
 

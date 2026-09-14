@@ -412,12 +412,18 @@ class TableSelectionSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "leave selection snapshots unchanged after table disposal" in {
-    var saved: TableSelectionModel[String] = null
-    mounted(ListProperty(js.Array("a", "b"))) { table =>
-      saved = table.selectionModel
+    var savedTable: TableView[String]          = null
+    var saved: TableSelectionModel[String]     = null
+    var alternate: TableSelectionModel[String] = null
+    mounted(ListProperty(js.Array("a", "b"))) { current =>
+      savedTable = current
+      saved = current.selectionModel
+      alternate = new TableSelectionModel(current)
       saved.selectionMode = TableSelectionMode.Multiple
       saved.selectAll()
     }
+    savedTable.selectionModel = alternate
+    savedTable.selectionModel should be theSameInstanceAs saved
     saved.clearSelection()
     saved.selectIndices(0)
     saved.clearAndSelect(0)
@@ -572,6 +578,72 @@ class TableSelectionSpec extends AnyFlatSpec with Matchers {
       table.selectedCellsProperty.get.map(position =>
         position.row -> position.column
       ) should not contain (0 -> 0)
+    }
+  }
+
+  it should "replace the selection model and keep every table-owned model reconciled" in {
+    val values = ListProperty(js.Array("a", "b", "c"))
+    mounted(values) { table =>
+      val original = table.selectionModel
+      original.selectionMode = TableSelectionMode.Multiple
+      original.selectIndices(1, 2)
+
+      final class EvenSelectionModel(owner: TableView[String])
+          extends TableSelectionModel[String](owner) {
+        var selectCalls                       = 0
+        override def select(index: Int): Unit = {
+          selectCalls += 1
+          if (index % 2 == 0) super.select(index)
+        }
+      }
+
+      val replacement = new EvenSelectionModel(table)
+      replacement.selectionMode = TableSelectionMode.Multiple
+      replacement.select(0)
+      replacement.select(1)
+      replacement.selectCalls shouldBe 2
+      replacement.selectedIndicesProperty.get shouldBe Vector(0)
+
+      val activeMode = table.selectionModelProperty.flatMap(_.selectionModeProperty)
+      val observed   = mutable.ArrayBuffer.empty[Vector[Int]]
+      val observer   = table.selectedIndicesProperty.observeWithoutInitial(observed += _)
+      table.selectionModel = replacement
+
+      table.selectionModel should be theSameInstanceAs replacement
+      table.selectionModelProperty.get should be theSameInstanceAs replacement
+      activeMode.get shouldBe TableSelectionMode.Multiple
+      table.selectedIndicesProperty.get shouldBe Vector(0)
+      observed.last shouldBe Vector(0)
+
+      // A detached alternate owns its state, but no longer drives the table projection.
+      original.select(0)
+      table.selectedIndicesProperty.get shouldBe Vector(0)
+
+      values.insert(0, "before")
+      table.selectedIndicesProperty.get shouldBe Vector(1)
+      original.selectedIndicesProperty.get shouldBe Vector(1, 2, 3)
+
+      table.selectionModel = original
+      table.selectedIndicesProperty.get shouldBe Vector(1, 2, 3)
+      observer.dispose()
+    }
+  }
+
+  it should "reject null and foreign selection models atomically" in {
+    mounted(ListProperty(js.Array("a"))) { table =>
+      val original = table.selectionModel
+      an[IllegalArgumentException] should be thrownBy {
+        table.selectionModel = null.asInstanceOf[TableSelectionModel[String]]
+      }
+      table.selectionModel should be theSameInstanceAs original
+
+      mounted(ListProperty(js.Array("other"))) { other =>
+        val foreign = new TableSelectionModel(other)
+        an[IllegalArgumentException] should be thrownBy {
+          table.selectionModel = foreign
+        }
+        table.selectionModel should be theSameInstanceAs original
+      }
     }
   }
 }

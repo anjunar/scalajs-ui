@@ -49,13 +49,12 @@ trait ReadOnlyProperty[V] {
 
       override def observeWithoutInitial(observer: T => Unit): Disposable = {
         val composite              = new CompositeDisposable()
-        var currentSub: Disposable = null
+        var currentSub: Disposable = transform(source.get).observeWithoutInitial(observer)
+        composite.add(currentSub)
 
         val mainSub = source.observeWithoutInitial { v =>
-          if (currentSub != null) {
-            currentSub.dispose()
-            composite.remove(currentSub)
-          }
+          currentSub.dispose()
+          composite.remove(currentSub)
           currentSub = transform(v).observe(observer)
           composite.add(currentSub)
         }

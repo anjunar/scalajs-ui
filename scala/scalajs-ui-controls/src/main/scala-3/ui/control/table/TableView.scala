@@ -70,20 +70,67 @@ final class TableView[S] private (
   val columnResizePolicyProperty: Property[ColumnResizePolicy] = Property(
     ColumnResizePolicy.FlexLastColumn
   )
-  private val userColumnWidths                        = mutable.Map.empty[TableColumn[S, ?], Double]
-  val selectionModel                                  = new TableSelectionModel(this)
-  val focusModel                                      = new TableFocusModel(this)
-  val focusedIndexProperty: ReadOnlyProperty[Int]     = focusModel.focusedIndexProperty
-  val focusedItemProperty: ReadOnlyProperty[S | Null] = focusModel.focusedItemProperty
+  private val userColumnWidths = mutable.Map.empty[TableColumn[S, ?], Double]
+
+  // Alternate models remain table-owned while detached so source and column changes cannot leave
+  // stale coordinates behind when callers install them again.
+  private val registeredSelectionModels = mutable.ArrayBuffer.empty[TableSelectionModel[S]]
+  private val registeredFocusModels     = mutable.ArrayBuffer.empty[TableFocusModel[S]]
+
+  private[table] def registerSelectionModel(model: TableSelectionModel[S]): Unit = {
+    require(!isDisposed, "Cannot create a selection model for a disposed TableView")
+    require(
+      model != null && (model.tableView eq this),
+      "Selection model belongs to another TableView"
+    )
+    if (!registeredSelectionModels.exists(_ eq model)) registeredSelectionModels += model
+  }
+
+  private[table] def registerFocusModel(model: TableFocusModel[S]): Unit = {
+    require(!isDisposed, "Cannot create a focus model for a disposed TableView")
+    require(model != null && (model.tableView eq this), "Focus model belongs to another TableView")
+    if (!registeredFocusModels.exists(_ eq model)) registeredFocusModels += model
+  }
+
+  private val selectionModelState: Property[TableSelectionModel[S]] =
+    Property(new TableSelectionModel(this))
+  private val focusModelState: Property[TableFocusModel[S]] = Property(new TableFocusModel(this))
+
+  val selectionModelProperty: ReadOnlyProperty[TableSelectionModel[S]] = selectionModelState
+  val focusModelProperty: ReadOnlyProperty[TableFocusModel[S]]         = focusModelState
+
+  def selectionModel: TableSelectionModel[S]                = selectionModelState.get
+  def selectionModel_=(model: TableSelectionModel[S]): Unit =
+    if (!isDisposed) {
+      require(model != null, "Selection model must not be null")
+      require(model.tableView eq this, "Selection model belongs to another TableView")
+      selectionModelState.set(model)
+    }
+
+  def focusModel: TableFocusModel[S]                = focusModelState.get
+  def focusModel_=(model: TableFocusModel[S]): Unit =
+    if (!isDisposed) {
+      require(model != null, "Focus model must not be null")
+      require(model.tableView eq this, "Focus model belongs to another TableView")
+      focusModelState.set(model)
+    }
+
+  val focusedIndexProperty: ReadOnlyProperty[Int] =
+    focusModelProperty.flatMap(_.focusedIndexProperty)
+  val focusedItemProperty: ReadOnlyProperty[S | Null] =
+    focusModelProperty.flatMap(_.focusedItemProperty)
   val focusedCellProperty: ReadOnlyProperty[TablePosition[S] | Null] =
-    focusModel.focusedCellProperty
-  val selectedIndexProperty: ReadOnlyProperty[Int]           = selectionModel.selectedIndexProperty
-  val selectedItemProperty: ReadOnlyProperty[S | Null]       = selectionModel.selectedItemProperty
+    focusModelProperty.flatMap(_.focusedCellProperty)
+  val selectedIndexProperty: ReadOnlyProperty[Int] =
+    selectionModelProperty.flatMap(_.selectedIndexProperty)
+  val selectedItemProperty: ReadOnlyProperty[S | Null] =
+    selectionModelProperty.flatMap(_.selectedItemProperty)
   val selectedIndicesProperty: ReadOnlyProperty[Vector[Int]] =
-    selectionModel.selectedIndicesProperty
-  val selectedItemsProperty: ReadOnlyProperty[Vector[S]] = selectionModel.selectedItemsProperty
+    selectionModelProperty.flatMap(_.selectedIndicesProperty)
+  val selectedItemsProperty: ReadOnlyProperty[Vector[S]] =
+    selectionModelProperty.flatMap(_.selectedItemsProperty)
   val selectedCellsProperty: ReadOnlyProperty[Vector[TablePosition[S]]] =
-    selectionModel.selectedCellsProperty
+    selectionModelProperty.flatMap(_.selectedCellsProperty)
   val rowDoubleClickHandlerProperty: Property[Option[S => Unit]]            = Property(None)
   val onScrollToProperty: Property[Option[Int => Unit]]                     = Property(None)
   val onScrollToColumnProperty: Property[Option[TableColumn[S, ?] => Unit]] = Property(None)
@@ -540,8 +587,8 @@ final class TableView[S] private (
     * following rows.
     */
   override protected def handleLocalItemsChange(change: ListProperty.Change[S]): Unit = {
-    focusModel.reconcile(change)
-    selectionModel.reconcile(change)
+    registeredFocusModels.toVector.foreach(_.reconcile(change))
+    registeredSelectionModels.toVector.foreach(_.reconcile(change))
     change match {
       case ListProperty.Reset(_) => refresh()
       case _                     => refreshItemState()
@@ -551,10 +598,11 @@ final class TableView[S] private (
   override protected def handleRemoteItemsChange(change: RemoteListChange[S]): Unit = {
     change match {
       case RemoteListChange.Reset() =>
-        selectionModel.reconcileReset(allowReferenceFallback = false)
-        focusModel.reconcileReset(allowReferenceFallback = false)
+        registeredSelectionModels.toVector.foreach(_.reconcileReset(allowReferenceFallback = false))
+        registeredFocusModels.toVector.foreach(_.reconcileReset(allowReferenceFallback = false))
       case RemoteListChange.Structural(change) =>
-        selectionModel.reconcile(change); focusModel.reconcile(change)
+        registeredSelectionModels.toVector.foreach(_.reconcile(change))
+        registeredFocusModels.toVector.foreach(_.reconcile(change))
       case RemoteListChange.RangeLoaded(_, _) => ()
     }
     super.handleRemoteItemsChange(change)
@@ -661,8 +709,8 @@ final class TableView[S] private (
   private def syncVisibleColumns(): Unit = {
     val wanted = TableColumnTree.visibleLeaves(columns.toVector)
     if (visibleColumns.toVector != wanted) visibleColumns.setAll(wanted)
-    focusModel.reconcileColumns()
-    selectionModel.reconcileColumns()
+    registeredFocusModels.toVector.foreach(_.reconcileColumns())
+    registeredSelectionModels.toVector.foreach(_.reconcileColumns())
     bumpColumnState()
     placeholderVisibleProperty.set(renderableCount == 0 || visibleColumns.isEmpty)
     recomputeVisible()
@@ -707,15 +755,20 @@ final class TableView[S] private (
 
     DslLayer.render(this, cursor) {
       addClass("ui-table-view")
-      classIf("ui-table-view-cell-selection", selectionModel.cellSelectionEnabledProperty)
+      classIf(
+        "ui-table-view-cell-selection",
+        selectionModelProperty.flatMap(_.cellSelectionEnabledProperty)
+      )
       setAttribute("role", "grid")
       setAttribute("tabindex", "0")
       addDisposable(focusedIndexProperty.observe(_ => updateActiveRow()))
       addDisposable(focusedCellProperty.observe(_ => updateActiveRow()))
       addDisposable(
-        selectionModel.selectionModeProperty.observe(mode =>
-          setAttribute("aria-multiselectable", (mode == TableSelectionMode.Multiple).toString)
-        )
+        selectionModelProperty
+          .flatMap(_.selectionModeProperty)
+          .observe(mode =>
+            setAttribute("aria-multiselectable", (mode == TableSelectionMode.Multiple).toString)
+          )
       )
       def updateCounts(): Unit = {
         setAttribute(
@@ -1109,8 +1162,8 @@ final class TableView[S] private (
   }
 
   private def refreshSelectedItem(): Unit = {
-    selectionModel.refresh()
-    focusModel.refresh()
+    registeredSelectionModels.toVector.foreach(_.refresh())
+    registeredFocusModels.toVector.foreach(_.refresh())
   }
 
   private def contentHeightProperty: ReadOnlyProperty[String] =
@@ -1250,6 +1303,15 @@ object TableView {
     DslLayer.child(new TableView[S](source, body)) {}
 
   def items[S](using table: TableView[S]): ListDataSource[S] = table.items
+
+  def selectionModel[S](using table: TableView[S]): TableSelectionModel[S] =
+    table.selectionModel
+  def selectionModel_=[S](model: TableSelectionModel[S])(using table: TableView[S]): Unit =
+    table.selectionModel = model
+
+  def focusModel[S](using table: TableView[S]): TableFocusModel[S]                = table.focusModel
+  def focusModel_=[S](model: TableFocusModel[S])(using table: TableView[S]): Unit =
+    table.focusModel = model
 
   def selectionMode(using table: TableView[?]): TableSelectionMode =
     table.selectionModel.selectionMode

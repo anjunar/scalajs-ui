@@ -5,7 +5,10 @@ import ui.core.state.{ListDataSource, Property, ReadOnlyProperty}
 /** Logical row/cell focus, independent of selection, scrolling and native DOM focus. A known remote
   * gap has an index but no focused item. Columns use stable leaf references across reordering.
   */
-final class TableFocusModel[S] private[table] (table: TableView[S]) {
+class TableFocusModel[S](final val tableView: TableView[S]) {
+  require(tableView != null, "A focus model requires a TableView")
+  protected val table: TableView[S] = tableView
+  table.registerFocusModel(this)
   private case class State(
       index: Int,
       item: Option[S],
@@ -82,19 +85,19 @@ final class TableFocusModel[S] private[table] (table: TableView[S]) {
       if (old.index != next.index || !sameItem || old.column != next.column) state.setAlways(next)
     }
 
-  private[table] def refresh(): Unit = publish(focusedIndex, state.get.column)
+  protected[table] def refresh(): Unit = publish(focusedIndex, state.get.column)
 
   /** Hidden/removed leaves degrade a cell coordinate to its still-focused row. Reordering keeps the
     * column reference and republishes so derived visible indices update.
     */
-  private[table] def reconcileColumns(): Unit = if (!table.isDisposed && focusedIndex >= 0) {
+  protected[table] def reconcileColumns(): Unit = if (!table.isDisposed && focusedIndex >= 0) {
     val current = state.get
     val column  = current.column.filter(table.getVisibleLeafIndex(_) >= 0)
     if (current.column != column) publish(current.index, None)
     else if (column.nonEmpty) state.setAlways(current)
   }
 
-  private[table] def reconcile(change: ListDataSource.Change[S]): Unit = {
+  protected[table] def reconcile(change: ListDataSource.Change[S]): Unit = {
     if (table.isDisposed) return
     val old                                                 = state.get
     def splice(from: Int, removed: Int, inserted: Int): Int =
@@ -115,7 +118,7 @@ final class TableFocusModel[S] private[table] (table: TableView[S]) {
     publish(next, old.column)
   }
 
-  private[table] def reconcileReset(allowReferenceFallback: Boolean): Unit =
+  protected[table] def reconcileReset(allowReferenceFallback: Boolean): Unit =
     if (!table.isDisposed)
       publish(resetIndex(state.get, allowReferenceFallback), state.get.column)
 
