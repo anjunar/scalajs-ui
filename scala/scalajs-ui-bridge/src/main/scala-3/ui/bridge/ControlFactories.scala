@@ -3,6 +3,7 @@ package ui.bridge
 import ui.control.carousel.Carousel
 import ui.control.datagrid.DataGrid
 import ui.control.table.{
+  TableCheckBoxCell,
   TableCell,
   TableColumn,
   TableEditCancelEvent,
@@ -10,6 +11,7 @@ import ui.control.table.{
   TableEditCommitEvent,
   TableEditStartEvent,
   TableRow,
+  TableTextFieldCell,
   TableView
 }
 import ui.control.tabs.Tabs
@@ -110,6 +112,8 @@ private[bridge] trait ColumnFacade extends js.Object {
   val editCommitHandler: js.UndefOr[js.Function1[js.Object, Unit]] = js.native
   val onEditCommit: js.UndefOr[js.Function1[js.Object, Unit]]      = js.native
   val onEditCancel: js.UndefOr[js.Function1[js.Object, Unit]]      = js.native
+  val standardCell: js.UndefOr[String]                             = js.native
+  val editOnBlur: js.UndefOr[String]                               = js.native
 
   /** `(row) => (scope) => void` -- the cell body, already wrapped in `withScope` on the TS side. */
   val cell: js.UndefOr[js.Function1[js.Any, js.Function1[ScopeHandleBridge, Unit]]] = js.native
@@ -498,6 +502,24 @@ private[bridge] object TableViewFactory extends ComponentFactory {
               }
             )
           )
+        }
+        col.standardCell.foreach {
+          case "text-field" =>
+            val blurPolicy = col.editOnBlur.fold(TableTextFieldCell.BlurPolicy.Keep) {
+              case "commit" => TableTextFieldCell.BlurPolicy.Commit
+              case "cancel" => TableTextFieldCell.BlurPolicy.Cancel
+              case _        => TableTextFieldCell.BlurPolicy.Keep
+            }
+            column.cellFactoryProperty.set(
+              Some(_ =>
+                new TableTextFieldCell[js.Any](blurPolicy).asInstanceOf[TableCell[js.Any, js.Any]]
+              )
+            )
+          case "check-box" =>
+            column.cellFactoryProperty.set(
+              Some(_ => new TableCheckBoxCell[js.Any].asInstanceOf[TableCell[js.Any, js.Any]])
+            )
+          case _ => ()
         }
         col.columns.foreach(children => column.columns.setAll(children.map(createColumn).toSeq))
         column

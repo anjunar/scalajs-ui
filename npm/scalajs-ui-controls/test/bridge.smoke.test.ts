@@ -45,7 +45,7 @@ import {
 } from "@anjunar/scalajs-ui-core";
 import { div, text } from "@anjunar/scalajs-ui-core";
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
-import { carousel, columnGroup, dataGrid, remoteSource, tab, tableView, tabs, valueColumn, virtualList } from "../src/index.js";
+import { carousel, checkBoxColumn, columnGroup, dataGrid, remoteSource, tab, tableView, tabs, textFieldColumn, valueColumn, virtualList } from "../src/index.js";
 import type { ColumnResizePolicy, TablePosition, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
 
 const linkedArtifact = resolve(process.cwd(), "../scalajs-ui-bridge/dist/fullopt/main.js");
@@ -1048,6 +1048,94 @@ describe("table-view", () => {
       expect(canceled).toHaveBeenLastCalledWith(expect.objectContaining({
         position: { row: 1, column: 0 }, reason: "column-unavailable",
       }));
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("edits standard text and Boolean cells with the documented keyboard transitions", () => {
+    const name = property("Ada");
+    const active = property(true);
+    type Row = { name: typeof name; active: typeof active };
+    const rows = listProperty<Row>([{ name, active }]);
+    const started = vi.fn();
+    const committed = vi.fn();
+    const canceled = vi.fn();
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<Row>;
+    const app = mount(root, () => {
+      table = tableView(rows, [
+        textFieldColumn("Name", row => row.name, {
+          onEditStart: started, onEditCommit: committed, onEditCancel: canceled,
+        }),
+        checkBoxColumn("Active", row => row.active, {
+          onEditStart: started, onEditCommit: committed,
+        }),
+      ], { paging: true, editable: true, cellSelectionEnabled: true });
+    });
+    try {
+      const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+      const nameCell = root.querySelectorAll<HTMLElement>(".ui-table-cell")[0]!;
+
+      nameCell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      let editor = root.querySelector<HTMLInputElement>(".ui-table-text-field-cell__editor")!;
+      expect(editor.value).toBe("Ada");
+      expect(document.activeElement).toBe(editor);
+      editor.value = "Grace";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      expect(table.editingValue.get).toBe("Grace");
+      editor.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Enter", isComposing: true,
+      }));
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }));
+      expect(name.get).toBe("Ada");
+      expect(canceled).toHaveBeenLastCalledWith(expect.objectContaining({ reason: "explicit", draftValue: "Grace" }));
+      expect(document.activeElement).toBe(grid);
+
+      table.focusCell(0, 0);
+      grid.focus();
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F2" }));
+      editor = root.querySelector<HTMLInputElement>(".ui-table-text-field-cell__editor")!;
+      editor.value = "Augusta";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      editor.blur();
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      editor.focus();
+      editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab" }));
+      expect(name.get).toBe("Augusta");
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 1 });
+      expect(table.editingCell.get).toBeNull();
+      expect(document.activeElement).toBe(grid);
+
+      const checkBox = root.querySelector<HTMLInputElement>(".ui-table-check-box-cell__editor")!;
+      checkBox.click();
+      expect(active.get).toBe(false);
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 1 });
+      expect(table.editingCell.get).toBeNull();
+      expect(committed).toHaveBeenCalledWith(expect.objectContaining({ oldValue: true, newValue: false }));
+
+      grid.focus();
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      expect(table.editingCell.get).toEqual({ row: 0, column: 1 });
+      expect(document.activeElement).toBe(checkBox);
+      checkBox.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      expect(active.get).toBe(true);
+      expect(table.editingCell.get).toBeNull();
+
+      grid.focus();
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F2" }));
+      checkBox.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Tab", shiftKey: true,
+      }));
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 0 });
+      expect(document.activeElement).toBe(grid);
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      editor = root.querySelector<HTMLInputElement>(".ui-table-text-field-cell__editor")!;
+      editor.value = "Lovelace";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      expect(name.get).toBe("Lovelace");
+      expect(document.activeElement).toBe(grid);
+      expect(started).toHaveBeenCalled();
     } finally { app.dispose(); root.remove(); }
   });
 

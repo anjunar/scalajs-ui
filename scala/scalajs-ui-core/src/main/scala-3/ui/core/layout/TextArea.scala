@@ -11,14 +11,14 @@ import scala.scalajs.js
   * of this component. Hydration adopts the live value without changing focus or selection.
   */
 class TextArea(initial: String = "") extends AbstractComponent {
-  val tagName = "textarea"
-  private var content: TextAreaContent = _
-  private var pending = TextAreaContent.normalize(initial)
-  private var baseline = pending
-  private val observed = Property(pending)
+  val tagName                                 = "textarea"
+  private var content: TextAreaContent        = _
+  private var pending                         = TextAreaContent.normalize(initial)
+  private var baseline                        = pending
+  private val observed                        = Property(pending)
   val valueProperty: ReadOnlyProperty[String] = observed
 
-  def value: String = if (content == null) pending else content.value
+  def value: String        = if (content == null) pending else content.value
   def defaultValue: String = if (content == null) baseline else content.defaultValue
 
   def setValue(value: String): Unit = {
@@ -75,6 +75,7 @@ class TextArea(initial: String = "") extends AbstractComponent {
 
 object TextArea {
   def textArea(initial: String = "")(body: TextArea ?=> Cursor ?=> Unit = {})(using
-      AbstractComponent, Cursor
+      AbstractComponent,
+      Cursor
   ): TextArea = DslLayer.child(new TextArea(initial))(body)
 }

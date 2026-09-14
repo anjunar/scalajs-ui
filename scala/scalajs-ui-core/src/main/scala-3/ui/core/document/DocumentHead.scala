@@ -118,8 +118,8 @@ final class DocumentHead {
     }
   }
 
-  /** Called by [[ui.core.layout.Head]] once it knows its host element. Everything registered
-    * before that point is written out immediately afterwards.
+  /** Called by [[ui.core.layout.Head]] once it knows its host element. Everything registered before
+    * that point is written out immediately afterwards.
     */
   private[ui] def connect(next: HeadSink): Unit = {
     sink = next

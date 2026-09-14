@@ -137,11 +137,11 @@ describe("typechecking a consumer", () => {
     mkdirSync(join(consumer, "src"), { recursive: true });
 
     const source = [
-      'import { div, installRuntime, listProperty, renderToString, text } from "@anjunar/scalajs-ui-core";',
+      'import { div, installRuntime, listProperty, property, renderToString, text } from "@anjunar/scalajs-ui-core";',
       'import type { SsrResult } from "@anjunar/scalajs-ui-core";',
       'import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";',
-      'import { carousel, column, columnGroup, dataGrid, remoteSource, tab, tableView, tabs, virtualList } from "@anjunar/scalajs-ui-controls";',
-      'import type { ColumnDef, RemoteSource, TablePosition, TableSort, TableViewHandle, TableViewOptions, TableRowContext, TableSelectionMode } from "@anjunar/scalajs-ui-controls";',
+      'import { carousel, checkBoxColumn, column, columnGroup, dataGrid, remoteSource, tab, tableView, tabs, textFieldColumn, virtualList } from "@anjunar/scalajs-ui-controls";',
+      'import type { ColumnDef, RemoteSource, TablePosition, TableSort, TableViewHandle, TableViewOptions, TableRowContext, TableSelectionMode, TextFieldBlurPolicy } from "@anjunar/scalajs-ui-controls";',
       "",
       "interface Row { readonly name: string }",
       "",
@@ -154,6 +154,9 @@ describe("typechecking a consumer", () => {
       "  installRuntime(bridgeRuntime);",
       "  return renderToString(() => {",
       "    const rows = listProperty<Row>([{ name: \"a\" }]);",
+      '    const blur: TextFieldBlurPolicy = "keep";',
+      '    const editableRows = listProperty([{ name: property("Ada"), active: property(true) }]);',
+      '    tableView(editableRows, [textFieldColumn("Name", row => row.name, { editOnBlur: blur }), checkBoxColumn("Active", row => row.active)], { editable: true });',
       "    tabs([tab(\"One\", () => div(() => text(\"one\")))]);",
       "    const options: TableViewOptions<Row> = { crawlable: true, crawlId: \"t\", cellSelectionEnabled: true, rowKey: row => row.name, row: (row: TableRowContext<Row>) => { const name: string | undefined = row.item.get?.name; row.renderCells(); } };",
       "    const table: TableViewHandle<Row> = tableView(rows, columns, options);",

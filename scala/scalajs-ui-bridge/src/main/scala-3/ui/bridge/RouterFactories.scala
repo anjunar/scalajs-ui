@@ -20,10 +20,10 @@ import scala.scalajs.js.JSConverters.*
 
 /** Step 5 of JAVASCRIPT_API.md §9: the router facade.
   *
-  * The trigger from CLAUDE_REVIEW_3.md §5 was "`scalajs-ui-bridge` gets `dependsOn(uiRouter)` **and**
-  * exports (a) a registry entry that mounts a `ui.router.Router` with a route table translated
-  * from JS, (b) `router-outlet`, (c) `router-link`". This file is those three, plus the JS <->
-  * Scala translation `ui.router.Router` needs and the deleted `router.ts` only sketched.
+  * The trigger from CLAUDE_REVIEW_3.md §5 was "`scalajs-ui-bridge` gets `dependsOn(uiRouter)`
+  * **and** exports (a) a registry entry that mounts a `ui.router.Router` with a route table
+  * translated from JS, (b) `router-outlet`, (c) `router-link`". This file is those three, plus the
+  * JS <-> Scala translation `ui.router.Router` needs and the deleted `router.ts` only sketched.
   *
   * The hard part is `load`: `ui.router.Route` takes `RouteContext => Future[AbstractComponent]`,
   * where the component is a virtual boundary the router renders. TypeScript writes a
@@ -199,11 +199,13 @@ private[bridge] object RouterFactory extends ComponentFactory {
 
     val routes = options("routes").asInstanceOf[js.Array[RouteFacade]]
     val config = options.get("config").map(_.asInstanceOf[RouterConfigFacade]).orUndefined
-    val layout = options.get("layout").map(
-      _.asInstanceOf[
-        js.Function2[js.Function1[ScopeHandleBridge, Unit], ScopeHandleBridge, Unit]
-      ]
-    )
+    val layout = options
+      .get("layout")
+      .map(
+        _.asInstanceOf[
+          js.Function2[js.Function1[ScopeHandleBridge, Unit], ScopeHandleBridge, Unit]
+        ]
+      )
 
     val startUrl =
       config.toOption

@@ -20,6 +20,10 @@ private[table] object TableRowKeyboard {
     val previous       = focus.focusedIndex
     val previousColumn = Option(focus.focusedColumn)
     val shortcut       = key.ctrlKey || key.metaKey
+    if ((key.key == "F2" || key.key == "Enter") && table.startFocusedIntegratedEdit()) {
+      key.preventDefault(); key.stopPropagation()
+      return
+    }
     if (key.key == "ArrowLeft" || key.key == "ArrowRight") {
       key.preventDefault(); key.stopPropagation()
       if (key.key == "ArrowLeft") focus.focusLeftCell() else focus.focusRightCell()

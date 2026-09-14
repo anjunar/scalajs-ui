@@ -3,7 +3,7 @@ package ui.control.table
 import ui.core.component.AbstractComponent
 import ui.core.dsl.ClassDsl.{addClass, classIf}
 import ui.core.dsl.DslLayer
-import ui.core.dsl.EventDsl.onClick
+import ui.core.dsl.EventDsl.{onClick, onDoubleClick}
 import ui.core.dsl.StyleDsl.*
 import ui.core.layout.TextComponent.text
 import ui.core.render.Cursor
@@ -127,6 +127,21 @@ class TableCell[S, T] extends AbstractComponent {
             case _ => ()
           }
         }
+        if (supportsIntegratedEditor)
+          onDoubleClick { event =>
+            event.raw match {
+              case mouse: org.scalajs.dom.MouseEvent if !emptyProperty.get =>
+                val element = host
+                  .asInstanceOf[ui.core.render.DomHostElement]
+                  .node
+                  .asInstanceOf[org.scalajs.dom.Element]
+                if (TableRowKeyboard.isRowBackground(mouse, element) && startIntegratedEdit()) {
+                  mouse.preventDefault()
+                  mouse.stopPropagation()
+                }
+              case _ => ()
+            }
+          }
         addDisposable(
           table.visibleLeafColumns.observe(_ =>
             if (!isDisposed)
@@ -156,6 +171,20 @@ class TableCell[S, T] extends AbstractComponent {
         Option(boundRow).foreach(row => renderer(row.itemProperty.get.asInstanceOf[S]))
       case None => text(itemProperty.map(item => Option(item).fold("")(_.toString))) {}
     }
+
+  /** Marks cells whose editor can be entered from the table keyboard or a double click. */
+  private[table] def supportsIntegratedEditor: Boolean = false
+
+  private[table] final def startIntegratedEdit(): Boolean =
+    (for {
+      table  <- Option(tableView)
+      column <- Option(boundColumn)
+      if supportsIntegratedEditor && !emptyProperty.get
+    } yield {
+      val started = table.edit(indexProperty.get, column)
+      if (started) table.focusModel.focus(indexProperty.get, column)
+      started
+    }).getOrElse(false)
 
   private def bindValue(): Unit = {
     valueSubscription.dispose()

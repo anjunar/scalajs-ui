@@ -79,9 +79,9 @@ final class UiRuntimeBridge extends js.Object {
   }
 
   /** Server-side render. `headers` is still fixed empty. `status` is `200` unless a
-    * `@anjunar/scalajs-ui-router` `router` was mounted: then it carries that router's `responseStatus` --
-    * an error route reached by `RouterConfig.onFailure` answers with its own `Route.status` (step 5
-    * of JAVASCRIPT_API.md §9). See [[SsrStatus]] for the mechanism.
+    * `@anjunar/scalajs-ui-router` `router` was mounted: then it carries that router's
+    * `responseStatus` -- an error route reached by `RouterConfig.onFailure` answers with its own
+    * `Route.status` (step 5 of JAVASCRIPT_API.md §9). See [[SsrStatus]] for the mechanism.
     */
   def renderToString(
       build: js.Function1[ScopeHandleBridge, Unit],

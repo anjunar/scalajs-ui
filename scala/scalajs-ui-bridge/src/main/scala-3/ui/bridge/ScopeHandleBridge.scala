@@ -17,10 +17,10 @@ import scala.scalajs.js.JSConverters.*
   * `using AbstractComponent, Cursor`. Mirrors `contract.ts`'s `ScopeHandle`.
   *
   * Every method here follows the same shape: install `parent`/`cursor` as givens, call the matching
-  * `scalajs-ui-core` DSL entry point, and hand the JS callback a fresh `ScopeHandleBridge` built from
-  * whatever component and cursor that entry point produced. `DslLayer.child` and friends run `body`
-  * themselves and unmount a half-built child if it throws (see `contract.ts`'s note on `child`) --
-  * this class never mounts in two steps, so that guarantee survives the crossing.
+  * `scalajs-ui-core` DSL entry point, and hand the JS callback a fresh `ScopeHandleBridge` built
+  * from whatever component and cursor that entry point produced. `DslLayer.child` and friends run
+  * `body` themselves and unmount a half-built child if it throws (see `contract.ts`'s note on
+  * `child`) -- this class never mounts in two steps, so that guarantee survives the crossing.
   */
 final class ScopeHandleBridge(
     private[bridge] final val parent: AbstractComponent,

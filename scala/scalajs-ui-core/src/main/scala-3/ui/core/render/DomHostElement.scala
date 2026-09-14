@@ -18,7 +18,7 @@ final class DomHostElement(private[ui] val node: dom.Element) extends HostElemen
     HostMutationGuard.checkWrite(this)
     node.removeAttribute(name)
   }
-  def attribute(name: String): Option[String]         = Option(node.getAttribute(name))
+  def attribute(name: String): Option[String] = Option(node.getAttribute(name))
 
   def setProperty(name: String, value: Any): Unit = {
     HostMutationGuard.checkRemoval(this)

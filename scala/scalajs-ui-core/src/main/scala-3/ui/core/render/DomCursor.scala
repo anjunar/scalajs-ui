@@ -27,7 +27,8 @@ final class DomCursor private (
 
   override def parentHost: Option[HostElement] =
     Option.when(parent.nodeType == dom.Node.ELEMENT_NODE)(
-      new DomHostElement(parent.asInstanceOf[dom.Element]))
+      new DomHostElement(parent.asInstanceOf[dom.Element])
+    )
 
   def claimElement(tag: String): HostElement = {
     val element = document.createElement(tag)

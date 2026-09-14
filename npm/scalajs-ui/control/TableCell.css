@@ -33,6 +33,33 @@
   box-shadow: inset 0 0 0 2px var(--aj-accent);
 }
 
+.ui-table-text-field-cell__display {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ui-table-text-field-cell__editor {
+  width: 100%;
+  min-width: 0;
+  height: calc(100% - 6px);
+  box-sizing: border-box;
+  padding: 0 8px;
+  color: inherit;
+  font: inherit;
+  background: var(--aj-surface);
+  border: 1px solid var(--aj-accent);
+  border-radius: 3px;
+  outline: none;
+}
+
+.ui-table-check-box-cell__editor {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--aj-accent);
+}
+
 .ui-table-view-cell-selection .ui-table-row.ui-table-row-selected {
   background-color: transparent;
   box-shadow: none;

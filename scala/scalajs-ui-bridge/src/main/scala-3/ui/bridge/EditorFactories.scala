@@ -22,9 +22,9 @@ import scala.concurrent.ExecutionContext
 import ui.editor.{MediaUploader, MediaUrlPolicy, MediaReference, UploadedMediaReference}
 
 /** Step 6 of JAVASCRIPT_API.md §9, the editor half -- the trigger was FINAL.md Priorität 4
-  * ("`scalajs-ui-editor` veröffentlichen oder bewusst ausklammern"), settled as: veröffentlichen, with a
-  * facade like every other family package (npm-Modularisierung Lauf 7). `ui.editor.Editor` is is a
-  * plain `ui.forms.Control[String]` -- SSR/hydration, the placeholder contract and form
+  * ("`scalajs-ui-editor` veröffentlichen oder bewusst ausklammern"), settled as: veröffentlichen,
+  * with a facade like every other family package (npm-Modularisierung Lauf 7). `ui.editor.Editor`
+  * is is a plain `ui.forms.Control[String]` -- SSR/hydration, the placeholder contract and form
   * registration are the ones every other control already has, so this factory needs no counterpart
   * to `FormFactories.DynamicFormular`: an `editor` registered under a `form`/`subForm` binds
   * through the exact same generic `(_, s: CoreProperty[Any], t: CoreProperty[Any])` branch of

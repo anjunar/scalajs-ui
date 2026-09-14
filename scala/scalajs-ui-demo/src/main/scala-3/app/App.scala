@@ -143,7 +143,9 @@ class App(
           hbox {
             classes = Seq("app-toolbar__api-switch")
             div { classes = Seq("is-active"); text("Scala") {} }
-            routerLink() { href = "https://anjunar.github.io/scalajs-ui/typescript/"; text("TypeScript") {} }
+            routerLink() {
+              href = "https://anjunar.github.io/scalajs-ui/typescript/"; text("TypeScript") {}
+            }
           }
           button(AppI18n.localeLabel(i18nRuntime.locale)) {
             classes = Seq("locale-choice")
@@ -165,7 +167,9 @@ class App(
                   val entries = navigationEntries.filter(_.zoneMessage.key.source == zone)
                   div {
                     classes = Seq("app-nav-group")
-                    div { classes = Seq("app-sidebar__section-title"); text(entries.head.zoneMessage) {} }
+                    div {
+                      classes = Seq("app-sidebar__section-title"); text(entries.head.zoneMessage) {}
+                    }
                     entries.foreach { entry =>
                       routerLink(entry.path) {
                         classes = Seq("app-nav-link")

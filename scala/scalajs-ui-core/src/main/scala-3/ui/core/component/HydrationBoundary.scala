@@ -4,8 +4,8 @@ import ui.core.render.{Cursor, HostElement, HostNode}
 import scala.util.control.NonFatal
 
 /** A stable physical boundary around replaceable content. Keep input fallbacks outside it.
-  * Capture/preflight happen before host bindings. Only this boundary's children are rebuilt after
-  * a failed claim; callbacks from that attempt are cancelled. Missing/wrong boundary hosts remain
+  * Capture/preflight happen before host bindings. Only this boundary's children are rebuilt after a
+  * failed claim; callbacks from that attempt are cancelled. Missing/wrong boundary hosts remain
   * outer hydration errors because their ownership cannot safely be inferred.
   */
 final class HydrationBoundary[A](
@@ -13,13 +13,14 @@ final class HydrationBoundary[A](
     capture: HostElement => A,
     preflight: (HostElement, A) => Unit,
     onRecovery: Throwable => Unit = _ => ()
-)(body: AbstractComponent ?=> Cursor ?=> Unit) extends AbstractComponent {
-  private var snapshot: Option[A] = None
+)(body: AbstractComponent ?=> Cursor ?=> Unit)
+    extends AbstractComponent {
+  private var snapshot: Option[A]                 = None
   private var preflightFailure: Option[Throwable] = None
-  private var rebuilt = false
+  private var rebuilt                             = false
 
   def captured: Option[A] = snapshot
-  def recovered: Boolean = rebuilt
+  def recovered: Boolean  = rebuilt
 
   override def beforeHostBinding(node: HostNode, cursor: Cursor): Unit =
     if (cursor.isHydrating) {
@@ -45,7 +46,9 @@ final class HydrationBoundary[A](
           rebuilt = true
           onRecovery(error)
           // Exactly one fresh attempt. Its errors propagate rather than looping.
-          addDisposable(cursor.insertion.withHydrationBoundary { fresh => body(using this)(using fresh) })
+          addDisposable(cursor.insertion.withHydrationBoundary { fresh =>
+            body(using this)(using fresh)
+          })
       }
     }
   }

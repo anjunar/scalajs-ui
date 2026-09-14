@@ -23,7 +23,8 @@ import scala.scalajs.js
   * first expected node to `document.documentElement` itself -- the real element, not a comment
   * marking an invisible wrapper's boundary -- exactly what `component.isVirtual == false` here
   * claims via `cursor.claimElement("html")`. `build` must then compose the document's `head()`/body
-  * content directly, with no enclosing `html(...)` of its own; see `scalajs-ui-demo`'s `app/document.ts`.
+  * content directly, with no enclosing `html(...)` of its own; see `scalajs-ui-demo`'s
+  * `app/document.ts`.
   *
   * `compose`'s `cursor` parameter is already the resolved content cursor --
   * `Runtime.mountWithCursor` works that out before calling `compose` at all -- so unlike those

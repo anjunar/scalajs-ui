@@ -14,14 +14,14 @@ Ziel ist funktionale Parität für Datenbindung, Zellen und Zeilen, Auswahl, Fok
 
 Die öffentliche [TableView-API von JavaFX 26](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/TableView.html) bildet den Referenzumfang. Zell- und Spaltenverträge werden zusätzlich gegen deren eigene APIs geprüft. Geerbte Darstellungsfunktionen werden auf DOM, Komponenten-Slots und Web-CSS abgebildet.
 
-**Editierbare Inhalte sind bereits möglich.** `TableColumn.cell { row => … }` komponiert beliebige Komponenten. Darin können Eingabefelder stehen, die über die vorhandene Property-/Form-Bindung das Zeilenmodell ändern. Dieser Weg bleibt unterstützt. Davon getrennt ist inzwischen auch der von der Tabelle verwaltete Kernablauf mit Editierposition, Start/Commit/Cancel und typisierten Ereignissen vorhanden; integrierte Standardeditoren und deren Tastatur-/Validierungsregeln fehlen noch. „Editing fehlt“ wäre daher eine falsche Beschreibung des heutigen Stands.
+**Editierbare Inhalte sind bereits möglich.** `TableColumn.cell { row => … }` komponiert beliebige Komponenten. Darin können Eingabefelder stehen, die über die vorhandene Property-/Form-Bindung das Zeilenmodell ändern. Dieser Weg bleibt unterstützt. Davon getrennt sind der von der Tabelle verwaltete Kernablauf mit Editierposition, Start/Commit/Cancel und typisierten Ereignissen sowie integrierte Text-/Boolean-Zellen vorhanden. Auswahlzellen, Konverter-/Validierungsfehler und deren Zugänglichkeitsvertrag fehlen noch. „Editing fehlt“ wäre daher eine falsche Beschreibung des heutigen Stands.
 
 Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Erweiterungen. Sie bleiben Bestandteil aller neuen Funktionen. Insbesondere erscheinen Previous/Next nur im Paging-Modus.
 
 ### Implementiert: erstes Grundlagenpaket
 
 - Überlappende Scrollfenster behalten Zeilen und Zellen am selben absoluten Index mit derselben Item-Instanz. Größenmessungen und Änderungen der festen Zeilenhöhe bauen diese Zellen ebenfalls nicht neu auf.
-- `cellValueFactory` liefert beobachtete Zellwerte; `cellFactory` erzeugt integrierte `TableCell[S,T]`-Instanzen. Default-Textzellen und benutzerdefinierte Zellinhalte verwenden denselben Bindungs-/Disposal-Pfad. Der bestehende `cell(row)`-Renderer bleibt unterstützt.
+- `cellValueFactory` liefert beobachtete Zellwerte; `cellFactory` erzeugt integrierte `TableCell[S,T]`-Instanzen. Default-Textzellen, die Standard-TextField-/CheckBox-Zellen und benutzerdefinierte Zellinhalte verwenden denselben Bindungs-/Disposal-Pfad. Der bestehende `cell(row)`-Renderer bleibt unterstützt.
 - Zellkontext: Tabelle, Spalte, Zeile, Index, Item und empty. Alte Wertabonnements werden bei Factory-Wechsel, Zeilenersatz und Unmount gelöst.
 - Direkte Änderungen an `columns` werden verwaltet. Doppelte, fremde, null- oder bereits entsorgte Spalten werden vor der Mutation abgewiesen. Entfernte Spalten bleiben wiederverwendbar; beim Tabellen-Unmount werden die dann noch zugeordneten Spalten entsorgt.
 - Scala: `getCellData`, `getCellObservableValue` und `TableView.refresh()`. Ein explizites Refresh bzw. lokaler Listen-Reset bewertet die sichtbaren Zellrenderer neu und kann deren Editorzustand zurücksetzen; kein explizites Remote-Reload.
@@ -223,8 +223,8 @@ Referenzen: [Cell-Editierablauf](https://openui.io/javadoc/26/javafx.controls/ja
 | E01 | Direkt editierbare Inhalte über eingebettete Controls | Vorhanden | Renderer komponiert das Control; Anwendung stellt dessen Datenbindung bereit. DOM-Identität, Fokus, Textauswahl und Modellbindung über Scroll-/Breitenänderungen in jsdom sowie Unicode-Eingabe, Tastaturisolation, Remount und Spaltensichtbarkeit im echten Browser abgesichert. Native OS-IME-Abnahme bleibt M5/M6. |
 | E02 | Tabellenverwalteter Editiermodus | Vorhanden | `editable` auf Tabelle/Spalte/Zelle, aktuelle Position/Item/Original/Entwurf sowie `edit`, `updateEdit`, `commitEdit` und `cancelEdit` bilden einen Tabellenzustand in Scala und TypeScript. M4. |
 | E03 | Edit-Events und Schreiben ins Datenmodell | Vorhanden | Typisierte Start-/Commit-/Cancel-Ereignisse, Default-Writeback über `WritableProperty`, ersetzbarer Commit-Handler und nachgelagerter Beobachter sind vorhanden. M4. |
-| E04 | Standard-Zellfabriken | Offen | TextField-, CheckBox-, ChoiceBox-, ComboBox- und ProgressBar-Zellen; vorhandene UI-/Binding-Primitiven wiederverwenden. M4/M6. |
-| E05 | Konvertierung, Fehler und Fokuswechsel | Teilweise | Eingebettete Controls können das selbst verwalten. Für integrierte Editoren gemeinsame Verträge für Enter/Escape/Tab, Parserfehler und Blur definieren. M4. |
+| E04 | Standard-Zellfabriken | Teilweise | `TableTextFieldCell`/`textFieldCell`/`textFieldColumn` und `TableCheckBoxCell`/`checkBoxCell`/`checkBoxColumn` sind vorhanden. ChoiceBox-, ComboBox- und ProgressBar-Zellen fehlen. M4/M6. |
+| E05 | Konvertierung, Fehler und Fokuswechsel | Teilweise | Text/Boolean besitzen IME-sichere Enter-/Escape-/Tab-Regeln, zeilenweise Tab-Reihenfolge und eine explizite Text-Blur-Policy. Parser-/Validierungsfehler für konvertierende und Auswahl-Editoren fehlen. M4/M6. |
 
 ### 3.6 Viewport, Darstellung und Zugänglichkeit
 
@@ -257,7 +257,7 @@ Die folgenden Bausteine beschreiben die Zielarchitektur. `TableSelectionModel`, 
 
 Diese tabellenspezifischen Bausteine gehören nach `ui.control.table`. Allgemeine Datenansichten oder generische Geometrie gehören bei tatsächlichem gemeinsamen Bedarf in `scalajs-ui-core` bzw. `ui.control.virtualized`.
 
-[build.sbt](build.sbt) legt seit dem zehnten Ausbau fest: Controls hängen produktiv an Core und Viewport; Forms hängen an Controls und Viewport. Das Spaltenmenü verwendet auf ausdrücklichen Wunsch den bestehenden Viewport-/Overlay-Pfad, statt eine zweite Popup-Implementierung einzuführen. Ein aktiviertes Menü benötigt einen umgebenden Viewport; Tabellen ohne Menü weiterhin nicht. **Controls dürfen nicht für Zell-Editoren von Forms abhängig werden**, da sonst ein Zyklus entsteht. Die Editorverträge bleiben in Controls; Standardeditoren auf Basis der vorhandenen Input-/ComboBox-Controls und ihrer Bindings gehören nach Forms oder in ein Integrationsmodul.
+[build.sbt](build.sbt) legt seit dem zehnten Ausbau fest: Controls hängen produktiv an Core und Viewport; Forms hängen an Controls und Viewport. Das Spaltenmenü verwendet auf ausdrücklichen Wunsch den bestehenden Viewport-/Overlay-Pfad, statt eine zweite Popup-Implementierung einzuführen. Ein aktiviertes Menü benötigt einen umgebenden Viewport; Tabellen ohne Menü weiterhin nicht. **Controls dürfen nicht für Zell-Editoren von Forms abhängig werden**, da sonst ein Zyklus entsteht. Die Editorverträge und einfache native Text-/Boolean-Editoren liegen deshalb in Controls. Auswahlzellen auf Basis der Forms-Controls benötigen später ein Integrationsmodul oder Forms-seitige Helfer.
 
 ### 4.2 Zellbindung und Erhalt bestehender Editoren
 
@@ -423,11 +423,15 @@ Der Ablauf ist `Idle → Editing → Commit oder Cancel → Idle`. Start/Cancel/
 
 Default-Writeback verwendet das zu Sitzungsbeginn gelieferte `WritableProperty`; die Bridge erhält die Schreibfähigkeit eines TypeScript-`Property`. Ein eigener Commit-Handler ersetzt dieses Verhalten, während `onEditCommit` anschließend weiterhin beobachtet. Ein nur lesbarer Wert ohne eigenen Handler lässt den Commit kontrolliert offen. Für unveränderliche Datensätze und Remote-Speichern bleibt der Commit-Handler der explizite anwendungsspezifische Vertrag; die lesende `ListDataSource` wurde dafür nicht aufgeweicht.
 
-Enter bestätigt, Escape verwirft. Parsing-/Validierungsfehler lassen den Editor offen und werden zugänglich angezeigt. Tab/Shift+Tab bestätigen nur bei gültigem Wert und wechseln nach dokumentierter Regel. Blur wird explizit konfiguriert; Popup-Fokus innerhalb eines Editors ist kein unbeabsichtigtes Ende.
+**Umgesetzt im achtzehnten Ausbau – Text-/Boolean-Zellen und Tastatur:** `TableTextFieldCell` ersetzt die Anzeige nur während der aktiven Sitzung durch ein natives Textfeld. Doppelklick sowie F2/Enter auf der logisch fokussierten Zelle starten; Enter bestätigt, Escape verwirft. Tab/Shift+Tab bestätigen und bewegen den logischen Fokus zeilenweise über die sichtbaren Blattspalten, öffnen aber nicht ungefragt die nächste Sitzung. Während IME-Komposition bleiben diese Tasten beim Eingabefeld. Nach Tastaturabschluss erhält das stabile Grid den DOM-Fokus zurück. Blur ist mit `Keep` (Default), `Commit` oder `Cancel` explizit konfigurierbar.
+
+`TableCheckBoxCell` bleibt als Checkbox sichtbar und führt jede Benutzerumschaltung atomar als Start/Commit aus. F2/Enter kann zusätzlich eine Sitzung auf der Checkbox öffnen; Enter schaltet um, Escape verwirft und Tab verwendet dieselbe Fokusreihenfolge. Tabelle, gesamte Spaltenkette und Zelle müssen editierbar sein. Scala bietet `textFieldCell(...)`/`checkBoxCell`, TypeScript die typisierten `textFieldColumn(...)`/`checkBoxColumn(...)`; beide Wege verwenden weiterhin Writable-Property-Writeback oder den eigenen Commit-Handler.
+
+Parsing-/Validierungsfehler für künftige konvertierende Editoren müssen die Sitzung offen lassen und zugänglich angezeigt werden. Popup-Fokus innerhalb eines künftigen Auswahl-Editors darf kein unbeabsichtigtes Ende sein.
 
 Vorgeschlagene Standardregel für integrierte Editoren: Verlässt die Zeile tatsächlich den virtuellen Bereich, wird die Sitzung mit Cancel und einem dokumentierten Grund beendet. Bleibt dieselbe Zeile sichtbar, müssen Scroll-/Messupdates den Editor erhalten. Entfernen der Zeile/Spalte und Ersetzen der Quelle brechen ebenfalls kontrolliert ab. Async-Commit-Ergebnisse dürfen nur zur zugehörigen Sitzung/Generation zurückschreiben.
 
-Die Standardfabriken decken Text, Boolean, Auswahl und Fortschritt ab. CheckBox-Zellen verdienen einen eigenen Pfad: JavaFX verwendet hier eine direkte bidirektionale Property-Bindung ohne gewöhnlichen Edit-Commit-Zyklus. Das entspricht eher unseren bereits möglichen dauerhaft eingebetteten Controls. Quelle: [CheckBoxTableCell, JavaFX 25](https://openui.io/javadoc/25/javafx.controls/javafx/scene/control/cell/CheckBoxTableCell.html); Detailabgleich mit JavaFX 26 bleibt Teil von M4, da diese 26-Einzelseite nicht abrufbar war.
+Die verbleibenden Standardfabriken decken Auswahl und Fortschritt ab. JavaFX verwendet für CheckBox-Zellen eine direkte bidirektionale Property-Bindung ohne gewöhnlichen Edit-Commit-Zyklus. Unsere Checkbox bleibt ebenfalls dauerhaft eingebettet, leitet die atomare Umschaltung aber absichtlich durch das einheitliche Start-/Commit-Ereignis- und Schreibmodell. Quelle: [CheckBoxTableCell, JavaFX 25](https://openui.io/javadoc/25/javafx.controls/javafx/scene/control/cell/CheckBoxTableCell.html); Detailabgleich mit JavaFX 26 bleibt Teil der Paritätsabnahme.
 
 ### 4.7 Spaltenbaum, Breiten und Header
 
@@ -495,11 +499,11 @@ ARIA umfasst Grid/Row/ColumnHeader/GridCell, sichtbare Spaltenindizes, absolute 
 
 ### 4.9 Scala- und TypeScript-Vertrag gemeinsam liefern
 
-Die öffentliche Tabellenfassade liegt in `npm/scalajs-ui-controls`; `tableView(...)` liefert ein `TableViewHandle<T>` für `refresh()`, `isDisposed`, lesbare Einzel-/Mehrfachauswahl, kontrollierte Auswahloperationen, Zeilen-/Spaltennavigation, Sortierung, sichtbare Blattanzahl und Zellwert-Lookups. Navigationsereignisse werden als deklarative Optionen registriert. `edit` und umfassende Modell-Handles bleiben offen.
+Die öffentliche Tabellenfassade liegt in `npm/scalajs-ui-controls`; `tableView(...)` liefert ein `TableViewHandle<T>` für Refresh/Lifecycle, Auswahl, Fokus/Navigation, Sortierung, Editing und Zellwert-Lookups. Navigations- und Edit-Ereignisse werden deklarativ registriert. Eigene Scala-Modellklassen werden nicht über die TypeScript-Fassade installiert.
 
 Die Rückgabe wird nach abgeschlossenem Mount über einen internen Factory-Callback aus der Bridge an die TypeScript-Fassade übergeben. Indexoperationen werden bei jedem Aufruf gegen die aktuelle sichtbare Blattfolge aufgelöst. Stabile öffentliche Spaltenhandles oder IDs können später für referenzbasierte Operationen ergänzt werden; sie sind für den jetzigen Paritätsstand nicht erforderlich.
 
-Jeder Meilenstein liefert Scala-API, Bridge-Anbindung, TypeScript-Typen, Lifecycle und ein Beispiel gemeinsam. Forms-basierte Zellfactory-Helfer werden entsprechend im Paket `npm/scalajs-ui-forms` angeboten. Keine zweite Auswahl-/Sortier-/Editierimplementierung in TypeScript. Callbacks müssen im vorhandenen Render-Scope laufen; Handles nach Unmount dürfen keine entfernten Komponenten weiter bedienen.
+Jeder Meilenstein liefert Scala-API, Bridge-Anbindung, TypeScript-Typen, Lifecycle und ein Beispiel gemeinsam. Auswahl-/Popup-Zellfactory-Helfer werden wegen der Abhängigkeitsrichtung später in Forms oder einem Integrationsmodul angeboten. Keine zweite Auswahl-/Sortier-/Editierimplementierung in TypeScript. Callbacks müssen im vorhandenen Render-Scope laufen; Handles nach Unmount dürfen keine entfernten Komponenten weiter bedienen.
 
 ## 5. Umsetzungsreihenfolge und Abnahme
 
@@ -538,9 +542,12 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 - [x] M2: Zell-/Rechteckauswahl, ausgewählte Positionen, Zell-/Zeilenmodus sowie Ctrl/Cmd-/Shift-Bedienung in Scala und TypeScript.
 - [x] M2: Austauschbare und erweiterbare Selection-/FocusModels einschließlich Ownership, Rebinding und Abgleich inaktiver Alternativen. M2 ist damit im vereinbarten Umfang abgeschlossen; anschließend M4 und die offenen M5/M6-Punkte.
 - [x] M4: Tabellenverwaltete Editiersitzung, Writable-Property-Writeback, ersetzbarer Commit-Handler, Ereignisse, Lifecycle-Abbruchgründe sowie Scala-/TypeScript-Handle.
-- [ ] M4: Standard-Text-/Boolean-Editoren sowie Enter/Escape/Tab-, Blur- und Validierungsregeln ergänzen.
+- [x] M4: Standard-Text-/Boolean-Editoren sowie F2/Enter/Escape/Tab- und explizite Blur-Regeln in Scala und TypeScript. M4 ist damit im festgelegten Umfang abgeschlossen.
+- [ ] M6: Auswahl-/Progress-Zellen sowie Parser-/Validierungsfehler und Popup-Fokusregeln ergänzen.
 
 ## 6. Verifikation
+
+Abnahme des achtzehnten Ausbaus am 14.09.2026: vollständiges Scala-Gate mit **444 Tests**, Bridge-Full-Link, CSS-/Design-Gate und npm-Gates für Controls (81 Integrationstests + 3 Paket-Consumer) sowie Demo (Typecheck, Client-/SSR-Builds, Eine-Runtime-Nachweis und 31 Routen) grün. Der neue Scala-Fall prüft beide Standardfactories, Anzeige-/Editorwechsel und Writable-Property-Writeback. Der reale Bridge-Test deckt Doppelklick, F2, Enter, Escape, Tab/Shift+Tab, IME-Abgrenzung, explizites Keep-on-Blur, DOM-/Zellfokus, Text-Commit/Cancel und atomare Checkbox-Umschaltung ab. Der Tarball-Consumer kompiliert die neuen typisierten Helfer und Blur-Policy strikt.
 
 Abnahme des siebzehnten Ausbaus am 14.09.2026: vollständiges Scala-Gate mit **443 Tests**, Bridge-Full-Link, CSS-/Design-Gate und npm-Gates für Controls (80 Integrationstests + 3 Paket-Consumer), Core (114 + 8) sowie Demo (Typecheck, Client-/SSR-Builds, Eine-Runtime-Nachweis und 31 Routen) grün. Vier neue Scala-Fälle prüfen Sitzung/Properties/CSS, genau einen Default-Writeback, ersetzbaren Commit samt nachgelagertem Beobachter, read-only Werte, Positionsfortschreibung, sämtliche wesentlichen Cancel-Gründe, Zellberechtigung und Disposal. Der reale Bridge-Test deckt zusätzlich den Erhalt der TypeScript-`Property`-Schreibfähigkeit, typisierte Callbacks, Custom Commit und das öffentliche Handle ab.
 

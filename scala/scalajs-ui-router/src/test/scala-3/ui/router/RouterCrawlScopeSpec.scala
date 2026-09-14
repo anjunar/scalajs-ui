@@ -13,8 +13,9 @@ import scala.concurrent.Future
 
 /** Counterpart to CrawlTestRoot in scalajs-ui-controls.
   *
-  * Since P1-4, scalajs-ui-controls no longer depends on scalajs-ui-router. Controls test against CrawlScope;
-  * verifying that the router provides a useful CrawlScope belongs on this side of the seam.
+  * Since P1-4, scalajs-ui-controls no longer depends on scalajs-ui-router. Controls test against
+  * CrawlScope; verifying that the router provides a useful CrawlScope belongs on this side of the
+  * seam.
   */
 class RouterCrawlScopeSpec extends AnyFlatSpec with Matchers {
 

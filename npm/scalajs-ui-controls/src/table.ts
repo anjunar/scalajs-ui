@@ -59,6 +59,20 @@ export interface ValueColumnOptions<S, V> extends Omit<ColumnDef<S>,
   readonly onEditCancel?: (event: TableEditCancelEvent<S, V>) => void;
 }
 
+export type TextFieldBlurPolicy = "keep" | "commit" | "cancel";
+
+export interface TextFieldColumnOptions<S> extends Omit<ValueColumnOptions<S, string>, "cell"> {
+  /** What losing DOM focus does while editing. Defaults to keep; Enter and Tab still commit. */
+  readonly editOnBlur?: TextFieldBlurPolicy;
+}
+
+export type CheckBoxColumnOptions<S> = Omit<ValueColumnOptions<S, boolean>, "cell">;
+
+type StandardColumnDef<T> = ColumnDef<T> & {
+  readonly standardCell: "text-field" | "check-box";
+  readonly editOnBlur?: TextFieldBlurPolicy;
+};
+
 export type ColumnGroupOptions<T> = Pick<ColumnDef<T>, "visible" | "onVisibilityChange" | "editable">;
 
 /** Builds a nested header whose width is the sum of its visible leaf columns. */
@@ -85,6 +99,32 @@ export function valueColumn<S, V>(
   return cell
     ? { ...result, valueCell: (observed, row) => cell(observed as ReadOnlyProperty<V | null>, row) }
     : result;
+}
+
+/** A String value column with a table-managed native text editor. */
+export function textFieldColumn<S>(
+  text: string,
+  value: (row: S) => Reactive<string>,
+  options: TextFieldColumnOptions<S> = {}
+): ColumnDef<S> {
+  const { editOnBlur, ...metadata } = options;
+  return {
+    ...valueColumn(text, value, metadata),
+    standardCell: "text-field",
+    editOnBlur,
+  } as StandardColumnDef<S>;
+}
+
+/** A Boolean value column whose checkbox commits every user toggle atomically. */
+export function checkBoxColumn<S>(
+  text: string,
+  value: (row: S) => Reactive<boolean>,
+  options: CheckBoxColumnOptions<S> = {}
+): ColumnDef<S> {
+  return {
+    ...valueColumn(text, value, options),
+    standardCell: "check-box",
+  } as StandardColumnDef<S>;
 }
 
 /** Builds one {@link ColumnDef}. */
@@ -323,6 +363,8 @@ export function tableView<T, Q = unknown>(
   options: TableViewOptions<T> = {}
 ): TableViewHandle<T> {
   const bridgeColumn = (col: ColumnDef<T>): Record<string, unknown> => defined({
+    standardCell: (col as Partial<StandardColumnDef<T>>).standardCell,
+    editOnBlur: (col as Partial<StandardColumnDef<T>>).editOnBlur,
     text: col.text,
     columns: col.columns?.map(bridgeColumn),
     prefWidth: col.prefWidth,

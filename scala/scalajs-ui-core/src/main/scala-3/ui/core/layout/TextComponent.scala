@@ -22,8 +22,11 @@ class TextComponent(initial: String = "") extends AbstractComponent {
       textNode.spliceText(start, deleteCount, inserted)
       pendingText = textNode.getText
     } else {
-      require(start >= 0 && start <= pendingText.length && deleteCount >= 0 &&
-        deleteCount <= pendingText.length - start, "Text splice is outside the UTF-16 range.")
+      require(
+        start >= 0 && start <= pendingText.length && deleteCount >= 0 &&
+          deleteCount <= pendingText.length - start,
+        "Text splice is outside the UTF-16 range."
+      )
       pendingText = pendingText.take(start) + inserted + pendingText.drop(start + deleteCount)
     }
   }

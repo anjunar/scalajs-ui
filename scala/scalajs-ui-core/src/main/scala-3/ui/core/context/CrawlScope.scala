@@ -9,8 +9,9 @@ import ui.core.di.Context
   * for crawlers. They need exactly one piece of information: the current page's path. They do not
   * need routing for this -- a generic table must not know that a router exists.
   *
-  * The application decides who provides the scope. Usually it is the router (scalajs-ui-router provides
-  * itself as a CrawlScope in `compose`); an application without a router may use any other source.
+  * The application decides who provides the scope. Usually it is the router (scalajs-ui-router
+  * provides itself as a CrawlScope in `compose`); an application without a router may use any other
+  * source.
   *
   * When the scope is missing, [[CrawlScope.path]] returns an empty string -- the controls then
   * render no crawl link. This is the correct failure mode: without a known path, there is no link a
