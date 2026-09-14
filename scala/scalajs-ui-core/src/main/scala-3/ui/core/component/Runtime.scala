@@ -194,9 +194,11 @@ object Runtime {
       require(!(ancestor.get eq component), "Cannot move a component into its own subtree.")
       ancestor = ancestor.get._parent
     }
-    val remaining = destination._children.filterNot(_ eq component).toVector
-    require(index >= 0 && index <= remaining.length, "Move index is outside destination children.")
-    if ((source eq destination) && source._children.indexOf(component) == index) return
+    val sameParent    = source eq destination
+    val remainingSize = destination._children.length - (if (sameParent) 1 else 0)
+    require(index >= 0 && index <= remainingSize, "Move index is outside destination children.")
+    if (sameParent && (destination._children(index) eq component)) return
+    val remaining       = destination._children.filterNot(_ eq component).toVector
     val previousContext = effectiveContext(component, source)
     val nextContext     = effectiveContext(component, destination)
     require(
@@ -229,6 +231,117 @@ object Runtime {
     destination._children.insert(index, component)
     component._parent = Some(destination)
     component._mountParentHost = Some(targetHost)
+  }
+
+  /** Permutes one owner's physical children. Ownership stays in Runtime; callers supply only the
+    * desired permutation. A longest increasing subsequence keeps already ordered hosts stationary,
+    * so rotating a large list moves one host rather than every sibling.
+    */
+  private[ui] def reorderChildren(
+      owner: AbstractComponent,
+      desired: Seq[AbstractComponent]
+  ): Unit = {
+    require(owner.isBound && !owner.isDisposed, "Parent is not mounted.")
+    val previous = owner._children.toVector
+    val wanted   = desired.toVector
+    val size     = previous.length
+    require(wanted.length == size, "Reordering requires every existing child exactly once.")
+    val positions = new java.util.IdentityHashMap[AbstractComponent, java.lang.Integer]()
+    previous.zipWithIndex.foreach { (component, index) => positions.put(component, index) }
+    val order = new Array[Int](size)
+    val seen  = new Array[Boolean](size)
+    var same  = true
+    var i     = 0
+    while (i < size) {
+      val component = wanted(i)
+      require(positions.containsKey(component), "Reordering cannot add or reparent children.")
+      val index = positions.get(component).intValue()
+      require(!seen(index), "Duplicate reordered child.")
+      require(
+        component.isBound && !component.isDisposed && !component.isVirtual && !component.isText,
+        "Reordering requires mounted physical element children."
+      )
+      require(component._parent.exists(_ eq owner), "Child ownership differs from its parent list.")
+      seen(index) = true
+      order(i) = index
+      same &&= index == i
+      i += 1
+    }
+    if (same) return
+
+    // Patience sorting, O(n log n), followed by reconstruction of stationary indices.
+    val tails       = new Array[Int](size)
+    val predecessor = Array.fill(size)(-1)
+    var length      = 0
+    i = 0
+    while (i < size) {
+      var low  = 0
+      var high = length
+      while (low < high) {
+        val middle = (low + high) >>> 1
+        if (order(tails(middle)) < order(i)) low = middle + 1 else high = middle
+      }
+      if (low > 0) predecessor(i) = tails(low - 1)
+      tails(low) = i
+      if (low == length) length += 1
+      i += 1
+    }
+    val stationary = new Array[Boolean](size)
+    i = tails(length - 1)
+    while (i >= 0) { stationary(i) = true; i = predecessor(i) }
+
+    val cursor = contentCursor(owner)
+    val target = cursor.parentHost.getOrElse(
+      throw new IllegalArgumentException("Destination has no physical parent host.")
+    )
+    HostMutationGuard.checkWrite(target)
+    i = 0
+    while (i < size) {
+      if (!stationary(i)) {
+        HostMutationGuard.checkRemoval(wanted(i)._host)
+        require(
+          wanted(i)._contentCursor.asyncContext == cursor.asyncContext,
+          "Moving across render contexts is not supported."
+        )
+      }
+      i += 1
+    }
+
+    // Transient links track only successful physical insertions. Even if a backend
+    // rejects a later insertion, the owner's list must describe the hosts already moved.
+    // Unlike repeated ArrayBuffer remove/insert, each link update is constant work.
+    val next = Array.tabulate(size + 1)(index => if (index == size) 0 else index + 1)
+    val prev = Array.tabulate(size + 1)(index => if (index == 0) size else index - 1)
+    val end: Option[HostNode] = owner._host match {
+      case host: VirtualHost => host.end
+      case _                 => None
+    }
+    var anchor = size
+    var moved  = false
+    try {
+      i = size - 1
+      while (i >= 0) {
+        val index = order(i)
+        if (!stationary(i)) {
+          val before = if (anchor == size) end else Some(previous(anchor)._host)
+          target.insertBefore(previous(index)._host, before)
+          next(prev(index)) = next(index)
+          prev(next(index)) = prev(index)
+          prev(index) = prev(anchor)
+          next(index) = anchor
+          next(prev(anchor)) = index
+          prev(anchor) = index
+          moved = true
+        }
+        anchor = index
+        i -= 1
+      }
+    } finally
+      if (moved) {
+        owner._children.clear()
+        var index = next(size)
+        while (index != size) { owner._children += previous(index); index = next(index) }
+      }
   }
 
   private def effectiveContext(

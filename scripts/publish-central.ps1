@@ -138,7 +138,7 @@ for ($attempt = 1; $attempt -le $MaxPolls; $attempt++) {
         exit 0
     }
 
-    if ($status.deploymentState -in @("FAILED", "VALIDATED")) {
+    if ($status.deploymentState -eq "FAILED" -or ($status.deploymentState -eq "VALIDATED" -and $PublishingType -eq "USER_MANAGED")) {
         Write-Host "Deployment ended with status $($status.deploymentState)."
         $status | ConvertTo-Json -Depth 10
         exit 1

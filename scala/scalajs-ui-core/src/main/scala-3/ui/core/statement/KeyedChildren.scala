@@ -53,10 +53,9 @@ final class KeyedChildren[K, V, C <: AbstractComponent](
         Runtime.unmount(entries(id).component)
         entries.remove(id)
       }
-      values.zip(keys).zipWithIndex.foreach { case ((value, id), index) =>
+      values.zip(keys).foreach { case (value, id) =>
         entries.get(id) match {
           case Some(entry) =>
-            Runtime.move(entry.component, this, index)
             if (entry.value != value) {
               update(entry.component, value)
               entries(id) = Entry(entry.component, value)
@@ -67,15 +66,14 @@ final class KeyedChildren[K, V, C <: AbstractComponent](
               !component.isVirtual && !component.isText,
               "Keyed children require physical element components."
             )
-            val base   = initialCursor.getOrElse(Runtime.contentCursor(this))
-            val cursor =
-              if (initialCursor.nonEmpty) base
-              else
-                children.lift(index).flatMap(_.firstPhysicalHost).map(base.before).getOrElse(base)
-            Runtime.mount(component, cursor, Some(this), Some(index))
+            // Append new hosts, then let Runtime permute the complete child list once.
+            val cursor = initialCursor.getOrElse(Runtime.contentCursor(this))
+            Runtime.mount(component, cursor, Some(this))
             entries(id) = Entry(component, value)
         }
       }
+      if (initialCursor.isEmpty)
+        Runtime.reorderChildren(this, keys.map(id => entries(id).component))
     } finally updating = false
   }
 
