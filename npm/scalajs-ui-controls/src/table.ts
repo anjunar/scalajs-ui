@@ -12,6 +12,8 @@ import type { ComponentHandle, Reactive, ReadOnlyProperty, ScopeHandle } from "@
 import { body, defined, rowBody } from "./internal.js";
 import type { Source, SortSpec } from "./data-source.js";
 
+type TableEditHandler<E> = { bivarianceHack(event: E): void }["bivarianceHack"];
+
 export interface ColumnDef<T> {
   readonly text: string;
   /** Nested columns form a group header. Only leaves render cells and participate in layout. */
@@ -23,6 +25,8 @@ export interface ColumnDef<T> {
   readonly resizable?: Reactive<boolean>;
   /** Disables header drag/keyboard reordering, not programmatic moves. Defaults to true. */
   readonly reorderable?: Reactive<boolean>;
+  /** Participates in table-managed editing. Defaults to true. */
+  readonly editable?: Reactive<boolean>;
   /** Removes the column from layout and rendering without removing its definition. Defaults to true. */
   readonly visible?: Reactive<boolean>;
   /** Observes changes, not the initial value; use to write menu changes back to app state. */
@@ -37,13 +41,25 @@ export interface ColumnDef<T> {
   readonly value?: (row: T) => Reactive<unknown>;
   /** Prefer `valueColumn` for a renderer whose observed value retains its concrete type. */
   readonly valueCell?: (value: ReadOnlyProperty<unknown>, row: T) => void;
+  readonly onEditStart?: TableEditHandler<TableEditStartEvent<T, unknown>>;
+  /** Replaces default write-back through a writable value property. */
+  readonly editCommitHandler?: TableEditHandler<TableEditCommitEvent<T, unknown>>;
+  /** Observes successful default or custom commits. */
+  readonly onEditCommit?: TableEditHandler<TableEditCommitEvent<T, unknown>>;
+  readonly onEditCancel?: TableEditHandler<TableEditCancelEvent<T, unknown>>;
 }
 
-export interface ValueColumnOptions<S, V> extends Omit<ColumnDef<S>, "text" | "cell" | "value" | "valueCell"> {
+export interface ValueColumnOptions<S, V> extends Omit<ColumnDef<S>,
+  "text" | "cell" | "value" | "valueCell" | "onEditStart" | "editCommitHandler" |
+  "onEditCommit" | "onEditCancel"> {
   readonly cell?: (value: ReadOnlyProperty<V | null>, row: S) => void;
+  readonly onEditStart?: (event: TableEditStartEvent<S, V>) => void;
+  readonly editCommitHandler?: (event: TableEditCommitEvent<S, V>) => void;
+  readonly onEditCommit?: (event: TableEditCommitEvent<S, V>) => void;
+  readonly onEditCancel?: (event: TableEditCancelEvent<S, V>) => void;
 }
 
-export type ColumnGroupOptions<T> = Pick<ColumnDef<T>, "visible" | "onVisibilityChange">;
+export type ColumnGroupOptions<T> = Pick<ColumnDef<T>, "visible" | "onVisibilityChange" | "editable">;
 
 /** Builds a nested header whose width is the sum of its visible leaf columns. */
 export function columnGroup<T>(
@@ -99,6 +115,21 @@ export interface TablePosition {
   readonly row: number;
   readonly column: number;
 }
+export interface TableEditStartEvent<T, V = unknown> {
+  readonly position: TablePosition;
+  readonly rowItem: T;
+  readonly oldValue: V;
+}
+export interface TableEditCommitEvent<T, V = unknown> extends TableEditStartEvent<T, V> {
+  readonly newValue: V;
+}
+export type TableEditCancelReason = "explicit" | "replaced" | "table-disabled" |
+  "column-disabled" | "row-removed" | "row-replaced" | "source-reset" |
+  "column-unavailable" | "cell-unavailable" | "disposed";
+export interface TableEditCancelEvent<T, V = unknown> extends TableEditStartEvent<T, V> {
+  readonly draftValue: V;
+  readonly reason: TableEditCancelReason;
+}
 /** One term in an explicit remote sort order, resolved against the current visible columns. */
 export interface TableSort {
   readonly columnIndex: number;
@@ -108,6 +139,8 @@ export type ColumnResizePolicy = "unconstrained" | "all-columns" | "last-column"
   | "subsequent-columns" | "flex-next-column" | "flex-last-column";
 
 export interface TableViewOptions<T = unknown> {
+  /** Enables table-managed editing. Defaults to false. */
+  readonly editable?: Reactive<boolean>;
   /** Stable, unique entity identity. Preserves loaded selection/focus across accepted remote
    * replacements and local resets. Duplicate or currently unloaded keys are not guessed or fetched.
    */
@@ -186,6 +219,16 @@ export interface TableViewHandle<T = unknown> {
   readonly focusedItem: ReadOnlyProperty<T | null>;
   /** Logical coordinate. Row-only focus has column -1; reordering republishes the derived index. */
   readonly focusedCell: ReadOnlyProperty<TablePosition | null>;
+  readonly editingCell: ReadOnlyProperty<TablePosition | null>;
+  readonly editingItem: ReadOnlyProperty<T | null>;
+  readonly originalEditValue: ReadOnlyProperty<unknown | null>;
+  readonly editingValue: ReadOnlyProperty<unknown | null>;
+  /** Starts an edit for a loaded, editable cell. A second target cancels the current edit first. */
+  editCell(rowIndex: number, visibleColumnIndex: number): boolean;
+  updateEdit(value: unknown): boolean;
+  /** Commits the current draft, or the supplied replacement. False keeps a read-only session open. */
+  commitEdit(value?: unknown): boolean;
+  cancelEdit(): boolean;
   /** Changes only logical focus: no selection, scrolling, DOM focus or remote fetch.
    * Invalid indices clear focus; all focus operations are no-ops after disposal.
    */
@@ -287,6 +330,7 @@ export function tableView<T, Q = unknown>(
     maxWidth: col.maxWidth,
     resizable: col.resizable,
     reorderable: col.reorderable,
+    editable: col.editable,
     visible: col.visible,
     onVisibilityChange: col.onVisibilityChange,
     sortable: col.sortable,
@@ -296,6 +340,10 @@ export function tableView<T, Q = unknown>(
     valueCell: col.valueCell
       ? (value: ReadOnlyProperty<unknown>, row: T) => body(() => col.valueCell!(value, row))
       : undefined,
+    onEditStart: col.onEditStart,
+    editCommitHandler: col.editCommitHandler,
+    onEditCommit: col.onEditCommit,
+    onEditCancel: col.onEditCancel,
   });
   let handle: TableViewHandle<T> | undefined;
   component(
@@ -307,6 +355,7 @@ export function tableView<T, Q = unknown>(
       columnResizePolicy: options.columnResizePolicy,
       selectionMode: options.selectionMode,
       cellSelectionEnabled: options.cellSelectionEnabled,
+      editable: options.editable,
       rowKey: options.rowKey,
       onScrollTo: options.onScrollTo,
       onScrollToColumn: options.onScrollToColumn,

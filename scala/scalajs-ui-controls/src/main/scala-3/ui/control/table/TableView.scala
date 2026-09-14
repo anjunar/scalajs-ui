@@ -48,6 +48,18 @@ final class TableView[S] private (
 
   val columns: ListProperty[TableColumn[S, ?]]                          = new TableColumnList(this)
   val rowFactoryProperty: Property[Option[TableView[S] => TableRow[S]]] = Property(None)
+  val editableProperty: Property[Boolean]                               = Property(false)
+  val editModel: TableEditModel[S]                                      = new TableEditModel(this)
+  val editingCellProperty: ReadOnlyProperty[TablePosition[S] | Null]    =
+    editModel.editingCellProperty
+  val editingItemProperty: ReadOnlyProperty[S | Null]         = editModel.editingItemProperty
+  val originalEditValueProperty: ReadOnlyProperty[Any | Null] = editModel.originalValueProperty
+  val editingValueProperty: ReadOnlyProperty[Any | Null]      = editModel.editingValueProperty
+  val editingProperty: ReadOnlyProperty[Boolean]              = editModel.isEditingProperty
+
+  def editable: Boolean                = editableProperty.get
+  def editable_=(value: Boolean): Unit = editableProperty.set(value)
+  def editing: Boolean                 = editingProperty.get
 
   /** Optional stable entity identity used to restore selection and focus after a source reset. Keys
     * must be unique in a result. Resolution scans loaded values only and never fetches gaps.
@@ -138,10 +150,11 @@ final class TableView[S] private (
 
   private final class VisibleRow(val index: Int, val item: Option[S])
 
-  private val visibleRowsProperty         = ListProperty[VisibleRow]()
-  private val columnStateRevisionProperty = Property(0)
-  private val columnTreeRevisionProperty  = Property(0)
-  private val headerStateRevisionProperty = Property(0)
+  private val visibleRowsProperty                      = ListProperty[VisibleRow]()
+  private val columnStateRevisionProperty              = Property(0)
+  private val columnTreeRevisionProperty               = Property(0)
+  private[table] val columnEditabilityRevisionProperty = Property(0)
+  private val headerStateRevisionProperty              = Property(0)
   private[table] val allColumnsProperty: ReadOnlyProperty[Vector[TableColumn[S, ?]]] =
     columnTreeRevisionProperty.map(_ => allColumns)
 
@@ -332,6 +345,7 @@ final class TableView[S] private (
     ensureCellFocusId(cell)
     updateActiveRow()
     cell.addDisposable(Disposable {
+      editModel.cellDisposed(cell)
       mountedCells.remove(cell)
       mountedCellIds.remove(cell)
       updateActiveRow()
@@ -587,25 +601,37 @@ final class TableView[S] private (
     * following rows.
     */
   override protected def handleLocalItemsChange(change: ListProperty.Change[S]): Unit = {
-    registeredFocusModels.toVector.foreach(_.reconcile(change))
-    registeredSelectionModels.toVector.foreach(_.reconcile(change))
-    change match {
-      case ListProperty.Reset(_) => refresh()
-      case _                     => refreshItemState()
-    }
+    editModel.reconcile(change)
+    editModel.beginItemRefresh()
+    try {
+      registeredFocusModels.toVector.foreach(_.reconcile(change))
+      registeredSelectionModels.toVector.foreach(_.reconcile(change))
+      change match {
+        case ListProperty.Reset(_) => refresh()
+        case _                     => refreshItemState()
+      }
+    } finally editModel.endItemRefresh()
   }
 
   override protected def handleRemoteItemsChange(change: RemoteListChange[S]): Unit = {
-    change match {
-      case RemoteListChange.Reset() =>
-        registeredSelectionModels.toVector.foreach(_.reconcileReset(allowReferenceFallback = false))
-        registeredFocusModels.toVector.foreach(_.reconcileReset(allowReferenceFallback = false))
-      case RemoteListChange.Structural(change) =>
-        registeredSelectionModels.toVector.foreach(_.reconcile(change))
-        registeredFocusModels.toVector.foreach(_.reconcile(change))
-      case RemoteListChange.RangeLoaded(_, _) => ()
-    }
-    super.handleRemoteItemsChange(change)
+    editModel.beginItemRefresh()
+    try {
+      change match {
+        case RemoteListChange.Reset() =>
+          editModel.reconcile(ListDataSource.Reset(dataSource))
+          registeredSelectionModels.toVector.foreach(
+            _.reconcileReset(allowReferenceFallback = false)
+          )
+          registeredFocusModels.toVector.foreach(_.reconcileReset(allowReferenceFallback = false))
+        case RemoteListChange.Structural(change) =>
+          editModel.reconcile(change)
+          registeredSelectionModels.toVector.foreach(_.reconcile(change))
+          registeredFocusModels.toVector.foreach(_.reconcile(change))
+        case RemoteListChange.RangeLoaded(from, untilExclusive) =>
+          editModel.reconcileRangeLoaded(from, untilExclusive)
+      }
+      super.handleRemoteItemsChange(change)
+    } finally editModel.endItemRefresh()
   }
 
   /** Only TableView scrolls horizontally. */
@@ -659,9 +685,35 @@ final class TableView[S] private (
     TableColumnTree.visibleLeaves(Seq(column))
   private[table] def allColumns: Vector[TableColumn[S, ?]] =
     TableColumnTree.nodes(columns.toVector).map(_.column)
-  def $getColumns: ListProperty[TableColumn[S, ?]] = columns
-  def $getFixedCellSize: Double                    = rowHeightProperty.get
-  def setFixedCellSize(value: Double): Unit        = rowHeightProperty.set(value)
+
+  private[table] def isColumnEditable(column: TableColumn[S, ?]): Boolean = {
+    var current: TableColumn[S, ?] | Null = column
+    var result                            = true
+    while (current != null && result) {
+      result = current.editableProperty.get
+      current = current.parentColumn
+    }
+    result
+  }
+
+  private[table] def canStartEdit[T](row: Int, column: TableColumn[S, T]): Boolean = {
+    val mounted = mountedCells.iterator.find(cell =>
+      cell.indexProperty.get == row && (cell.tableColumn eq column)
+    )
+    !isDisposed && editableProperty.get && column != null &&
+    (column.tableViewProperty.get eq this) && getVisibleLeafIndex(column) >= 0 &&
+    row >= 0 && row < items.totalLength && items.itemAt(row).nonEmpty &&
+    isColumnEditable(column) && mounted.forall(_.editableProperty.get)
+  }
+
+  def edit[T](row: Int, column: TableColumn[S, T]): Boolean = editModel.edit(row, column)
+  def updateEdit(value: Any | Null): Boolean                = editModel.updateEdit(value)
+  def commitEdit(): Boolean                                 = editModel.commitEdit()
+  def commitEdit(value: Any | Null): Boolean                = editModel.commitEdit(value)
+  def cancelEdit(): Boolean                                 = editModel.cancelEdit()
+  def $getColumns: ListProperty[TableColumn[S, ?]]          = columns
+  def $getFixedCellSize: Double                             = rowHeightProperty.get
+  def setFixedCellSize(value: Double): Unit                 = rowHeightProperty.set(value)
 
   private[control] def registerColumn(column: TableColumn[S, ?]): Unit = {
     columnParentStack.headOption match {
@@ -680,6 +732,7 @@ final class TableView[S] private (
   private def syncColumns(): Unit = {
     val tree    = TableColumnTree.nodes(columns.toVector)
     val current = tree.map(_.column)
+    editModel.reconcileColumns(TableColumnTree.visibleLeaves(columns.toVector))
     attachedColumns.keys.filterNot(current.contains).toVector.foreach { column =>
       attachedColumns.remove(column).foreach(_.dispose())
       userColumnWidths.remove(column)
@@ -695,6 +748,12 @@ final class TableView[S] private (
       subscriptions.add(column.minWidthProperty.observeWithoutInitial(_ => bumpColumnState()))
       subscriptions.add(column.maxWidthProperty.observeWithoutInitial(_ => bumpColumnState()))
       subscriptions.add(column.resizableProperty.observeWithoutInitial(_ => bumpColumnState()))
+      subscriptions.add(
+        column.editableProperty.observeWithoutInitial { _ =>
+          columnEditabilityRevisionProperty.set(columnEditabilityRevisionProperty.get + 1)
+          editModel.reconcileColumns(TableColumnTree.visibleLeaves(columns.toVector))
+        }
+      )
       subscriptions.add(column.sortableProperty.observeWithoutInitial(_ => bumpHeaderState()))
       subscriptions.add(column.sortKeyProperty.observeWithoutInitial(_ => bumpHeaderState()))
       subscriptions.add(column.visibleProperty.observeWithoutInitial(_ => syncVisibleColumns()))
@@ -702,12 +761,14 @@ final class TableView[S] private (
       attachedColumns.put(column, subscriptions)
     }
     columnTreeRevisionProperty.set(columnTreeRevisionProperty.get + 1)
+    columnEditabilityRevisionProperty.set(columnEditabilityRevisionProperty.get + 1)
     syncVisibleColumns()
   }
 
   /** A visibility change removes only hidden cells, retaining all other column instances. */
   private def syncVisibleColumns(): Unit = {
     val wanted = TableColumnTree.visibleLeaves(columns.toVector)
+    editModel.reconcileColumns(wanted)
     if (visibleColumns.toVector != wanted) visibleColumns.setAll(wanted)
     registeredFocusModels.toVector.foreach(_.reconcileColumns())
     registeredSelectionModels.toVector.foreach(_.reconcileColumns())
@@ -755,6 +816,8 @@ final class TableView[S] private (
 
     DslLayer.render(this, cursor) {
       addClass("ui-table-view")
+      classIf("ui-table-view-editable", editableProperty)
+      classIf("ui-table-view-editing", editingProperty)
       classIf(
         "ui-table-view-cell-selection",
         selectionModelProperty.flatMap(_.cellSelectionEnabledProperty)
@@ -1066,6 +1129,8 @@ final class TableView[S] private (
 
   private def installObservers(): Unit = {
     syncColumns()
+    addDisposable(Disposable(editModel.dispose()))
+    addDisposable(editableProperty.observeWithoutInitial(_ => editModel.tableEditableChanged()))
     addDisposable(Disposable {
       pendingScrollColumn = None
       attachedColumns.toVector.foreach { case (column, subscriptions) =>
@@ -1276,6 +1341,12 @@ final class TableView[S] private (
 }
 
 object TableView {
+  def editable(using table: TableView[?]): Boolean                = table.editableProperty.get
+  def editable_=(value: Boolean)(using table: TableView[?]): Unit =
+    table.editableProperty.set(value)
+  def editable_=(value: ReadOnlyProperty[Boolean])(using table: TableView[?]): Unit =
+    table.addDisposable(value.observe(table.editableProperty.set))
+
   def columnMenuText(using table: TableView[?]): String = table.columnMenuTextProperty.get
   def columnMenuText_=(value: String)(using table: TableView[?]): Unit =
     table.columnMenuTextProperty.set(value)

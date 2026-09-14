@@ -2,7 +2,16 @@ package ui.bridge
 
 import ui.control.carousel.Carousel
 import ui.control.datagrid.DataGrid
-import ui.control.table.{TableCell, TableColumn, TableRow, TableView}
+import ui.control.table.{
+  TableCell,
+  TableColumn,
+  TableEditCancelEvent,
+  TableEditCancelReason,
+  TableEditCommitEvent,
+  TableEditStartEvent,
+  TableRow,
+  TableView
+}
 import ui.control.tabs.Tabs
 import ui.control.virtuallist.VirtualListView
 import ui.core.component.AbstractComponent
@@ -85,17 +94,22 @@ private[bridge] trait TabFacade extends js.Object {
 
 @js.native
 private[bridge] trait ColumnFacade extends js.Object {
-  val text: String                                                = js.native
-  val columns: js.UndefOr[js.Array[ColumnFacade]]                 = js.native
-  val prefWidth: js.UndefOr[Double]                               = js.native
-  val minWidth: js.UndefOr[Double]                                = js.native
-  val maxWidth: js.UndefOr[Double]                                = js.native
-  val resizable: js.UndefOr[js.Any]                               = js.native
-  val reorderable: js.UndefOr[js.Any]                             = js.native
-  val sortable: js.UndefOr[Boolean]                               = js.native
-  val sortKey: js.UndefOr[String]                                 = js.native
-  val visible: js.UndefOr[js.Any]                                 = js.native
-  val onVisibilityChange: js.UndefOr[js.Function1[Boolean, Unit]] = js.native
+  val text: String                                                 = js.native
+  val columns: js.UndefOr[js.Array[ColumnFacade]]                  = js.native
+  val prefWidth: js.UndefOr[Double]                                = js.native
+  val minWidth: js.UndefOr[Double]                                 = js.native
+  val maxWidth: js.UndefOr[Double]                                 = js.native
+  val resizable: js.UndefOr[js.Any]                                = js.native
+  val reorderable: js.UndefOr[js.Any]                              = js.native
+  val editable: js.UndefOr[js.Any]                                 = js.native
+  val sortable: js.UndefOr[Boolean]                                = js.native
+  val sortKey: js.UndefOr[String]                                  = js.native
+  val visible: js.UndefOr[js.Any]                                  = js.native
+  val onVisibilityChange: js.UndefOr[js.Function1[Boolean, Unit]]  = js.native
+  val onEditStart: js.UndefOr[js.Function1[js.Object, Unit]]       = js.native
+  val editCommitHandler: js.UndefOr[js.Function1[js.Object, Unit]] = js.native
+  val onEditCommit: js.UndefOr[js.Function1[js.Object, Unit]]      = js.native
+  val onEditCancel: js.UndefOr[js.Function1[js.Object, Unit]]      = js.native
 
   /** `(row) => (scope) => void` -- the cell body, already wrapped in `withScope` on the TS side. */
   val cell: js.UndefOr[js.Function1[js.Any, js.Function1[ScopeHandleBridge, Unit]]] = js.native
@@ -269,6 +283,44 @@ private[bridge] object TableViewFactory extends ComponentFactory {
     val src     = ControlFactories.source(options("source"))
     val columns = options("columns").asInstanceOf[js.Array[ColumnFacade]]
 
+    def positionFacade(row: Int, column: Int): js.Object =
+      js.Dynamic.literal(row = row, column = column)
+
+    def editStartFacade(event: TableEditStartEvent[js.Any, js.Any]): js.Object =
+      js.Dynamic.literal(
+        position = positionFacade(event.position.row, event.position.column),
+        rowItem = event.rowValue,
+        oldValue = event.oldValue
+      )
+
+    def editCommitFacade(event: TableEditCommitEvent[js.Any, js.Any]): js.Object =
+      js.Dynamic.literal(
+        position = positionFacade(event.position.row, event.position.column),
+        rowItem = event.rowValue,
+        oldValue = event.oldValue,
+        newValue = event.newValue
+      )
+
+    def editCancelFacade(event: TableEditCancelEvent[js.Any, js.Any]): js.Object =
+      js.Dynamic.literal(
+        position = positionFacade(event.position.row, event.position.column),
+        rowItem = event.rowValue,
+        oldValue = event.oldValue,
+        draftValue = event.draftValue,
+        reason = (event.reason match {
+          case TableEditCancelReason.Explicit          => "explicit"
+          case TableEditCancelReason.Replaced          => "replaced"
+          case TableEditCancelReason.TableDisabled     => "table-disabled"
+          case TableEditCancelReason.ColumnDisabled    => "column-disabled"
+          case TableEditCancelReason.RowRemoved        => "row-removed"
+          case TableEditCancelReason.RowReplaced       => "row-replaced"
+          case TableEditCancelReason.SourceReset       => "source-reset"
+          case TableEditCancelReason.ColumnUnavailable => "column-unavailable"
+          case TableEditCancelReason.CellUnavailable   => "cell-unavailable"
+          case TableEditCancelReason.Disposed          => "disposed"
+        })
+      )
+
     val table = TableView.tableView[js.Any](src) {
       options.get("rowHeight").foreach(value => TableView.rowHeight = ControlFactories.dbl(value))
       options.get("columnResizePolicy").foreach { value =>
@@ -299,6 +351,12 @@ private[bridge] object TableViewFactory extends ComponentFactory {
           table.selectionModelProperty.observeWithoutInitial { model =>
             model.cellSelectionEnabled = source.get
           }
+        )
+      }
+      options.get("editable").foreach { value =>
+        val table = summon[TableView[js.Any]]
+        table.addDisposable(
+          ReactiveBridge.asProperty[Boolean](value).observe(table.editableProperty.set)
         )
       }
       options
@@ -394,8 +452,25 @@ private[bridge] object TableViewFactory extends ComponentFactory {
             ReactiveBridge.asProperty[Boolean](value).observe(column.reorderableProperty.set)
           )
         }
+        col.editable.foreach { value =>
+          column.addDisposable(
+            ReactiveBridge.asProperty[Boolean](value).observe(column.editableProperty.set)
+          )
+        }
         col.sortable.foreach(column.sortableProperty.set)
         col.sortKey.foreach(key => column.sortKeyProperty.set(Some(key)))
+        col.onEditStart.foreach(callback =>
+          column.onEditStartProperty.set(Some(event => callback(editStartFacade(event))))
+        )
+        col.editCommitHandler.foreach(callback =>
+          column.editCommitHandlerProperty.set(Some(event => callback(editCommitFacade(event))))
+        )
+        col.onEditCommit.foreach(callback =>
+          column.onEditCommitProperty.set(Some(event => callback(editCommitFacade(event))))
+        )
+        col.onEditCancel.foreach(callback =>
+          column.onEditCancelProperty.set(Some(event => callback(editCancelFacade(event))))
+        )
         col.value.foreach { accessor =>
           column.cellValueFactoryProperty.set(
             Some(features => ReactiveBridge.asProperty[js.Any](accessor(features.value)))

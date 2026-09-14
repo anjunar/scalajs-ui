@@ -989,6 +989,68 @@ describe("table-view", () => {
     } finally { app.dispose(); root.remove(); }
   });
 
+  it("coordinates table editing, writable value commit and structural cancellation", () => {
+    const name = property("Ada");
+    const rows = listProperty([{ name }]);
+    const visible = property(true);
+    const started = vi.fn();
+    const committed = vi.fn();
+    const canceled = vi.fn();
+    const customCommit = vi.fn();
+    const customObserved = vi.fn();
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<{ name: typeof name }>;
+    const app = mount(root, () => {
+      table = tableView(rows, [
+        valueColumn("Name", row => row.name, {
+          visible,
+          onEditStart: started,
+          onEditCommit: committed,
+          onEditCancel: canceled,
+        }),
+        valueColumn("Manual", row => row.name.map(value => value), {
+          editCommitHandler: customCommit,
+          onEditCommit: customObserved,
+        }),
+      ], { paging: true, editable: true });
+    });
+    try {
+      expect(table.editCell(0, 0)).toBe(true);
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      expect(table.editingItem.get).toBe(rows.get[0]);
+      expect(table.originalEditValue.get).toBe("Ada");
+      expect(table.editingValue.get).toBe("Ada");
+      expect(root.querySelector(".ui-table-cell")?.getAttribute("aria-readonly")).toBe("false");
+      expect(root.querySelector(".ui-table-cell-editing")).not.toBeNull();
+      expect(started).toHaveBeenCalledWith(expect.objectContaining({
+        position: { row: 0, column: 0 }, oldValue: "Ada", rowItem: rows.get[0],
+      }));
+
+      expect(table.updateEdit("Grace")).toBe(true);
+      expect(table.commitEdit()).toBe(true);
+      expect(name.get).toBe("Grace");
+      expect(committed).toHaveBeenCalledWith(expect.objectContaining({
+        oldValue: "Ada", newValue: "Grace",
+      }));
+      expect(table.editingCell.get).toBeNull();
+
+      expect(table.editCell(0, 1)).toBe(true);
+      expect(table.commitEdit("Manual")).toBe(true);
+      expect(name.get).toBe("Grace");
+      expect(customCommit).toHaveBeenCalledWith(expect.objectContaining({ newValue: "Manual" }));
+      expect(customObserved).toHaveBeenCalledWith(expect.objectContaining({ newValue: "Manual" }));
+
+      expect(table.editCell(0, 0)).toBe(true);
+      rows.insert(0, { name: property("Before") });
+      expect(table.editingCell.get).toEqual({ row: 1, column: 0 });
+      visible.set(false);
+      expect(table.editingCell.get).toBeNull();
+      expect(canceled).toHaveBeenLastCalledWith(expect.objectContaining({
+        position: { row: 1, column: 0 }, reason: "column-unavailable",
+      }));
+    } finally { app.dispose(); root.remove(); }
+  });
+
   it("focuses remote gaps without fetching and uses paging navigation to materialize the focused row", async () => {
     type Query = { offset: number; limit: number };
     const requests: { query: Query; resolve: (page: RemotePage<string, Query>) => void }[] = [];
