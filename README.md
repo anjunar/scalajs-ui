@@ -52,7 +52,7 @@ Add Scala JS UI 1.0 in `build.sbt` (sbt 2 uses `%%` for the Scala.js platform su
 enablePlugins(ScalaJSPlugin)
 scalaVersion := "3.3.8"
 scalaJSUseMainModuleInitializer := true
-libraryDependencies += "com.anjunar" %% "scalajs-ui-core" % "1.0.0"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-core" % "1.0.1"
 ```
 
 Add a host element to `index.html`:
@@ -156,15 +156,15 @@ The runnable examples are in [`scalajs-ui-demo`](scala/scalajs-ui-demo) for Scal
 Set the shared project version in the Scala build, npm workspaces, demos, lockfile, and installation examples with one command:
 
 ```bash
-npm run set-version -- 3.0.1
+npm run set-version -- 1.0.1
 ```
 
-CI can verify the checked-in values without changing files with `npm run check-version -- 3.0.1`.
+CI can verify the checked-in values without changing files with `npm run check-version -- 1.0.1`.
 
-After the version change and successful release checks, publish Maven Central and all public npm packages with:
+After the version change and successful release checks, publish the Maven artifacts with:
 
 ```powershell
-.\scripts\deploy.ps1
+.\scripts\publish-central.ps1 -Version 1.0.1
 ```
 
 ## Build and tests
@@ -184,7 +184,7 @@ npm run verify --workspace npm/scalajs-ui-core
 
 ## Project status and license
 
-The repository is on the `1.0.0` release line and under active development. The complete Scala suite and every npm workspace verification run in CI for pushes and pull requests. Source, releases, and issue tracking live in the [GitHub repository](https://github.com/anjunar/scalajs-ui).
+The repository is on the `1.0.1` release line and under active development. The complete Scala suite and every npm workspace verification run in CI for pushes and pull requests. Source, releases, and issue tracking live in the [GitHub repository](https://github.com/anjunar/scalajs-ui).
 
 Scala JS UI 1.0 is available under the [MIT License](LICENSE).
 

@@ -9,7 +9,7 @@ Route matching, asynchronous route loading, nested outlets, links, localized URL
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-router" % "1.0.0"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-router" % "1.0.1"
 ```
 
 ## Quick start

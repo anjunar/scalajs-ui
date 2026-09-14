@@ -168,9 +168,9 @@ async function updateBuild(nextVersion) {
 
 async function updateScalaReadmes(nextVersion) {
   const candidates = [resolve(repositoryRoot, "README.md")];
-  for (const entry of await readdir(repositoryRoot, { withFileTypes: true })) {
+  for (const entry of await readdir(resolve(repositoryRoot, "scala"), { withFileTypes: true })) {
     if (entry.isDirectory() && entry.name.startsWith("scalajs-ui-")) {
-      candidates.push(resolve(repositoryRoot, entry.name, "README.md"));
+      candidates.push(resolve(repositoryRoot, "scala", entry.name, "README.md"));
     }
   }
 
@@ -220,7 +220,14 @@ async function updateDemos(nextVersion) {
   await record(typescriptPath, typescriptCurrent, typescriptNext);
 
   const starterPath = resolve(repositoryRoot, "docs/starters/build.sbt");
-  const starterCurrent = await readFile(starterPath, "utf8");
+  let starterCurrent;
+  try {
+    starterCurrent = await readFile(starterPath, "utf8");
+  } catch (error) {
+    // The generated starter is absent in source-only checkouts.
+    if (error?.code === "ENOENT") return;
+    throw error;
+  }
   const starterNext = starterCurrent.replace(
     /(libraryDependencies\s*\+=\s*"com\.anjunar"\s*%%\s*"scalajs-ui-[^"]+"\s*%\s*")[^"]+("\s*)/g,
     `$1${nextVersion}$2`

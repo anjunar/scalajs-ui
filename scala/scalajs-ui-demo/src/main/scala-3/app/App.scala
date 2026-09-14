@@ -194,7 +194,7 @@ class App(
           classes = Seq("app-footer")
           text(i18n"Scala JS UI 1.0 · Scala.js and TypeScript · one runtime.") {}
           routerLink() { href = "https://github.com/anjunar/scalajs-ui"; text("GitHub") {} }
-          text("v1.0.0") {}
+          text("v1.0.1") {}
         }
       }
     }
