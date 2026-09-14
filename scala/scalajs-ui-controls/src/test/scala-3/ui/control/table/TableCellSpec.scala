@@ -332,6 +332,36 @@ class TableCellSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(root)
   }
 
+  it should "provide text-field and check-box cell factories through the Scala DSL" in {
+    final class EditableRow(val name: Property[String], val active: Property[Boolean])
+    val row = new EditableRow(Property("Ada"), Property(true))
+    var nameColumn: TableColumn[EditableRow, String]    = null
+    var activeColumn: TableColumn[EditableRow, Boolean] = null
+    val (root, table, cursor)                           = mountTable(ListProperty(js.Array(row))) {
+      editable = true
+      nameColumn = column[EditableRow, String]("Name") {
+        cellValueFactory = _.value.name
+        textFieldCell()
+      }
+      activeColumn = column[EditableRow, Boolean]("Active") {
+        cellValueFactory = _.value.active
+        checkBoxCell
+      }
+    }
+
+    cursor.collectHtml() should include("ui-table-text-field-cell__display")
+    cursor.collectHtml() should include("ui-table-check-box-cell__editor")
+    table.edit(0, nameColumn) shouldBe true
+    cursor.collectHtml() should include("ui-table-text-field-cell__editor")
+    table.commitEdit("Grace") shouldBe true
+    row.name.get shouldBe "Grace"
+    cursor.collectHtml() should include("ui-table-text-field-cell__display")
+    table.edit(0, activeColumn) shouldBe true
+    table.commitEdit(false) shouldBe true
+    row.active.get shouldBe false
+    Runtime.unmount(root)
+  }
+
   it should "project visibility into headers, cells, widths and leaf lookups without remounting other cells" in {
     val source                                = ListProperty(js.Array("Ada"))
     val shown                                 = Property(false)

@@ -5,7 +5,10 @@ import ui.core.i18n.{CatalogEntry, i18n}
 
 object AppTranslations {
   val entries: Seq[CatalogEntry] = Seq(
-    de(i18n"Selection applies to this page only: browser storage is unavailable.", "Auswahl gilt nur auf dieser Seite: Browserspeicher nicht verfügbar."),
+    de(
+      i18n"Selection applies to this page only: browser storage is unavailable.",
+      "Auswahl gilt nur auf dieser Seite: Browserspeicher nicht verfügbar."
+    ),
     de(i18n"Design", "Design"),
     de(i18n"Appearance", "Darstellung"),
     de(i18n"Components", "Komponenten"),

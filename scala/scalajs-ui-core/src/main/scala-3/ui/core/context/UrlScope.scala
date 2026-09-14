@@ -6,8 +6,8 @@ import ui.core.di.Context
 /** The URL and navigation operation belonging to the currently rendered route.
   *
   * This is deliberately smaller than a router API. Controls can keep their state in the address bar
-  * without depending on scalajs-ui-router, while an application without a router can provide its own
-  * implementation.
+  * without depending on scalajs-ui-router, while an application without a router can provide its
+  * own implementation.
   */
 trait UrlScope {
   def url: String

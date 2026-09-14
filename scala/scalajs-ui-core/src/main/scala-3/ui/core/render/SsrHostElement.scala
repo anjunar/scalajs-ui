@@ -19,7 +19,7 @@ final class SsrHostElement(val tagName: String) extends HostElement, SsrNode {
     HostMutationGuard.checkWrite(this)
     attrs.remove(name)
   }
-  def attribute(name: String): Option[String]         = attrs.get(name)
+  def attribute(name: String): Option[String] = attrs.get(name)
 
   def setProperty(name: String, value: Any): Unit = {
     HostMutationGuard.checkRemoval(this)
@@ -39,8 +39,8 @@ final class SsrHostElement(val tagName: String) extends HostElement, SsrNode {
     HostMutationGuard.checkWrite(this)
     styles(name) = value
   }
-  def style(name: String): Option[String]         = styles.get(name)
-  def removeStyle(name: String): Unit = {
+  def style(name: String): Option[String] = styles.get(name)
+  def removeStyle(name: String): Unit     = {
     HostMutationGuard.checkWrite(this)
     styles.remove(name)
   }
@@ -56,14 +56,17 @@ final class SsrHostElement(val tagName: String) extends HostElement, SsrNode {
 
   def insertBefore(child: HostNode, before: Option[HostNode]): Unit = {
     require(textAreaContent.isEmpty, "Textarea content does not accept child components.")
-    require(before.forall {
-      case node: SsrNode => node.parentElement.contains(this)
-      case _ => false
-    }, "Insertion anchor does not belong to this host.")
+    require(
+      before.forall {
+        case node: SsrNode => node.parentElement.contains(this)
+        case _             => false
+      },
+      "Insertion anchor does not belong to this host."
+    )
     if (before.contains(child)) return
     val ssr = child match {
       case node: SsrNode => node
-      case _ => throw new IllegalArgumentException("An SSR host requires SSR children.")
+      case _             => throw new IllegalArgumentException("An SSR host requires SSR children.")
     }
     var ancestor: Option[SsrHostElement] = Some(this)
     while (ancestor.nonEmpty) {

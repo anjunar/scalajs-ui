@@ -414,6 +414,61 @@ final class TableView[S] private (
     )
   }
 
+  private[table] def focusGridAfterEditor(): Unit =
+    if (browserRendering && !isDisposed)
+      domElement(this).foreach(
+        _.asInstanceOf[js.Dynamic].focus(js.Dynamic.literal(preventScroll = true))
+      )
+
+  /** Starts the integrated editor in the focused cell. Row-only focus chooses the first mounted
+    * integrated cell in visible-column order.
+    */
+  private[table] def startFocusedIntegratedEdit(): Boolean = {
+    val row = focusModel.focusedIndex
+    if (row < 0) false
+    else {
+      val focusedColumn = Option(focusModel.focusedColumn)
+      val candidates    = mountedCells.iterator
+        .filter(cell =>
+          !cell.isDisposed && !cell.emptyProperty.get && cell.indexProperty.get == row &&
+            cell.supportsIntegratedEditor
+        )
+        .toVector
+        .sortBy(cell => getVisibleLeafIndex(cell.tableColumn))
+      val candidate = focusedColumn match {
+        case Some(column) => candidates.find(cell => cell.tableColumn eq column)
+        case None         => candidates.headOption
+      }
+      candidate.exists(_.startIntegratedEdit())
+    }
+  }
+
+  /** Tab order is row-major across the current visible leaf columns. It changes logical focus and
+    * reveals the destination, but deliberately does not open a second edit session.
+    */
+  private[table] def moveFocusAfterEdit(
+      row: Int,
+      column: TableColumn[S, ?],
+      backwards: Boolean
+  ): Unit = {
+    val leaves      = visibleLeafColumns.get
+    val columnIndex = leaves.indexOf(column)
+    val count       = math.max(0, items.totalLength)
+    if (columnIndex >= 0 && count > 0 && leaves.nonEmpty) {
+      val current = row.toLong * leaves.size + columnIndex
+      val next    = current + (if (backwards) -1L else 1L)
+      val limit   = count.toLong * leaves.size
+      if (next >= 0 && next < limit) {
+        val nextRow    = (next / leaves.size).toInt
+        val nextColumn = leaves((next % leaves.size).toInt)
+        focusModel.focus(nextRow, nextColumn)
+        scrollTo(nextRow)
+        scrollToColumn(nextColumn)
+      }
+    }
+    focusGridAfterEditor()
+  }
+
   /** Browser-only intrinsic sizing of the header and at most 100 mounted, loaded cells. No remote
     * fetch or renderer calls. Bounds and the current resize policy still apply. True means a width
     * changed, or a valid hydration-time request was queued.

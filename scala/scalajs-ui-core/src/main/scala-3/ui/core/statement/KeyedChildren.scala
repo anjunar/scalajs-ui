@@ -17,9 +17,9 @@ final class KeyedChildren[K, V, C <: AbstractComponent](
     update: (C, V) => Unit
 ) extends AbstractCustomComponent {
   private final case class Entry(component: C, value: V)
-  private val entries = mutable.HashMap.empty[K, Entry]
+  private val entries      = mutable.HashMap.empty[K, Entry]
   private var initialItems = initial.toVector
-  private var updating = false
+  private var updating     = false
 
   def componentFor(id: K): Option[C] = entries.get(id).map(_.component)
 
@@ -63,11 +63,15 @@ final class KeyedChildren[K, V, C <: AbstractComponent](
             }
           case None =>
             val component = create(value)
-            require(!component.isVirtual && !component.isText,
-              "Keyed children require physical element components.")
-            val base = initialCursor.getOrElse(Runtime.contentCursor(this))
-            val cursor = if (initialCursor.nonEmpty) base
-              else children.lift(index).flatMap(_.firstPhysicalHost).map(base.before).getOrElse(base)
+            require(
+              !component.isVirtual && !component.isText,
+              "Keyed children require physical element components."
+            )
+            val base   = initialCursor.getOrElse(Runtime.contentCursor(this))
+            val cursor =
+              if (initialCursor.nonEmpty) base
+              else
+                children.lift(index).flatMap(_.firstPhysicalHost).map(base.before).getOrElse(base)
             Runtime.mount(component, cursor, Some(this), Some(index))
             entries(id) = Entry(component, value)
         }
@@ -80,8 +84,10 @@ final class KeyedChildren[K, V, C <: AbstractComponent](
     require(!updating && !destination.updating, "Reentrant keyed transfer.")
     require(destination ne this, "Use setItems to reorder within the same collection.")
     val entry = entries.getOrElse(id, throw new IllegalArgumentException("Unknown child key."))
-    require(destination.key(entry.value) == id && !destination.entries.contains(id),
-      "Destination key is different or already present.")
+    require(
+      destination.key(entry.value) == id && !destination.entries.contains(id),
+      "Destination key is different or already present."
+    )
     Runtime.move(entry.component, destination, index)
     entries.remove(id)
     destination.entries(id) = destination.Entry(entry.component, entry.value)

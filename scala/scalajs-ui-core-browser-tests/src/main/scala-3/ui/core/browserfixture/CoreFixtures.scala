@@ -16,7 +16,7 @@ object CoreFixtures {
     override def compose(cursor: Cursor): Unit = if (id.nonEmpty) host.setAttribute("id", id)
   }
   private class Label(value: String, id: String = "") extends Box("p", id) {
-    val text = new TextComponent(value)
+    val text                                   = new TextComponent(value)
     override def compose(cursor: Cursor): Unit = {
       super.compose(cursor)
       Runtime.mount(text, cursor, Some(this))
@@ -29,16 +29,16 @@ object CoreFixtures {
       host.setAttribute("name", "body")
     }
   }
-  private var root: AbstractComponent = _
-  private var moving: Label = _
-  private var destination: Box = _
-  private var area: Field = _
+  private var root: AbstractComponent                               = _
+  private var moving: Label                                         = _
+  private var destination: Box                                      = _
+  private var area: Field                                           = _
   private var group: KeyedChildren[String, (String, String), Label] = _
-  private var lease: Disposable = Disposable.empty
-  private var hydration: Cursor = _
-  private var ready = 0
-  private var repairs = 0
-  private var captured = ""
+  private var lease: Disposable                                     = Disposable.empty
+  private var hydration: Cursor                                     = _
+  private var ready                                                 = 0
+  private var repairs                                               = 0
+  private var captured                                              = ""
 
   private def child[C <: AbstractComponent](owner: AbstractComponent, value: C): C =
     Runtime.mount(value, Runtime.contentCursor(owner), Some(owner))
@@ -50,20 +50,23 @@ object CoreFixtures {
     moving = child(source, new Label("A😀BC", "moving"))
     moving.host.setAttribute("contenteditable", "true")
   }
-  @JSExport def move(): Unit = Runtime.move(moving, destination, 0)
+  @JSExport def move(): Unit           = Runtime.move(moving, destination, 0)
   @JSExport def addMovingField(): Unit = { area = child(moving, new Field("control text")) }
-  @JSExport def splice(start: Int, count: Int, inserted: String): Unit = moving.text.spliceText(start, count, inserted)
+  @JSExport def splice(start: Int, count: Int, inserted: String): Unit =
+    moving.text.spliceText(start, count, inserted)
   @JSExport def appendMoved(): Unit = { child(moving, new TextComponent("!")); () }
-  @JSExport def protect(): Unit = { lease.dispose(); lease = HostMutationGuard.protect(moving.host) }
-  @JSExport def release(): Unit = lease.dispose()
+  @JSExport def protect(): Unit     = {
+    lease.dispose(); lease = HostMutationGuard.protect(moving.host)
+  }
+  @JSExport def release(): Unit                 = lease.dispose()
   @JSExport def attempt(action: String): String = {
     try {
       action match {
-        case "text" => moving.text.setText("changed")
-        case "move" => move()
-        case "remove" => Runtime.unmount(root)
+        case "text"     => moving.text.setText("changed")
+        case "move"     => move()
+        case "remove"   => Runtime.unmount(root)
         case "property" => moving.host.setProperty("textContent", "changed")
-        case "mount" => child(moving, new Label("new"))
+        case "mount"    => child(moving, new Label("new"))
       }
       "allowed"
     } catch { case _: HostWriteBlocked => "blocked" }
@@ -72,11 +75,18 @@ object CoreFixtures {
 
   @JSExport def mountKeyed(container: dom.Element): Unit = {
     root = Runtime.mount(new Box("div"), DomCursor.root(container))
-    group = child(root, new KeyedChildren[String, (String, String), Label](
-      Seq("a" -> "one", "b" -> "two"), _._1,
-      item => new Label(item._2, item._1), (component, item) => component.text.setText(item._2)))
+    group = child(
+      root,
+      new KeyedChildren[String, (String, String), Label](
+        Seq("a" -> "one", "b" -> "two"),
+        _._1,
+        item => new Label(item._2, item._1),
+        (component, item) => component.text.setText(item._2)
+      )
+    )
   }
-  @JSExport def updateKeyed(): Unit = group.setItems(Seq("b" -> "TWO", "a" -> "one", "c" -> "three"))
+  @JSExport def updateKeyed(): Unit =
+    group.setItems(Seq("b" -> "TWO", "a" -> "one", "c" -> "three"))
 
   @JSExport def renderArea(value: String): String = Runtime.renderToString { cursor =>
     val form = Runtime.mount(new Box("form"), cursor)
@@ -89,11 +99,11 @@ object CoreFixtures {
     area = Runtime.mount(new Field(initial), Runtime.contentCursor(root), Some(root))
     hydration.completeHydration()
   }
-  @JSExport def areaValue(): String = area.value
-  @JSExport def areaObserved(): String = area.valueProperty.get
-  @JSExport def areaDefault(): String = area.defaultValue
-  @JSExport def setAreaValue(value: String): Unit = area.setValue(value)
-  @JSExport def setAreaDefault(value: String): Unit = area.setDefaultValue(value)
+  @JSExport def areaValue(): String                            = area.value
+  @JSExport def areaObserved(): String                         = area.valueProperty.get
+  @JSExport def areaDefault(): String                          = area.defaultValue
+  @JSExport def setAreaValue(value: String): Unit              = area.setValue(value)
+  @JSExport def setAreaDefault(value: String): Unit            = area.setDefaultValue(value)
   @JSExport def mountPendingArea(container: dom.Element): Unit = {
     area = new Field("baseline")
     area.setValue("pending draft")
@@ -103,10 +113,12 @@ object CoreFixtures {
   private def boundaryPage(): AbstractComponent = new Box("main") {
     override def compose(cursor: Cursor): Unit = {
       area = Runtime.mount(new Field("server"), cursor, Some(this))
-      val boundary = new HydrationBoundary[String]("section",
+      val boundary = new HydrationBoundary[String](
+        "section",
         _ => { captured = area.value; captured },
         (host, _) => require(!host.attribute("data-reject").contains("yes"), "profile mismatch"),
-        _ => repairs += 1)({
+        _ => repairs += 1
+      )({
         for (value <- Seq("first", "second")) {
           val label = new Label(value) {
             override def beforeHostBinding(node: HostNode, current: Cursor): Unit =
@@ -120,15 +132,16 @@ object CoreFixtures {
       Runtime.mount(boundary, cursor, Some(this))
     }
   }
-  @JSExport def renderBoundary(): String = Runtime.renderToString(cursor => Runtime.mount(boundaryPage(), cursor))
+  @JSExport def renderBoundary(): String =
+    Runtime.renderToString(cursor => Runtime.mount(boundaryPage(), cursor))
   @JSExport def hydrateBoundary(container: dom.Element, complete: Boolean): Unit = {
     ready = 0; repairs = 0; captured = ""
     hydration = HydratingCursor.root(container)
     root = Runtime.mount(boundaryPage(), hydration)
     if (complete) hydration.completeHydration()
   }
-  @JSExport def complete(): Unit = hydration.completeHydration()
-  @JSExport def readyCount(): Int = ready
-  @JSExport def repairCount(): Int = repairs
+  @JSExport def complete(): Unit        = hydration.completeHydration()
+  @JSExport def readyCount(): Int       = ready
+  @JSExport def repairCount(): Int      = repairs
   @JSExport def capturedValue(): String = captured
 }

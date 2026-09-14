@@ -15,7 +15,10 @@ import ui.core.i18n.{I18nRuntime, RuntimeMessage, i18n}
 object OverviewPage {
   def render()(using AbstractComponent, Cursor): Unit = {
     val runtime = I18nRuntime.require
-    showcasePage(i18n"Welcome to Scala JS UI 1.0", i18n"Reactive Scala.js interfaces with SSR and hydration built into the same component model.") {
+    showcasePage(
+      i18n"Welcome to Scala JS UI 1.0",
+      i18n"Reactive Scala.js interfaces with SSR and hydration built into the same component model."
+    ) {
       vbox {
         style { gap = "34px" }
         componentShowcase(

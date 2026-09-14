@@ -58,19 +58,26 @@ class AppSsrSpec extends AsyncFlatSpec with Matchers {
   }
 
   it should "render every design preview with semantic controls and isolated state" in {
-    scala.concurrent.Future.sequence(for {
-      design <- Seq("atlas", "flora", "terra", "ember")
-      scheme <- Seq("light", "dark")
-    } yield Runtime.renderToStringAsync(cursor =>
-      Runtime.mount(documentFor(desktopRequest, s"/?design=$design&colorScheme=$scheme"), cursor)
-    ).map { html =>
-      html should include(s"data-design=\"$design\" data-color-scheme=\"$scheme\"")
-      html should include(s"<option value=\"$design\" selected=\"\">")
-      html should include(s"<option value=\"$scheme\" selected=\"\">")
-      html should include("<details open=\"\">")
-      html should include("<main class=\"app-main\" id=\"main-content\">")
-      html should include("<span class=\"preferences__status\" role=\"status\">")
-    }).map(_ => succeed)
+    scala.concurrent.Future
+      .sequence(
+        for {
+          design <- Seq("atlas", "flora", "terra", "ember")
+          scheme <- Seq("light", "dark")
+        } yield Runtime
+          .renderToStringAsync(cursor =>
+            Runtime
+              .mount(documentFor(desktopRequest, s"/?design=$design&colorScheme=$scheme"), cursor)
+          )
+          .map { html =>
+            html should include(s"data-design=\"$design\" data-color-scheme=\"$scheme\"")
+            html should include(s"<option value=\"$design\" selected=\"\">")
+            html should include(s"<option value=\"$scheme\" selected=\"\">")
+            html should include("<details open=\"\">")
+            html should include("<main class=\"app-main\" id=\"main-content\">")
+            html should include("<span class=\"preferences__status\" role=\"status\">")
+          }
+      )
+      .map(_ => succeed)
   }
 
   it should "render route metadata in the document head" in {
@@ -79,7 +86,9 @@ class AppSsrSpec extends AsyncFlatSpec with Matchers {
         Runtime.mount(documentFor(desktopRequest, "/de/router"), cursor)
       )
       .map { html =>
-        html should startWith("<html data-design=\"ember\" data-color-scheme=\"dark\" lang=\"de\"><head>")
+        html should startWith(
+          "<html data-design=\"ember\" data-color-scheme=\"dark\" lang=\"de\"><head>"
+        )
         html should include("<div id=\"root\"><app>")
         html should include("<title data-ui-head=\"title\">Router | scalajs-ui</title>")
         html should include(
@@ -148,7 +157,9 @@ class AppSsrSpec extends AsyncFlatSpec with Matchers {
         Runtime.mount(documentFor(desktopRequest, "/editor?article.editor=editable"), cursor)
       )
       .map { html =>
-        html should include("<textarea class=\"scalajs-ui-editor__markdown-textarea\" name=\"article\"")
+        html should include(
+          "<textarea class=\"scalajs-ui-editor__markdown-textarea\" name=\"article\""
+        )
         html should not include "href=\"/scalajs-ui/en/editor?article.editor=editable\""
         html should include("href=\"/scalajs-ui/en/editor?article.editor=readonly\"")
       }
@@ -257,7 +268,17 @@ class AppSsrSpec extends AsyncFlatSpec with Matchers {
     Runtime
       .renderToStringAsync(cursor => Runtime.mount(documentFor(desktopRequest, "/"), cursor))
       .map { html =>
-        val zones = Seq("Welcome", "Interaction", "Architecture", "Foundation", "Runtime", "Composition", "Forms", "Data", "Editor")
+        val zones = Seq(
+          "Welcome",
+          "Interaction",
+          "Architecture",
+          "Foundation",
+          "Runtime",
+          "Composition",
+          "Forms",
+          "Data",
+          "Editor"
+        )
         val positions = zones.map(zone => html.indexOf(s">$zone<"))
 
         all(positions) should be >= 0

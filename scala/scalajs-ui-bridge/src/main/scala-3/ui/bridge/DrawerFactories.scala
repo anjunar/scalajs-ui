@@ -9,9 +9,9 @@ import scala.scalajs.js
 /** TypeScript's imperative handle for the Drawer enclosing its two slots. */
 @js.native
 private[bridge] trait DrawerHandleFacade extends js.Object {
-  def isOpen(): Boolean              = js.native
-  def setOpen(value: Boolean): Unit  = js.native
-  def toggle(): Unit                 = js.native
+  def isOpen(): Boolean             = js.native
+  def setOpen(value: Boolean): Unit = js.native
+  def toggle(): Unit                = js.native
 }
 
 private[bridge] object DrawerFactory extends ComponentFactory {
@@ -23,19 +23,19 @@ private[bridge] object DrawerFactory extends ComponentFactory {
       val self = summon[Drawer]
 
       options.get("open").foreach(value => self.openProperty.set(ControlFactories.bool(value)))
-      options.get("drawerWidth").foreach(value =>
-        self.drawerWidthProperty.set(ControlFactories.str(value))
-      )
-      options.get("closeOnScrimClick").foreach(value =>
-        self.closeOnScrimClickProperty.set(ControlFactories.bool(value))
-      )
+      options
+        .get("drawerWidth")
+        .foreach(value => self.drawerWidthProperty.set(ControlFactories.str(value)))
+      options
+        .get("closeOnScrimClick")
+        .foreach(value => self.closeOnScrimClickProperty.set(ControlFactories.bool(value)))
       options.get("side").foreach { value =>
         self.sideProperty.set(
           if (ControlFactories.str(value) == "end") Drawer.Side.End else Drawer.Side.Start
         )
       }
 
-      val isOpenFn: js.Function0[Boolean] = () => self.openProperty.get
+      val isOpenFn: js.Function0[Boolean]        = () => self.openProperty.get
       val setOpenFn: js.Function1[Boolean, Unit] = value => self.openProperty.set(value)
       val toggleFn: js.Function0[Unit] = () => self.openProperty.set(!self.openProperty.get)
 

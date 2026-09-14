@@ -4,7 +4,8 @@ import ui.core.state.Disposable
 import org.scalajs.dom
 import scala.collection.mutable
 
-final class HostWriteBlocked extends IllegalStateException("The host is protected from UI mutations.")
+final class HostWriteBlocked
+    extends IllegalStateException("The host is protected from UI mutations.")
 
 /** A scoped write barrier, not an input controller or scheduler. Native browser changes are
   * deliberately unaffected. Release the lease before retrying a projection or unmounting its host.
@@ -15,8 +16,10 @@ object HostMutationGuard {
   private val leases = mutable.ArrayBuffer.empty[Lease]
 
   def protect(root: HostNode): Disposable = {
-    require(root.isInstanceOf[SsrNode] || DomNodes.option(root).nonEmpty,
-      "Mutation guards require a DOM or SSR host.")
+    require(
+      root.isInstanceOf[SsrNode] || DomNodes.option(root).nonEmpty,
+      "Mutation guards require a DOM or SSR host."
+    )
     val lease = new Lease(root)
     leases += lease
     Disposable { leases -= lease }
@@ -40,20 +43,24 @@ object HostMutationGuard {
   }
 
   private[render] def checkDom(node: dom.Node, destructive: Boolean): Unit =
-    if (leases.exists(lease => DomNodes.option(lease.root).exists { root =>
-      root.contains(node) || (destructive && node.contains(root))
-    })) throw new HostWriteBlocked
+    if (
+      leases.exists(lease =>
+        DomNodes.option(lease.root).exists { root =>
+          root.contains(node) || (destructive && node.contains(root))
+        }
+      )
+    ) throw new HostWriteBlocked
 
   private def contains(outer: HostNode, inner: HostNode): Boolean =
     (DomNodes.option(outer), DomNodes.option(inner)) match {
       case (Some(a), Some(b)) => a.contains(b)
-      case _ =>
+      case _                  =>
         var current: Option[HostNode] = Some(inner)
         while (current.nonEmpty) {
           if (current.get eq outer) return true
           current = current.get match {
             case node: SsrNode => node.parentElement
-            case _ => None
+            case _             => None
           }
         }
         false

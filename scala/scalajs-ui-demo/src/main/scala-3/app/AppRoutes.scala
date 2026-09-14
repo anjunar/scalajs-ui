@@ -135,7 +135,7 @@ object AppRoutes {
       },
       Route.view("/table") { context =>
         val (offset, limit) = paging(context, "table", 10)
-        val source = TableViewPage.createRemoteBooks(pageSize = limit, offset = offset)
+        val source          = TableViewPage.createRemoteBooks(pageSize = limit, offset = offset)
         // The route owns the initial fetch. This is the first scrolling window (two 80-item
         // prefetch pages), not the complete 1,000-row source. Hydration then finds this range
         // already loaded and does not issue a second request.
@@ -145,7 +145,7 @@ object AppRoutes {
       },
       Route.view("/data-grid") { context =>
         val (offset, limit) = paging(context, "showcase-tiles", 10)
-        val source = DataGridPage.createRemoteTiles(pageSize = limit, offset = offset)
+        val source          = DataGridPage.createRemoteTiles(pageSize = limit, offset = offset)
         // DataGrid configures a 24-item prefetch. Load its initial two-page window in the route;
         // the control must not repeat that request after hydration.
         loaded(source.reload(_.copy(offset = offset, limit = 48))) {

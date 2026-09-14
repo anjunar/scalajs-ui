@@ -6,7 +6,7 @@ final class SsrTextNode(private var value: String) extends TextNode, SsrNode {
       HostMutationGuard.checkWrite(this)
       value = next
     }
-  def getText: String             = value
+  def getText: String = value
 
   // An empty text node serializes to nothing, and a browser then parses no node at all — but the
   // client builds one, and hydration goes looking for it. So an empty text leaves an anchor, the

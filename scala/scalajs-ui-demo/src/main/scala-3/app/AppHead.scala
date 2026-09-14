@@ -150,5 +150,6 @@ final class AppHead(
        |  }
        |}""".stripMargin
 
-  private def themeInitScript: String = DesignPreferences.bootstrapScript(SiteConfig.themeStorageKey)
+  private def themeInitScript: String =
+    DesignPreferences.bootstrapScript(SiteConfig.themeStorageKey)
 }

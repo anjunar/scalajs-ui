@@ -441,7 +441,7 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
     change match {
       case ui.core.remote.RemoteListChange.Reset()       => resetMeasurements()
       case ui.core.remote.RemoteListChange.Structural(_) => resetMeasurements()
-      case _                                              => ()
+      case _                                             => ()
     }
     bumpRemoteState()
     refreshItemState()

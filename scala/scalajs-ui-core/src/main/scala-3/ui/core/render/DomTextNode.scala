@@ -16,6 +16,6 @@ final class DomTextNode(private[ui] val node: dom.Text) extends TextNode {
       node.replaceData(start, deleteCount, inserted)
     }
   }
-  def getText: String              = node.data
-  def renderHtml(): String         = node.data
+  def getText: String      = node.data
+  def renderHtml(): String = node.data
 }

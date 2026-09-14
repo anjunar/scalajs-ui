@@ -248,6 +248,31 @@ person.name.set("Grace"); // Updates both observed cells without recomposing the
 
 Snapshots do not observe mutations. Custom value renderers receive a read-only property;
 editing still requires the row's writable property or an explicit application callback.
+
+### Standard editable cells
+
+`textFieldColumn` and `checkBoxColumn` use the same observed-value and edit-event contract as
+`valueColumn`, while supplying the standard editor component:
+
+```ts
+const person = { name: property("Ada"), active: property(true) };
+tableView(listProperty([person]), [
+  textFieldColumn("Name", row => row.name),
+  checkBoxColumn("Active", row => row.active),
+], { editable: true, cellSelectionEnabled: true });
+```
+
+A text editor opens with double-click, F2 or Enter on the logically focused cell. Enter commits,
+Escape cancels, and Tab/Shift+Tab commits before moving logical focus to the next/previous visible
+cell in row-major order. Tab does not automatically open another edit session. IME composition
+keeps these keys inside the input. Losing DOM focus keeps the session open by default; set
+`editOnBlur: "commit"` or `"cancel"` when the application needs another explicit policy.
+
+A checkbox remains visible and commits each click or Space toggle as one start/commit operation.
+F2/Enter can also enter it as the focused editor; Escape cancels that open session and Enter
+toggles it. Both cells obey table, ancestor-column, column and cell editability. A writable
+`Property` receives the default commit; `editCommitHandler` remains the alternative for read-only
+or application-managed values.
 Cells at overlapping absolute row positions retain their component/DOM identity during
 scrolling and measurement when the item instance is unchanged. Leaving the virtual window,
 replacing an item, resetting the source list, or changing the renderer can recreate cells.

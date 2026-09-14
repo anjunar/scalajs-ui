@@ -8,6 +8,7 @@ trait TextAreaContent {
   def defaultValue: String
   def setValue(value: String): Unit
   def setDefaultValue(value: String): Unit
+
   /** Restores the current value, equivalent to setValue(defaultValue). Native form.reset()
     * additionally clears the browser's internal dirty-value flag.
     */
@@ -17,7 +18,11 @@ trait TextAreaContent {
 object TextAreaContent {
   def normalize(value: String): String = value.replace("\r\n", "\n").replace('\r', '\n')
 
-  private[render] def attach(host: HostElement, initial: String, hydrating: Boolean): TextAreaContent = {
+  private[render] def attach(
+      host: HostElement,
+      initial: String,
+      hydrating: Boolean
+  ): TextAreaContent = {
     require(host.tagName.equalsIgnoreCase("textarea"), "Textarea content requires a textarea host.")
     host match {
       case ssr: SsrHostElement =>
@@ -38,9 +43,10 @@ object TextAreaContent {
     }
   }
 
-  private final class DomContent(host: HostElement, node: dom.HTMLTextAreaElement) extends TextAreaContent {
-    def value: String = node.value
-    def defaultValue: String = normalize(node.defaultValue)
+  private final class DomContent(host: HostElement, node: dom.HTMLTextAreaElement)
+      extends TextAreaContent {
+    def value: String                 = node.value
+    def defaultValue: String          = normalize(node.defaultValue)
     def setValue(value: String): Unit = {
       val next = normalize(value)
       if (node.value != next) {
@@ -59,11 +65,11 @@ object TextAreaContent {
   }
 
   private final class SsrContent(host: HostElement, initial: String) extends TextAreaContent {
-    private var current = initial
-    private var baseline = initial
-    private var dirty = false
-    def value: String = current
-    def defaultValue: String = baseline
+    private var current               = initial
+    private var baseline              = initial
+    private var dirty                 = false
+    def value: String                 = current
+    def defaultValue: String          = baseline
     def setValue(value: String): Unit = {
       val next = normalize(value)
       if (current != next) {

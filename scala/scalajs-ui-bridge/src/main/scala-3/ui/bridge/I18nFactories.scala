@@ -11,12 +11,12 @@ import scala.scalajs.js
   *
   * `ui.core.i18n.i18n"..."` is a Scala-3 macro (`I18nInterpolator.scala`): it derives the message
   * source, placeholder names and a fingerprint from the AST at compile time. TypeScript has no
-  * macros, so `npm/scalajs-ui-core/src/i18n.ts`'s `` i18n`...` `` tag does the same derivation at runtime
-  * instead -- the same source-reconstruction and the same FNV-1a fingerprint, just computed from a
-  * `TemplateStringsArray` instead of a quasiquote. Placeholder names are never inferred from the
-  * substituted expression (`I18nMacros.placeholderName` reads the *identifier*, which TypeScript
-  * does not preserve at runtime): every substitution must be `named("x", value)`, enforced by
-  * `i18n.ts` itself.
+  * macros, so `npm/scalajs-ui-core/src/i18n.ts`'s `` i18n`...` `` tag does the same derivation at
+  * runtime instead -- the same source-reconstruction and the same FNV-1a fingerprint, just computed
+  * from a `TemplateStringsArray` instead of a quasiquote. Placeholder names are never inferred from
+  * the substituted expression (`I18nMacros.placeholderName` reads the *identifier*, which
+  * TypeScript does not preserve at runtime): every substitution must be `named("x", value)`,
+  * enforced by `i18n.ts` itself.
   *
   * That symmetry is what makes this file small: a `RuntimeMessage` built in TypeScript has the
   * exact same shape as one the Scala macro builds, so [[I18nFactories.toScala]] is a straight
@@ -97,8 +97,8 @@ private[bridge] object I18nFactories {
   * `I18nRuntime.managed(...)`, then `I18nRuntime.provide(i18nRuntime)(using this)`. A TypeScript
   * user gets both from one call; everything nested inside `body` -- including a `router()`, which
   * reads `I18nRuntime.current` for its own locale-prefixed URLs
-  * (`ui.router.Router.synchronizeI18n`) -- sees this runtime through the ordinary
-  * component-context walk, exactly as it would on the Scala side.
+  * (`ui.router.Router.synchronizeI18n`) -- sees this runtime through the ordinary component-context
+  * walk, exactly as it would on the Scala side.
   */
 private[bridge] final class I18nProviderRoot(
     runtime: I18nRuntime,

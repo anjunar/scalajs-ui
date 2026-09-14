@@ -22,8 +22,8 @@ import scala.scalajs.js
 
 /** Step 5/6 of JAVASCRIPT_API.md §9 ("Router-Fassade, dann Forms-Schema" / "Komponentenregistratur
   * auffüllen"): the forms facade -- the trigger from CLAUDE_REVIEW_3.md §5 was
-  * "`@anjunar/scalajs-ui-controls` exists AND a form-schema projection is designed" (settled: a TS-native
-  * validator schema, see `npm/scalajs-ui-forms/src/validators.ts`).
+  * "`@anjunar/scalajs-ui-controls` exists AND a form-schema projection is designed" (settled: a
+  * TS-native validator schema, see `npm/scalajs-ui-forms/src/validators.ts`).
   *
   * The one real design problem this file solves: `ui.forms.Form`/`SubForm` bind a control to a
   * model property by asking a macro-built `reflect.ClassDescriptor` for the accessor named
@@ -35,11 +35,11 @@ import scala.scalajs.js
   * `Formular.scala` itself, so the 285+ tests on the `ClassDescriptor` path are undisturbed.
   *
   * Validators have the same shape of problem and the same shape of answer: `ValidatorFactory` (in
-  * `scalajs-ui-forms`) already dispatches on `reflect.Annotation(annotationClassName, parameters)` at
-  * runtime, not at macro time -- `npm/scalajs-ui-forms/src/validators.ts` builds exactly that shape as
-  * plain data (`notNull()`, `size(1, 100)`, ...), and `FormFactories.schemaFrom` turns it into real
-  * `Annotation` values that the *same*, unmodified `ValidatorFactory`/`BuiltinValidators` consume.
-  * No validator logic is ported to TypeScript.
+  * `scalajs-ui-forms`) already dispatches on `reflect.Annotation(annotationClassName, parameters)`
+  * at runtime, not at macro time -- `npm/scalajs-ui-forms/src/validators.ts` builds exactly that
+  * shape as plain data (`notNull()`, `size(1, 100)`, ...), and `FormFactories.schemaFrom` turns it
+  * into real `Annotation` values that the *same*, unmodified `ValidatorFactory`/`BuiltinValidators`
+  * consume. No validator logic is ported to TypeScript.
   *
   * `ArrayForm`, `FieldSet`, `ComboBox`, `ImageCropper`, `Input`, `InputContainer` need none of this
   * -- they have no `ClassDescriptor` dependency at all, so their factories register the existing

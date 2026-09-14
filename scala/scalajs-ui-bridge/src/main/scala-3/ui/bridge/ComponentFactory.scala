@@ -18,8 +18,8 @@ private[bridge] trait ComponentFactory {
   )(using parent: AbstractComponent, cursor: Cursor): AbstractComponent
 }
 
-/** Name -> class. Mirrors `scalajs-ui-bridge`'s share of §3 in JAVASCRIPT_API.md: the registry lives here,
-  * the typed wrappers live in `dsl.ts`.
+/** Name -> class. Mirrors `scalajs-ui-bridge`'s share of §3 in JAVASCRIPT_API.md: the registry
+  * lives here, the typed wrappers live in `dsl.ts`.
   *
   * A `Map` in an `object` looks like the requestbound state ARCHITECTURE.md §5 forbids, but it is
   * not: every entry is registered once at module load, from constant factories, and never touched

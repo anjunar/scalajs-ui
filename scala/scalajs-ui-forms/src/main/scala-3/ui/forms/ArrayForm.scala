@@ -53,9 +53,10 @@ class ArrayForm[V](
     mountedByIndex.toSeq.sortBy(_._1).map(_._2)
 
   /** The control mounted for `index`, if the renderer has run for it. A bridge-facing renderer
-    * (`scalajs-ui-bridge`'s `ArrayFormFactory`) mounts its item through the DSL rather than building and
-    * returning a `Control[?]` value directly -- self-registration during that mount already
-    * populates `mountedByIndex`, so this is how the renderer function recovers what it just built.
+    * (`scalajs-ui-bridge`'s `ArrayFormFactory`) mounts its item through the DSL rather than
+    * building and returning a `Control[?]` value directly -- self-registration during that mount
+    * already populates `mountedByIndex`, so this is how the renderer function recovers what it just
+    * built.
     */
   def itemControlAt(index: Int): Option[Control[?]] = mountedByIndex.get(index)
 

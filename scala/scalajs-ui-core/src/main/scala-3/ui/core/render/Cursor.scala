@@ -43,8 +43,13 @@ trait Cursor {
   def insertion: Cursor = fresh
 
   def claimTextAreaContent(initial: String): TextAreaContent =
-    TextAreaContent.attach(parentHost.getOrElse(
-      throw new IllegalStateException("Textarea content needs a physical host.")), initial, false)
+    TextAreaContent.attach(
+      parentHost.getOrElse(
+        throw new IllegalStateException("Textarea content needs a physical host.")
+      ),
+      initial,
+      false
+    )
 
   def claimElement(tag: String): HostElement
 

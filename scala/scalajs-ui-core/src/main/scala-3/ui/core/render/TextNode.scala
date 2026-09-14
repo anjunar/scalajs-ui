@@ -15,6 +15,9 @@ trait TextNode extends HostNode {
 
 object TextNode {
   private[render] def checkSplice(text: String, start: Int, deleteCount: Int): Unit =
-    require(start >= 0 && start <= text.length && deleteCount >= 0 &&
-      deleteCount <= text.length - start, "Text splice is outside the UTF-16 range.")
+    require(
+      start >= 0 && start <= text.length && deleteCount >= 0 &&
+        deleteCount <= text.length - start,
+      "Text splice is outside the UTF-16 range."
+    )
 }

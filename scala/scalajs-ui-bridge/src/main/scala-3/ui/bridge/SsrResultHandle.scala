@@ -12,8 +12,8 @@ final class SsrResultHandle(
     val headers: js.Dictionary[String]
 ) extends js.Object
 
-/** Mirrors `contract.ts`'s `SsrOptions`. Native: [[UiRuntimeBridge.renderToString]] only ever
-  * reads one, never builds one.
+/** Mirrors `contract.ts`'s `SsrOptions`. Native: [[UiRuntimeBridge.renderToString]] only ever reads
+  * one, never builds one.
   */
 @js.native
 trait SsrOptionsFacade extends js.Object {

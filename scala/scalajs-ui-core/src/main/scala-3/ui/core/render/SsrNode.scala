@@ -8,7 +8,7 @@ import scala.collection.mutable
   * be found linearly, making construction of large lists quadratic -- see CHANGE.md P4-2.
   */
 private[render] trait SsrNode {
-  private[render] var siblingHint: Int = -1
+  private[render] var siblingHint: Int                      = -1
   private[render] var parentElement: Option[SsrHostElement] = None
 }
 

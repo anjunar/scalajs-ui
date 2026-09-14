@@ -43,11 +43,13 @@ final class HydratingCursor private (
     session.afterComplete(callback)
 
   override def insertion: Cursor =
-    new DeferredHydrationCursor(DomCursor.append(parent, stopBefore, currentAsyncContext),
-      callback => session.afterComplete(callback))
+    new DeferredHydrationCursor(
+      DomCursor.append(parent, stopBefore, currentAsyncContext),
+      callback => session.afterComplete(callback)
+    )
 
   override def withHydrationBoundary(body: Cursor => Unit): Disposable = {
-    val local = new HydratingCursor.HydrationSession(Some(session))
+    val local  = new HydratingCursor.HydrationSession(Some(session))
     val cursor = new HydratingCursor(parent, nextNode, stopBefore, mode, currentAsyncContext, local)
     // This scope owns the complete remaining range, on success and on recovery.
     nextNode = stopBefore
@@ -63,7 +65,7 @@ final class HydratingCursor private (
   }
 
   override def claimTextAreaContent(initial: String): TextAreaContent = {
-    val host = parentHost.getOrElse(throw new IllegalStateException("Missing textarea host."))
+    val host    = parentHost.getOrElse(throw new IllegalStateException("Missing textarea host."))
     val content = TextAreaContent.attach(host, initial, true)
     // Textarea RCDATA is owned by the value adapter, not individual TextComponents.
     nextNode = stopBefore
@@ -487,7 +489,7 @@ object HydratingCursor {
         cursors.clear()
         enclosing match {
           case Some(parent) => parent.afterComplete(() => activate())
-          case None => activate()
+          case None         => activate()
         }
       }
   }

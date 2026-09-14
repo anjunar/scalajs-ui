@@ -269,6 +269,14 @@ object TableColumn {
       factory: CellFactory[S, T]
   ): Unit = column.cellFactoryProperty.set(Option(factory))
 
+  def textFieldCell[S](
+      blurPolicy: TableTextFieldCell.BlurPolicy = TableTextFieldCell.BlurPolicy.Keep
+  )(using column: TableColumn[S, String]): Unit =
+    column.cellFactoryProperty.set(Some(_ => new TableTextFieldCell[S](blurPolicy)))
+
+  def checkBoxCell[S](using column: TableColumn[S, Boolean]): Unit =
+    column.cellFactoryProperty.set(Some(_ => new TableCheckBoxCell[S]))
+
   def sortable[S, T](using column: TableColumn[S, T]): Boolean =
     column.sortableProperty.get
 

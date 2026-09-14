@@ -203,7 +203,8 @@ final class DataGrid[T] private (
                 width = "100%"
                 minHeight = itemStateRevisionProperty.map(_ => px(declaredHeaderHeight))
                 boxSizing = "border-box"
-                marginBottom = itemStateRevisionProperty.map(_ => px(if (headerVisible) gap else 0.0))
+                marginBottom =
+                  itemStateRevisionProperty.map(_ => px(if (headerVisible) gap else 0.0))
               }
               currentHeader.addDisposable(
                 gapProperty.observe(value =>

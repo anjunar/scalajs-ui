@@ -161,8 +161,11 @@ final class Editor private[editor] (
             }
 
             surfaceHost = div {
-              classes =
-                Seq("scalajs-ui-editor__surface", "lexical-editor-container", "lexical-editor-input")
+              classes = Seq(
+                "scalajs-ui-editor__surface",
+                "lexical-editor-container",
+                "lexical-editor-input"
+              )
               setDslAttribute("role", "textbox")
               setDslAttribute("aria-multiline", "true")
               setDslAttribute("contenteditable", editableProperty.get.toString)
