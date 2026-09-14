@@ -45,7 +45,7 @@ import {
 } from "@anjunar/scalajs-ui-core";
 import { div, text } from "@anjunar/scalajs-ui-core";
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
-import { carousel, dataGrid, remoteSource, tab, tableView, tabs, valueColumn, virtualList } from "../src/index.js";
+import { carousel, columnGroup, dataGrid, remoteSource, tab, tableView, tabs, valueColumn, virtualList } from "../src/index.js";
 import type { ColumnResizePolicy, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
 
 const linkedArtifact = resolve(process.cwd(), "../scalajs-ui-bridge/dist/fullopt/main.js");
@@ -178,6 +178,54 @@ describe("carousel", () => {
 });
 
 describe("table-view", () => {
+  it("renders nested group headers and uses only visible leaves for cells, widths and handles", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const groupVisible = property(true);
+    let table!: TableViewHandle<{ first: string; last: string; year: number }>;
+    const app = mount(root, () => {
+      table = tableView(listProperty([{ first: "Ada", last: "Lovelace", year: 1815 }]), [
+        columnGroup("Identity", [
+          valueColumn("First", row => row.first, { prefWidth: 120 }),
+          valueColumn("Last", row => row.last, { prefWidth: 180 }),
+        ], { visible: groupVisible }),
+        valueColumn("Year", row => row.year, { prefWidth: 100 }),
+      ], { paging: true, rowHeight: 32, columnResizePolicy: "unconstrained" });
+    });
+    try {
+      const headers = (): HTMLElement[] => Array.from(root.querySelectorAll(".ui-table-header-cell"));
+      expect(headers().map(header => header.textContent)).toEqual(["Identity", "Year", "First", "Last"]);
+      expect(headers()[0]!.classList).toContain("ui-table-header-cell-group");
+      expect(headers()[0]!.getAttribute("aria-colspan")).toBe("2");
+      expect(headers()[1]!.getAttribute("aria-rowspan")).toBe("2");
+      expect(root.querySelector<HTMLElement>(".ui-table-header-viewport")!.style.height).toBe("64px");
+      expect(Array.from(root.querySelectorAll(".ui-table-cell")).map(cell => cell.textContent))
+        .toEqual(["Ada", "Lovelace", "1815"]);
+      expect(table.columnWidths.get).toEqual([120, 180, 100]);
+      expect(table.visibleColumnCount.get).toBe(3);
+      expect(table.getCellData(0, 0)).toBe("Ada");
+      expect(table.getCellObservableValue(0, 1)?.get).toBe("Lovelace");
+      expect(table.getCellData(0.5, 0)).toBeNull();
+      expect(table.getCellObservableValue(0, 99)).toBeNull();
+
+      expect(table.moveColumn(0, 1)).toBe(true);
+      expect(Array.from(root.querySelectorAll(".ui-table-cell")).map(cell => cell.textContent))
+        .toEqual(["Lovelace", "Ada", "1815"]);
+      expect(table.moveColumn(1, 2)).toBe(false);
+
+      groupVisible.set(false);
+      expect(headers().map(header => header.textContent)).toEqual(["Year"]);
+      expect(Array.from(root.querySelectorAll(".ui-table-cell")).map(cell => cell.textContent))
+        .toEqual(["1815"]);
+      expect(table.columnWidths.get).toEqual([100]);
+      expect(table.visibleColumnCount.get).toBe(1);
+      expect(table.getCellData(0, 0)).toBe(1815);
+      expect(root.querySelector<HTMLElement>(".ui-table-header-viewport")!.style.height).toBe("32px");
+      groupVisible.set(true);
+      expect(table.columnWidths.get).toEqual([180, 120, 100]);
+    } finally { app.dispose(); root.remove(); }
+  });
+
   it("opens the column menu in the nearest viewport and keeps visibility, widths and selection coherent", () => {
     const root = document.createElement("div"); document.body.appendChild(root);
     const visible = property(true);

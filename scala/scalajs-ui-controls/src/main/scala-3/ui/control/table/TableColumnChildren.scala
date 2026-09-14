@@ -2,14 +2,25 @@ package ui.control.table
 
 import ui.core.state.ListProperty
 
-/** Validate ownership before mutation: observers must never see an invalid column list. */
-private[table] final class TableColumnList[S](table: TableView[S])
+/** Child list that keeps parent identity coherent before observers see a mutation. */
+private[table] final class TableColumnChildren[S](parent: TableColumn[S, ?])
     extends ListProperty[TableColumn[S, ?]] {
 
+  private var previous = Vector.empty[TableColumn[S, ?]]
+
   private def validate(candidate: Seq[TableColumn[S, ?]]): Unit = {
-    require(!table.isDisposed, "Cannot change the columns of a disposed TableView")
-    table.checkColumnMutation()
-    table.validateRootColumns(candidate)
+    Option(parent.tableViewProperty.get) match {
+      case Some(table) => table.validateColumnChildren(parent, candidate)
+      case None        => TableColumnTree.validate(Seq(parent), null, Some(parent -> candidate))
+    }
+  }
+
+  override def notified(change: ListProperty.Change[TableColumn[S, ?]]): Unit = {
+    val current = toVector
+    previous.filterNot(current.contains).foreach(_.setParentColumn(parent, null))
+    current.foreach(_.setParentColumn(null, parent))
+    previous = current
+    super.notified(change)
   }
 
   override def addOne(column: TableColumn[S, ?]): this.type = {

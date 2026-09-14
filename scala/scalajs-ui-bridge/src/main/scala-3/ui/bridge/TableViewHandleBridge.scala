@@ -6,6 +6,24 @@ import scala.scalajs.js.JSConverters.*
 
 /** Minimal imperative table contract; all operations remain owned by the Scala component. */
 final class TableViewHandleBridge(private val table: TableView[js.Any]) extends js.Object {
+  val visibleColumnCount = new ReadOnlyPropertyHandle(table.visibleLeafColumns.map(_.size))
+  def getCellData(rowIndex: Double, columnIndex: Double): js.Any | Null =
+    if (!validIndex(rowIndex) || !validIndex(columnIndex)) null
+    else
+      Option(table.getVisibleLeafColumn(columnIndex.toInt))
+        .map(_.asInstanceOf[ui.control.table.TableColumn[js.Any, js.Any]])
+        .fold[js.Any | Null](null)(_.getCellData(rowIndex.toInt))
+  def getCellObservableValue(
+      rowIndex: Double,
+      columnIndex: Double
+  ): ReadOnlyPropertyHandle[js.Any] | Null =
+    if (!validIndex(rowIndex) || !validIndex(columnIndex)) null
+    else
+      Option(table.getVisibleLeafColumn(columnIndex.toInt))
+        .map(_.asInstanceOf[ui.control.table.TableColumn[js.Any, js.Any]])
+        .flatMap(column => Option(column.getCellObservableValue(rowIndex.toInt)))
+        .fold[ReadOnlyPropertyHandle[js.Any] | Null](null)(new ReadOnlyPropertyHandle(_))
+
   def setSortOrder(order: js.Array[TableSortFacade]): Boolean =
     if (order == null || !js.Array.isArray(order)) false
     else {

@@ -14,6 +14,8 @@ import type { Source, SortSpec } from "./data-source.js";
 
 export interface ColumnDef<T> {
   readonly text: string;
+  /** Nested columns form a group header. Only leaves render cells and participate in layout. */
+  readonly columns?: readonly ColumnDef<T>[];
   readonly prefWidth?: number;
   readonly minWidth?: number;
   readonly maxWidth?: number;
@@ -39,6 +41,17 @@ export interface ColumnDef<T> {
 
 export interface ValueColumnOptions<S, V> extends Omit<ColumnDef<S>, "text" | "cell" | "value" | "valueCell"> {
   readonly cell?: (value: ReadOnlyProperty<V | null>, row: S) => void;
+}
+
+export type ColumnGroupOptions<T> = Pick<ColumnDef<T>, "visible" | "onVisibilityChange">;
+
+/** Builds a nested header whose width is the sum of its visible leaf columns. */
+export function columnGroup<T>(
+  text: string,
+  columns: readonly ColumnDef<T>[],
+  options: ColumnGroupOptions<T> = {}
+): ColumnDef<T> {
+  return { text, columns, ...options };
 }
 
 /** A typed value column backed by the runtime's observed TableCell binding. */
@@ -130,6 +143,15 @@ export interface TableViewOptions<T = unknown> {
 
 /** Runtime-owned row selection, row focus, navigation and refresh. Cell coordinates remain pending. */
 export interface TableViewHandle<T = unknown> {
+  /** Number of visible leaf columns; groups never count as data columns. */
+  readonly visibleColumnCount: ReadOnlyProperty<number>;
+  /** Snapshot value at an absolute row/current visible-leaf coordinate, or null when unavailable. */
+  getCellData(rowIndex: number, visibleColumnIndex: number): unknown | null;
+  /** The underlying observed cell value, or null for invalid/unloaded/non-value cells. */
+  getCellObservableValue(
+    rowIndex: number,
+    visibleColumnIndex: number
+  ): ReadOnlyProperty<unknown> | null;
   /** Atomically replaces the whole remote order. Invalid, hidden, unsortable or duplicate
    * sort keys reject the whole command without changing state. Empty order requests unsorted.
    * Indices resolve at call time; the resulting field keys survive later column reordering.
@@ -222,6 +244,24 @@ export function tableView<T, Q = unknown>(
   columns: readonly ColumnDef<T>[],
   options: TableViewOptions<T> = {}
 ): TableViewHandle<T> {
+  const bridgeColumn = (col: ColumnDef<T>): Record<string, unknown> => defined({
+    text: col.text,
+    columns: col.columns?.map(bridgeColumn),
+    prefWidth: col.prefWidth,
+    minWidth: col.minWidth,
+    maxWidth: col.maxWidth,
+    resizable: col.resizable,
+    reorderable: col.reorderable,
+    visible: col.visible,
+    onVisibilityChange: col.onVisibilityChange,
+    sortable: col.sortable,
+    sortKey: col.sortKey,
+    cell: col.cell ? rowBody(col.cell) : undefined,
+    value: col.value,
+    valueCell: col.valueCell
+      ? (value: ReadOnlyProperty<unknown>, row: T) => body(() => col.valueCell!(value, row))
+      : undefined,
+  });
   let handle: TableViewHandle<T> | undefined;
   component(
     "table-view",
@@ -242,23 +282,7 @@ export function tableView<T, Q = unknown>(
            }))
         : undefined,
       receiveHandle: (value: TableViewHandle<T>) => { handle = value; },
-      columns: columns.map((col) => ({
-        text: col.text,
-        prefWidth: col.prefWidth,
-        minWidth: col.minWidth,
-        maxWidth: col.maxWidth,
-        resizable: col.resizable,
-        reorderable: col.reorderable,
-        visible: col.visible,
-        onVisibilityChange: col.onVisibilityChange,
-        sortable: col.sortable,
-        sortKey: col.sortKey,
-        cell: col.cell ? rowBody(col.cell) : undefined,
-        value: col.value,
-        valueCell: col.valueCell
-          ? (value: ReadOnlyProperty<unknown>, row: T) => body(() => col.valueCell!(value, row))
-          : undefined,
-      })),
+      columns: columns.map(bridgeColumn),
       rowHeight: options.rowHeight,
       showHeader: options.showHeader,
       showFooter: options.showFooter,

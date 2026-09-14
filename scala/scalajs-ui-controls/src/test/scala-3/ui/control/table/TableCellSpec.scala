@@ -178,6 +178,118 @@ class TableCellSpec extends AnyFlatSpec with Matchers {
     name.isDisposed shouldBe true
   }
 
+  "TableColumn trees" should "derive ownership, visible leaves, group widths and multi-row headers" in {
+    val values                              = ListProperty(js.Array("Ada"))
+    var group: TableColumn[String, Any]     = null
+    var first: TableColumn[String, String]  = null
+    var second: TableColumn[String, String] = null
+    val (root, table, cursor)               = mountTable(values) {
+      group = columnGroup[String]("Identity") {
+        first = column[String, String]("First") {
+          prefWidth = 120
+          cell(value => text(value) {})
+        }
+        second = column[String, String]("Second") {
+          prefWidth = 180
+          cell(value => text(value.reverse) {})
+        }
+      }
+    }
+
+    table.columns.toVector shouldBe Vector(group)
+    group.columns.toVector shouldBe Vector(first, second)
+    first.parentColumn shouldBe group
+    second.parentColumn shouldBe group
+    group.parentColumn shouldBe null
+    Seq(group, first, second).foreach(_.tableViewProperty.get shouldBe table)
+    table.visibleLeafColumns.get shouldBe Vector(first, second)
+    group.width shouldBe (first.width + second.width +- 0.001)
+
+    val initialHtml = cursor.collectHtml()
+    initialHtml should include("ui-table-header-cell-group")
+    initialHtml should include("aria-colspan=\"2\"")
+    initialHtml should include("grid-row: 1 / span 1")
+    initialHtml should include("grid-row: 2 / span 1")
+    initialHtml should include("aria-rowcount=\"3\"")
+
+    first.visible = false
+    table.visibleLeafColumns.get shouldBe Vector(second)
+    group.width shouldBe (second.width +- 0.001)
+    cursor.collectHtml() should not include "First"
+
+    group.visible = false
+    table.visibleLeafColumns.get shouldBe empty
+    cursor.collectHtml() should include("ui-table-placeholder")
+    Runtime.unmount(root)
+    Seq(group, first, second).foreach(_.isDisposed shouldBe true)
+  }
+
+  it should "validate dynamic child mutations atomically and preserve detached subtrees" in {
+    val values                = ListProperty(js.Array("Ada"))
+    val (root, table, cursor) = mountTable(values) {}
+    val group                 = new TableColumn[String, Any]("Group")
+    val first                 = new TableColumn[String, String]("First")
+    val second                = new TableColumn[String, String]("Second")
+    first.setCellRenderer(value => text(value) {})
+    second.setCellRenderer(value => text(value.reverse) {})
+    group.columns.setAll(Seq(first, second))
+    table.columns.addOne(group)
+
+    table.visibleLeafColumns.get shouldBe Vector(first, second)
+    intercept[IllegalArgumentException](group.columns.addOne(first))
+    intercept[IllegalArgumentException](first.columns.addOne(group))
+    group.columns.toVector shouldBe Vector(first, second)
+    table.columns.toVector shouldBe Vector(group)
+
+    group.columns.remove(0) shouldBe first
+    first.parentColumn shouldBe null
+    first.tableViewProperty.get shouldBe null
+    first.isDisposed shouldBe false
+    table.visibleLeafColumns.get shouldBe Vector(second)
+    cursor.collectHtml() should not include "First"
+
+    group.columns.insert(0, first)
+    first.parentColumn shouldBe group
+    first.tableViewProperty.get shouldBe table
+    table.columns.clear()
+    Seq(group, first, second).foreach(_.tableViewProperty.get shouldBe null)
+    group.columns.toVector shouldBe Vector(first, second)
+
+    val (otherRoot, other, _) = mountTable(values) {}
+    other.columns.addOne(group)
+    Seq(group, first, second).foreach(_.tableViewProperty.get shouldBe other)
+    Runtime.unmount(root)
+    Seq(group, first, second).foreach(_.isDisposed shouldBe false)
+    Runtime.unmount(otherRoot)
+    Seq(group, first, second).foreach(_.isDisposed shouldBe true)
+  }
+
+  it should "compose arbitrarily nested groups through the Scala DSL" in {
+    val values                             = ListProperty(js.Array("Ada"))
+    var outer: TableColumn[String, Any]    = null
+    var inner: TableColumn[String, Any]    = null
+    var first: TableColumn[String, String] = null
+    var last: TableColumn[String, String]  = null
+    var year: TableColumn[String, String]  = null
+    val (root, table, cursor)              = mountTable(values) {
+      outer = columnGroup[String]("Person") {
+        inner = columnGroup[String]("Name") {
+          first = column[String, String]("First") {}
+          last = column[String, String]("Last") {}
+        }
+        year = column[String, String]("Year") {}
+      }
+    }
+
+    outer.columns.toVector shouldBe Vector(inner, year)
+    inner.columns.toVector shouldBe Vector(first, last)
+    table.visibleLeafColumns.get shouldBe Vector(first, last, year)
+    cursor.collectHtml() should include("aria-colspan=\"3\"")
+    cursor.collectHtml() should include("aria-rowspan=\"2\"")
+    cursor.collectHtml() should include("grid-template-rows: repeat(3,")
+    Runtime.unmount(root)
+  }
+
   it should "refresh unobserved data in both value columns and existing row renderers" in {
     val person                = new Person(Property("Ada"))
     val values                = ListProperty(js.Array(person))

@@ -151,7 +151,7 @@ The existing Viewport owns the overlay and anchor positioning; the table owns it
 No native popover or second overlay implementation is involved. Without the option,
 tables still work without a viewport. `showHeader: false` also hides the menu button.
 
-The menu lists all columns in their current order, including hidden columns. It stays open
+The menu lists all group and leaf columns in tree order, including hidden columns. It stays open
 when toggling a checkbox and remains usable after hiding every column. Existing selection,
 sorting and user widths are preserved. Hiding a column disposes its cells, as with `visible`.
 Arrow keys/Home/End navigate, Enter/Space toggle, Escape closes and returns focus. Tab closes
@@ -191,7 +191,39 @@ active IME composition return false. Scala uses `moveColumn(column, toVisibleInd
 Native composition is not interrupted to perform a move; retry after composition ends.
 Escape, pointer cancellation/capture loss, blur, hiding/locking/removing the dragged column
 or disposal cancel a drag. Dropping outside the header cancels too; drag release never sorts.
-Column groups, drag-edge autoscrolling and a visibility menu are not implemented yet.
+Within a column group, leaf columns can be moved among their siblings. A move across group
+boundaries is rejected so it cannot silently change the declared hierarchy. Group-header drag,
+moving an entire group and drag-edge autoscrolling are not implemented yet.
+
+### Column groups
+
+`columnGroup` nests columns to any depth. Groups render one header row per level and consume
+the combined width of their currently visible leaf columns. Only leaves render cells, appear in
+`columnWidths`, count in `visibleColumnCount`, and participate in index-based table operations.
+Top-level leaves span the remaining header rows.
+
+```ts
+tableView(books, [
+  columnGroup("Book", [
+    valueColumn("Title", book => book.title),
+    valueColumn("Author", book => book.author),
+  ]),
+  columnGroup("Details", [
+    valueColumn("Year", book => book.year),
+    column("Note", book => text(book.note)),
+  ]),
+]);
+```
+
+In Scala, `columnGroup("Book") { column(...); column(...) }` builds the same tree.
+`TableColumn.columns`, `parentColumnProperty` and `tableViewProperty` expose its model.
+Child/root mutations validate duplicates, cycles, disposed columns and foreign ownership before
+observers see the new forest. Removed subtrees stay reusable until their owning table is disposed.
+Visibility on a group suppresses all descendants without changing their individual flags.
+
+The handle supplies `visibleColumnCount`, `getCellData(rowIndex, visibleColumnIndex)` and
+`getCellObservableValue(...)`. Coordinates use absolute rows and the current visible leaf order;
+invalid, hidden, unloaded or non-value cells return `null`.
 
 ### Observed table values
 
@@ -227,7 +259,8 @@ Column `visible` accepts a boolean or a `ReadOnlyProperty<boolean>` (default: tr
 Hidden columns do not render headers/cells or consume width. Their definitions remain
 attached; showing them again creates fresh cells. Other visible cells remain mounted when
 a neighboring column is hidden or shown. With no visible columns, the table displays its
-placeholder instead of rows. This currently supports flat columns, not grouped headers.
+placeholder instead of rows. Hiding a group suppresses its whole subtree; showing it restores
+the descendant visibility state.
 
 ```ts
 const showYear = property(true);
@@ -473,7 +506,7 @@ SSR renders a stable paged or crawl slice. After successful hydration, `tableVie
 ## API overview
 
 - `tab`, `tabs`, `carousel`
-- `column`, `valueColumn`, `ValueColumnOptions`, `tableView`, `dataGrid`, `virtualList`
+- `column`, `columnGroup`, `valueColumn`, `ColumnGroupOptions`, `ValueColumnOptions`, `tableView`, `dataGrid`, `virtualList`
 - `remoteSource`, `RemoteSource`, `RemotePage`, `SortSpec`
 - `TabsOptions`, `CarouselOptions`, `TableViewOptions<T>`, `TableViewHandle<T>`, `TableRowContext<T>`, `DataGridOptions`, `VirtualListOptions`
 

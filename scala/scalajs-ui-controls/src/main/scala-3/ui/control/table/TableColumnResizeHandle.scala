@@ -31,19 +31,25 @@ private[table] final class TableColumnResizeHandle[S](
     setAttribute("role", "separator")
     setAttribute("aria-orientation", "vertical")
     setAttribute("tabindex", "0")
-    addDisposable(column.textProperty.observe(text => setAttribute("aria-label", s"Resize $text")))
     addDisposable(
-      column.widthProperty.observe(width => setAttribute("aria-valuenow", width.toString))
+      column.textProperty.observe(text => if (isBound) setAttribute("aria-label", s"Resize $text"))
+    )
+    addDisposable(
+      column.widthProperty.observe(width =>
+        if (isBound) setAttribute("aria-valuenow", width.toString)
+      )
     )
     def updateBounds(): Unit = {
-      val spec = column.widthSpec(column.prefWidth)
-      setAttribute("aria-valuemin", spec.minimum.toString)
-      setAttribute("aria-valuemax", spec.maximum.toString)
+      if (isBound) {
+        val spec = column.widthSpec(column.prefWidth)
+        setAttribute("aria-valuemin", spec.minimum.toString)
+        setAttribute("aria-valuemax", spec.maximum.toString)
+      }
     }
     addDisposable(column.minWidthProperty.observe(_ => updateBounds()))
     addDisposable(column.maxWidthProperty.observe(_ => updateBounds()))
     addDisposable(column.resizableProperty.observe { enabled =>
-      setStyle("display", if (enabled) "block" else "none")
+      if (isBound) setStyle("display", if (enabled) "block" else "none")
       if (!enabled) finishDrag()
     })
     addDisposable(table.columnResizePolicyProperty.observeWithoutInitial(_ => finishDrag()))

@@ -86,6 +86,7 @@ private[bridge] trait TabFacade extends js.Object {
 @js.native
 private[bridge] trait ColumnFacade extends js.Object {
   val text: String                                                = js.native
+  val columns: js.UndefOr[js.Array[ColumnFacade]]                 = js.native
   val prefWidth: js.UndefOr[Double]                               = js.native
   val minWidth: js.UndefOr[Double]                                = js.native
   val maxWidth: js.UndefOr[Double]                                = js.native
@@ -350,44 +351,48 @@ private[bridge] object TableViewFactory extends ComponentFactory {
         TableView.onScrollToColumn[js.Any](column => handler(table.getVisibleLeafIndex(column)))
       }
 
-      columns.foreach { col =>
-        TableColumn.column[js.Any, js.Any](col.text) {
-          col.visible.foreach(value =>
-            TableColumn.visible_=[js.Any, js.Any](ReactiveBridge.asProperty[Boolean](value))
+      def createColumn(col: ColumnFacade): TableColumn[js.Any, js.Any] = {
+        val column = new TableColumn[js.Any, js.Any](col.text)
+        col.visible.foreach(value =>
+          column.addDisposable(
+            ReactiveBridge.asProperty[Boolean](value).observe(column.visibleProperty.set)
           )
-          col.onVisibilityChange.foreach { callback =>
-            val column = summon[TableColumn[js.Any, js.Any]]
-            column.addDisposable(
-              column.visibleProperty.observeWithoutInitial(value => callback(value))
-            )
-          }
-          col.prefWidth.foreach(width => TableColumn.prefWidth_=[js.Any, js.Any](width))
-          col.minWidth.foreach(width => TableColumn.minWidth_=[js.Any, js.Any](width))
-          col.maxWidth.foreach(width => TableColumn.maxWidth_=[js.Any, js.Any](width))
-          col.resizable.foreach { value =>
-            val column = summon[TableColumn[js.Any, js.Any]]
-            column.addDisposable(
-              ReactiveBridge.asProperty[Boolean](value).observe(column.resizableProperty.set)
-            )
-          }
-          col.reorderable.foreach { value =>
-            TableColumn.reorderable_=[js.Any, js.Any](ReactiveBridge.asProperty[Boolean](value))
-          }
-          col.sortable.foreach(flag => TableColumn.sortable_=[js.Any, js.Any](flag))
-          col.sortKey.foreach(key => TableColumn.sortKey_=[js.Any, js.Any](key))
-          col.value.foreach { accessor =>
-            TableColumn.cellValueFactory_=[js.Any, js.Any](features =>
-              ReactiveBridge.asProperty[js.Any](accessor(features.value))
-            )
-          }
-          col.cell.foreach { renderer =>
-            TableColumn.cell[js.Any, js.Any] {
-              (row: js.Any) => (_: AbstractComponent) ?=> (_: Cursor) ?=>
+        )
+        col.onVisibilityChange.foreach { callback =>
+          column.addDisposable(
+            column.visibleProperty.observeWithoutInitial(value => callback(value))
+          )
+        }
+        col.prefWidth.foreach(column.prefWidth = _)
+        col.minWidth.foreach(column.minWidth = _)
+        col.maxWidth.foreach(column.maxWidth = _)
+        col.resizable.foreach { value =>
+          column.addDisposable(
+            ReactiveBridge.asProperty[Boolean](value).observe(column.resizableProperty.set)
+          )
+        }
+        col.reorderable.foreach { value =>
+          column.addDisposable(
+            ReactiveBridge.asProperty[Boolean](value).observe(column.reorderableProperty.set)
+          )
+        }
+        col.sortable.foreach(column.sortableProperty.set)
+        col.sortKey.foreach(key => column.sortKeyProperty.set(Some(key)))
+        col.value.foreach { accessor =>
+          column.cellValueFactoryProperty.set(
+            Some(features => ReactiveBridge.asProperty[js.Any](accessor(features.value)))
+          )
+        }
+        col.cell.foreach { renderer =>
+          column.setCellRenderer((row: js.Any) =>
+            (_: AbstractComponent) ?=>
+              (_: Cursor) ?=>
                 renderer(row)(new ScopeHandleBridge(summon[AbstractComponent], summon[Cursor]))
-            }
-          }
-          col.valueCell.foreach { renderer =>
-            TableColumn.cellFactory_=[js.Any, js.Any](_ =>
+          )
+        }
+        col.valueCell.foreach { renderer =>
+          column.cellFactoryProperty.set(
+            Some(_ =>
               new TableCell[js.Any, js.Any] {
                 override protected def renderContent(using
                     parent: AbstractComponent,
@@ -399,9 +404,12 @@ private[bridge] object TableViewFactory extends ComponentFactory {
                   )(new ScopeHandleBridge(parent, cursor))
               }
             )
-          }
+          )
         }
+        col.columns.foreach(children => column.columns.setAll(children.map(createColumn).toSeq))
+        column
       }
+      columns.foreach(col => summon[TableView[js.Any]].columns.addOne(createColumn(col)))
 
       options.get("header").foreach { slot =>
         TableView.header[js.Any](
