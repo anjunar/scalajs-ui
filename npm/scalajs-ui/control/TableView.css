@@ -296,3 +296,11 @@
 .ui-table-column-drop-after {
   box-shadow: inset -3px 0 var(--aj-accent-strong);
 }
+
+.ui-table-view[dir="rtl"] .ui-table-column-drop-before {
+  box-shadow: inset -3px 0 var(--aj-accent-strong);
+}
+
+.ui-table-view[dir="rtl"] .ui-table-column-drop-after {
+  box-shadow: inset 3px 0 var(--aj-accent-strong);
+}

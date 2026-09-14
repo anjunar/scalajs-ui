@@ -156,6 +156,31 @@ class TableFocusSpec extends AnyFlatSpec with Matchers {
     }
   }
 
+  it should "interpret left and right as visual directions in RTL" in {
+    val values = ListProperty(js.Array("a"))
+    mounted(values) { table =>
+      val first  = table.getVisibleLeafColumn(0)
+      val second = new TableColumn[String, String]("Second")
+      val third  = new TableColumn[String, String]("Third")
+      table.columns.addAll(Seq(second, third))
+      table.directionProperty.set(TableDirection.RightToLeft)
+
+      table.focusModel.focus(0, first)
+      table.focusModel.focusLeftCell()
+      table.focusModel.focusedCell shouldBe TablePosition(table, 0, second)
+      table.focusModel.focusLeftCell()
+      table.focusModel.focusedCell shouldBe TablePosition(table, 0, third)
+      table.focusModel.focusLeftCell()
+      table.focusModel.focusedCell shouldBe TablePosition(table, 0, third)
+      table.focusModel.focusRightCell()
+      table.focusModel.focusedCell shouldBe TablePosition(table, 0, second)
+
+      table.directionProperty.set(TableDirection.LeftToRight)
+      table.focusModel.focusRightCell()
+      table.focusModel.focusedCell shouldBe TablePosition(table, 0, third)
+    }
+  }
+
   it should "stop accepting focus operations after disposal" in {
     val values                             = ListProperty(js.Array("a", "b"))
     var table: TableView[String]           = null

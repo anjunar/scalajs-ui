@@ -363,6 +363,14 @@ private[bridge] object TableViewFactory extends ComponentFactory {
 
     val table = TableView.tableView[js.Any](src) {
       options.get("rowHeight").foreach(value => TableView.rowHeight = ControlFactories.dbl(value))
+      options.get("direction").foreach { value =>
+        val table = summon[TableView[js.Any]]
+        table.addDisposable(
+          ReactiveBridge.asProperty[String](value).observe { direction =>
+            table.directionProperty.set(TableViewHandleBridge.parseDirection(direction))
+          }
+        )
+      }
       options.get("columnResizePolicy").foreach { value =>
         val table = summon[TableView[js.Any]]
         table.addDisposable(ReactiveBridge.asProperty[String](value).observe { policy =>

@@ -35,7 +35,7 @@ tableView(books, [
 ### Column widths and resizing
 
 Columns accept `minWidth` (default 40), `prefWidth` (160), `maxWidth` (unbounded),
-and reactive `resizable` (true). Drag the grip at the right edge of a header, or focus it and
+and reactive `resizable` (true). Drag the grip at the inline end of a header, or focus it and
 press Left/Right (10 px; Shift: 1 px). Resizing does not sort the column or rebuild its cells.
 Pointer-up/cancel, lost capture, window blur, hiding/removing the column, locking it, changing
 the policy and unmount all end the gesture. Cancellation retains the last applied width.
@@ -580,7 +580,13 @@ The target is revalidated before scrolling; hidden/removed targets and disposed 
 The header offset is synchronized immediately, including browser clamping. Row and column requests
 are independent. Scala additionally accepts a column reference via `scrollToColumn(column)`;
 `onScrollToColumn` reports the applied column (as its current visible index in TypeScript).
-RTL navigation remains pending.
+
+Set the reactive `direction` option to `"rtl"` to put visible column zero at the right edge.
+The table normalizes native horizontal scrolling internally, so column requests retain the same
+visible indices in either direction. Left/Right cell focus, keyboard/pointer resizing, keyboard
+reordering, drop markers and the column menu follow the physical direction. Changing direction
+at runtime preserves the logical inline-start offset. Scala exposes the same contract through
+`directionProperty` and `TableDirection.LeftToRight` / `RightToLeft`.
 
 Paged or scrolling content headers can declare their reserved height with `headerRows`. For
 `dataGrid`, one row is one card height and the header always spans the full responsive grid width;

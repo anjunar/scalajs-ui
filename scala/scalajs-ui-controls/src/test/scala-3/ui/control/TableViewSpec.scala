@@ -48,6 +48,17 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
     columnEvents shouldBe 0
   }
 
+  it should "render a deterministic right-to-left table while keeping native scrolling normalized" in {
+    val html = renderTable(Seq("Ada")) {
+      direction = ui.control.table.TableDirection.RightToLeft
+    }
+
+    html should include("dir=\"rtl\"")
+    html should include("direction: rtl")
+    html should include("direction: ltr")
+    html should include regex "translateX\\(-0(?:\\.0)?px\\)"
+  }
+
   "Table menu" should "remain opt-in and disappear with the header" in {
     renderTable(Seq("Ada")) {} should not include "ui-table-column-menu"
     renderTable(Seq("Ada")) {

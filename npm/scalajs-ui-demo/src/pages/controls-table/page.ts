@@ -1,7 +1,7 @@
 import { attr, button, classes, div, element, onClick, onInput, property, style, text, when } from "@anjunar/scalajs-ui-core";
 import { column, columnGroup, remoteSource, tableView } from "@anjunar/scalajs-ui-controls";
 import type { Property, UiEvent } from "@anjunar/scalajs-ui-core";
-import type { ColumnResizePolicy, RemotePage, RemoteSource, SortSpec, TableSelectionMode, TableViewHandle } from "@anjunar/scalajs-ui-controls";
+import type { ColumnResizePolicy, RemotePage, RemoteSource, SortSpec, TableDirection, TableSelectionMode, TableViewHandle } from "@anjunar/scalajs-ui-controls";
 import { translated } from "../../app/i18n.js";
 
 const input = element("input");
@@ -63,6 +63,7 @@ export function controlsTablePage(): void {
   const selectionMode = property<TableSelectionMode>("multiple");
   const cellSelectionEnabled = property(false);
   const resizePolicy = property<ColumnResizePolicy>("flex-last-column");
+  const direction = property<TableDirection>("ltr");
   const notes = new Map<string, Property<string>>();
   const noteFor = (book: Book): Property<string> => {
     let note = notes.get(book.title);
@@ -122,6 +123,8 @@ export function controlsTablePage(): void {
     div(() => text(translated("The note field is bound per book. Its focus and text selection stay in place while neighboring columns change.")));
     button(translated("Toggle constrained / free column widths"), {}, () => onClick(() =>
       resizePolicy.set(resizePolicy.get === "unconstrained" ? "flex-last-column" : "unconstrained")));
+    button(translated("Toggle left-to-right / right-to-left"), {}, () => onClick(() =>
+      direction.set(direction.get === "ltr" ? "rtl" : "ltr")));
     button(translated("Go to row 500"), {}, () => onClick(() => table.scrollToIndex(499)));
     button(translated("Go to first row"), {}, () => onClick(() => table.scrollToIndex(0)));
     button(translated("Show selected row"), {}, () => onClick(() => table.scrollToIndex(table.selectedIndex.get)));
@@ -159,6 +162,7 @@ export function controlsTablePage(): void {
           tableMenuButtonVisible: true,
           columnMenuText: translated("Columns"),
           columnResizePolicy: resizePolicy,
+          direction,
           selectionMode,
           cellSelectionEnabled,
           row: (row) => {

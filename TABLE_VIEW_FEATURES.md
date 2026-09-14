@@ -1,6 +1,6 @@
 # TableView: Feature-Stand und Implementierungsplan
 
-Stand: 14.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltenbaum/Gruppenheader, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, stabile Zeilenschlüssel, RowFactory, Mehrfach- und Zell-/Rechteckauswahl, austauschbare Selection-/FocusModels, Zeilen-/Spaltennavigation samt Ereignissen, Spalten-Resizing, Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung, Standardzellen sowie Remote-Mehrspaltensortierung · Referenz: JavaFX 26.
+Stand: 14.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltenbaum/Gruppenheader, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, stabile Zeilenschlüssel, RowFactory, Mehrfach- und Zell-/Rechteckauswahl, austauschbare Selection-/FocusModels, Zeilen-/Spaltennavigation samt Ereignissen und RTL, Spalten-Resizing, Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung, Standardzellen sowie Remote-Mehrspaltensortierung · Referenz: JavaFX 26.
 
 Dieses Dokument beschreibt, welche Funktionen unsere TableView bereits unterstützt und wie wir die fehlenden Fähigkeiten der JavaFX-TableView ergänzen. Es ist ein Implementierungsplan; als **geplant** bezeichnete Modelle, Methoden und Dateien existieren noch nicht.
 
@@ -98,7 +98,18 @@ Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Er
 - SSR ist ein No-op. Bei Hydration/verdecktem Layout wartet der letzte gültige Auftrag auf einen messbaren Viewport. Er speichert eine Spaltenreferenz und folgt ihr bei Reordering; vor Ausführung werden Sichtbarkeit und Zugehörigkeit erneut geprüft. Ungültige Aufrufe überschreiben keinen gültigen Auftrag, Disposal löscht ihn. Zeilen- und Spaltenaufträge sind unabhängig.
 - Die TypeScript-Demo bietet Schalter für erste/letzte sichtbare Spalte. Für sichtbares horizontales Scrollen freie Breiten wählen und Spalten über die Tabellenbreite hinaus verbreitern. Die Navigation erzwingt keinen Policy-Wechsel.
 
-`onScrollToColumn` meldet entsprechend die tatsächlich angewendete Spaltenanforderung. TypeScript erhält den sichtbaren Blattspaltenindex zum Ausführungszeitpunkt; Scala die stabile Spaltenreferenz. Überschriebene, inzwischen versteckte/entfernte, ungültige, SSR- oder entsorgte Anforderungen bleiben stumm. Gruppenspalten werden über ihre sichtbaren Blätter erreicht; RTL-Navigation bleibt offen.
+`onScrollToColumn` meldet entsprechend die tatsächlich angewendete Spaltenanforderung. TypeScript erhält den sichtbaren Blattspaltenindex zum Ausführungszeitpunkt; Scala die stabile Spaltenreferenz. Überschriebene, inzwischen versteckte/entfernte, ungültige, SSR- oder entsorgte Anforderungen bleiben stumm. Gruppenspalten werden über ihre sichtbaren Blätter erreicht.
+
+### Implementiert: RTL-Tabellenrichtung (21. Ausbau)
+
+- Scala: `TableDirection.LeftToRight`/`RightToLeft`, `directionProperty` und die DSL-Zuweisung `direction`; TypeScript: der reaktive, typisierte `direction`-Wert `"ltr" | "rtl"`. Default bleibt LTR.
+- RTL setzt Spalte null an die rechte Kante, ohne sichtbare Indizes oder Datenkoordinaten umzudefinieren. Ein intern LTR-normalisierter Scrollcontainer vermeidet die unterschiedlichen nativen RTL-`scrollLeft`-Modelle der Browser. Tabelleninhalte und Header erhalten dennoch echte RTL-Flussrichtung; der Header folgt dem gelesenen physischen Offset.
+- `scrollToColumn`, Links-/Rechts-Zellfokus, Pfeiltastenauswahl, Resize-Griff und -Delta, Alt+Shift-Reordering, Pointer-Drop-Grenzen und Markierungen sind visuell gespiegelt. Das ausgelagerte Spaltenmenü übernimmt Richtung und Startkanten-Ausrichtung. Ein Richtungswechsel erhält den logischen Abstand von der jeweiligen Startkante und beendet eine laufende Spaltenziehgeste.
+- SSR schreibt Richtung und normalisierte Scrollstruktur deterministisch; Hydration setzt vor ausstehenden Spaltenanforderungen die passende physische Startposition. Breiten-, Zeilen-, Auswahl-, Fokus- und Editoridentitäten bleiben unverändert.
+
+**Browserabnahme am 14.09.2026:** In der TypeScript-Demo wurden RTL, freie Spaltenbreiten und die erste logische Spalte aktiviert. Spalte null lag rechts, der native LTR-normalisierte Viewport stand bei 70/70 px, und die vier Header-/Zellpaare hatten pixelgenau dieselben horizontalen Grenzen. Pfeil links bewegte den Fokus von sichtbarer Spalte null auf eins. Das ausgelagerte Spaltenmenü trug `dir="rtl"` und teilte seine linke Startkante mit dem links angeordneten Auslöser. Keine Browserfehler. Native OS-IME- und umfassende Screenreader-Abnahme bleiben offen.
+
+**Abnahme am 14.09.2026:** Vollständiges Scala-Gate (`Test/testOnly *`), Bridge-Full-Link, CSS-/Design-Gate sowie npm-Gates für Controls (85 Integrationstests + 3 Paket-Consumer) und Demo (Typecheck, Client-/SSR-Builds, Eine-Runtime-Nachweis und 31 Routen) grün.
 
 **Abnahme am 09.09.2026:** Vollständiges Scala-Gate (`Test/testOnly *`), Bridge-Full-Link und Scala-Demo-Fast-Link grün. npm-Gates Controls (60 Integrationstests + 3 Paket-Consumer), Core (114 + 8) und Demo (Client/SSR, Eine-Runtime-Nachweis, 31 Routen) grün. Ein neuer Scala-SSR-Test und sieben neue Integrationstestfälle prüfen Navigation, aktuelle Breiten/Reihenfolge, versteckte Spalten, Editor-/Auswahlerhalt, leere/headerlose Tabellen, native Begrenzung, kein Remote-Nachladen, unabhängige Zeilennavigation, Hydration, verdecktes Layout und Disposal. Im echten Browser: 1.000 px breite Tabelle in 846 px Viewport, Sprünge zwischen horizontal 0 und 154 px, identische Header-/Zellpositionen und bei Zeile 500 unverändert vertikal 19.783 px; keine Browserfehler.
 
@@ -234,10 +245,10 @@ Referenzen: [Cell-Editierablauf](https://openui.io/javadoc/26/javafx.controls/ja
 | --- | --- | --- | --- |
 | V01 | Virtuelle Zeilen mit fester Höhe | Vorhanden | Überlappende absolute Slots mit derselben Item-Instanz bleiben erhalten. Datensatzbewegungen sind nicht Bestandteil dieses Vertrags. M1. |
 | V03 | `scrollTo(index/item)`, `onScrollTo` | Vorhanden | Zeilennavigation und Ausführungsbenachrichtigung in Scala/TypeScript, bekannte ungeladene Remote-Positionen, Paging, Header und Hydration vorhanden. M2. |
-| V04 | Horizontales Scrollen und Spaltennavigation | Teilweise | Header-Synchronisation, Policy-abhängiges overflow, Navigation und Ausführungsbenachrichtigung in Scala/TypeScript vorhanden. RTL fehlt. M2/M5. |
+| V04 | Horizontales Scrollen und Spaltennavigation | Vorhanden | Header-Synchronisation, Policy-abhängiges overflow, Navigation, Ausführungsbenachrichtigung und reaktive RTL-Spiegelung in Scala/TypeScript vorhanden. M2/M5/M6. |
 | V05 | Zeilen-/Zellzustände und CSS-Anpassung | Teilweise | selected/odd/even/loading, Zeilen-/Zell-focused sowie Zell-selected/editing vorhanden; disabled und Spaltenstil ergänzen. M2/M4/M6. |
 | V06 | Zugänglicher Tabellen-/Grid-Vertrag | Teilweise | Rollen, Indizes/Zähler, aria-selected für Zeilen/Zellen, Zeilen-/Zellfokus per vorhandener active-descendant-ID sowie primäres aria-sort, Richtungs-/Prioritätsbeschreibung und aria-busy vorhanden. Umfassende Screenreader-Abnahme fehlt. M2/M5/M6. |
-| V07 | Angepasste Darstellung, Menüs, Tooltips, RTL | Teilweise | Eigene Zellkomposition vorhanden. Zeilen-/Header-Slots, spiegelbare Navigation und Overlay-Integration vervollständigen. M5/M6. |
+| V07 | Angepasste Darstellung, Menüs und Tooltips | Teilweise | Eigene Zellkomposition sowie RTL-fähige Navigation und Overlay-Integration vorhanden. Zeilen-/Header-Slots und fertige Tooltip-/Menü-Presenter vervollständigen. M5/M6. |
 
 ## 4. Wie wir es implementieren
 
@@ -524,7 +535,7 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 | M3 – Remote-Sortiermodell | Nach M1 und den Identitätsregeln aus M2: Mehrspalten, Remote-Policy/Events, Abfragegenerationen. | Gleiches Sortiermodell für API und Header; korrekte Datensatzidentität beim Writeback; keine lokale Sortierung oder Filterung. | L |
 | M4 – Integrierte Editoren | Nach M1–M3: Sitzungen, Start/Commit/Cancel, Schreibvertrag, Standard-Text-/Boolean-Editoren. | Commit genau einmal, Cancel ohne Schreiben, korrekter Datensatz nach Sortierung, Fokus-/Virtualisierungsregeln getestet. | L |
 | M5 – Spaltenbedienung | Nach M1/M2; parallel zu M3/M4 möglich: Gruppenheader, Resize-Policies, Reorder, Visibility-Menü und Header-Slots. | Header und Zellen fluchten bei jeder Policy; Grenzen, ausgeblendete Spalten, Gruppen und horizontaler Scroll funktionieren. | L |
-| M6 – Vervollständigung | Nach den betreffenden Grundlagen: verbleibende Standardzellen, Tooltips/Menüs, RTL und Accessibility-Abnahme. | Standardzellen und benutzerdefinierte Zeilen; Tastatur und Screenreader geprüft. | L |
+| M6 – Vervollständigung | Nach den betreffenden Grundlagen: verbleibende Standardzellen, Tooltips/Menüs und Accessibility-Abnahme. | Standardzellen und benutzerdefinierte Zeilen; Tastatur und Screenreader geprüft. | L |
 | M7 – Paritätsabnahme | Nach M1–M6: Matrix gegen Referenz und Beispiele prüfen, Migration dokumentieren, alle Gates ausführen. | Keine unbezeichnete Funktionslücke im vereinbarten Umfang; Scala und TypeScript zeigen denselben Stand. | M |
 
 ### Konkreter Startumfang und Fortschritt
@@ -551,6 +562,7 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 - [x] M4: Tabellenverwaltete Editiersitzung, Writable-Property-Writeback, ersetzbarer Commit-Handler, Ereignisse, Lifecycle-Abbruchgründe sowie Scala-/TypeScript-Handle.
 - [x] M4: Standard-Text-/Boolean-Editoren sowie F2/Enter/Escape/Tab- und explizite Blur-Regeln in Scala und TypeScript. M4 ist damit im festgelegten Umfang abgeschlossen.
 - [x] M6: Auswahl-/Progress-Zellen, Popup-Fokusregeln und Parser-/Validierungsfehler samt zugänglicher Fehlermeldung.
+- [x] M6: Reaktive LTR-/RTL-Richtung für Layout, horizontales Scrollen, Zellnavigation, Resize, Reordering und Spaltenmenü.
 
 ## 6. Verifikation
 

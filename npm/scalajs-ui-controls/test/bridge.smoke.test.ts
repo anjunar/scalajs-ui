@@ -46,7 +46,7 @@ import {
 import { div, text } from "@anjunar/scalajs-ui-core";
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
 import { carousel, checkBoxColumn, choiceBoxColumn, columnGroup, comboBoxColumn, convertingTextFieldColumn, dataGrid, progressBarColumn, remoteSource, tab, tableView, tabs, textFieldColumn, valueColumn, virtualList } from "../src/index.js";
-import type { ColumnResizePolicy, TablePosition, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
+import type { ColumnResizePolicy, TableDirection, TablePosition, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
 
 const linkedArtifact = resolve(process.cwd(), "../scalajs-ui-bridge/dist/fullopt/main.js");
 
@@ -230,13 +230,14 @@ describe("table-view", () => {
     const root = document.createElement("div"); document.body.appendChild(root);
     const visible = property(true);
     const enabled = property(true);
+    const direction = property<TableDirection>("rtl");
     const changed = vi.fn((next: boolean) => visible.set(next));
     let table!: TableViewHandle<string>;
     const app = mount(root, () => component("viewport", {}, () => {
       table = tableView(listProperty(["Ada"]), [
         valueColumn("A", row => row, { visible, onVisibilityChange: changed }),
         valueColumn("B", row => row),
-      ], { paging: true, columnResizePolicy: "unconstrained", tableMenuButtonVisible: enabled });
+      ], { paging: true, direction, columnResizePolicy: "unconstrained", tableMenuButtonVisible: enabled });
     }));
     const open = (): HTMLElement => {
       root.querySelector<HTMLButtonElement>(".ui-table-column-menu-button")!.click();
@@ -246,6 +247,7 @@ describe("table-view", () => {
       table.selectIndex(0); table.resizeColumn(0, 30);
       const retained = root.querySelectorAll(".ui-table-cell")[1];
       const menu = open();
+      expect(menu.dir).toBe("rtl");
       expect(menu.closest(".ui-table-view")).toBeNull();
       expect(menu.closest(".scalajs-ui-viewport")).not.toBeNull();
       const items = menu.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]');
@@ -262,7 +264,10 @@ describe("table-view", () => {
       visible.set(false); expect(items[0]!.getAttribute("aria-checked")).toBe("false");
       enabled.set(false); expect(root.querySelector('[role="menu"]')).toBeNull();
       enabled.set(true); expect(root.querySelector(".ui-table-column-menu-button")).not.toBeNull();
-      open(); app.dispose(); expect(root.querySelector(".scalajs-ui-viewport-overlay")).toBeNull();
+      expect(open().dir).toBe("rtl");
+      direction.set("ltr"); expect(root.querySelector('[role="menu"]')).toBeNull();
+      expect(open().dir).toBe("ltr");
+      app.dispose(); expect(root.querySelector(".scalajs-ui-viewport-overlay")).toBeNull();
     } finally { app.dispose(); root.remove(); }
   });
 
@@ -1384,6 +1389,94 @@ describe("table-view", () => {
       expect(viewport.style.overflowX).toBe("auto");
       app.dispose(); table.scrollToColumnIndex(0); expect(viewport.scrollLeft).toBe(300);
     } finally { app.dispose(); root.remove(); }
+  });
+
+  it("mirrors RTL columns, scroll targets, focus, resize and keyboard reordering", () => {
+    const root = document.createElement("div"); document.body.appendChild(root);
+    const direction = property<TableDirection>("rtl");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [
+        valueColumn("A", row => row, { prefWidth: 200 }),
+        valueColumn("B", row => row, { prefWidth: 200 }),
+        valueColumn("C", row => row, { prefWidth: 200 }),
+      ], { paging: true, direction, columnResizePolicy: "unconstrained" });
+    });
+    try {
+      const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+      const viewport = measureTable(root);
+      Object.defineProperty(viewport, "clientWidth", { configurable: true, value: 250 });
+      const headerContent = root.querySelector<HTMLElement>(".ui-table-header-content")!;
+      const tableContent = root.querySelector<HTMLElement>(".ui-table-content")!;
+      expect(grid.dir).toBe("rtl");
+      expect(viewport.style.direction).toBe("ltr");
+      expect(headerContent.style.direction).toBe("rtl");
+      expect(tableContent.style.direction).toBe("rtl");
+
+      table.scrollToColumnIndex(0);
+      expect(viewport.scrollLeft).toBe(350);
+      expect(headerContent.style.transform).toMatch(/^translateX\(-350(?:\.0)?px\)$/);
+      table.scrollToColumnIndex(1); expect(viewport.scrollLeft).toBe(200);
+      table.scrollToColumnIndex(2); expect(viewport.scrollLeft).toBe(0);
+
+      table.focusCell(0, 0);
+      grid.focus();
+      grid.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 1 });
+      grid.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 0 });
+
+      const firstHandle = root.querySelector<HTMLElement>(".ui-table-column-resize-handle")!;
+      expect(firstHandle.style.left).toBe("0px");
+      expect(firstHandle.style.right).toBe("auto");
+      firstHandle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      expect(table.columnWidths.get[0]).toBe(210);
+      firstHandle.dispatchEvent(new PointerEvent("pointerdown", {
+        bubbles: true, clientX: 100, pointerId: 17,
+      }));
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 80, pointerId: 17 }));
+      window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 17 }));
+      expect(table.columnWidths.get[0]).toBe(230);
+
+      const firstHeader = root.querySelector<HTMLElement>(".ui-table-header-cell-leaf")!;
+      firstHeader.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "ArrowLeft", altKey: true, shiftKey: true, bubbles: true,
+      }));
+      expect(Array.from(root.querySelectorAll(".ui-table-header-cell-leaf"), node => node.textContent))
+        .toEqual(["B", "A", "C"]);
+
+      table.scrollToColumnIndex(1);
+      expect(viewport.scrollLeft).toBe(200);
+      direction.set("ltr");
+      expect(grid.dir).toBe("ltr");
+      expect(tableContent.style.direction).toBe("ltr");
+      expect(viewport.scrollLeft).toBe(180); // Preserve the logical inline-start offset.
+      expect(headerContent.style.transform).toMatch(/^translateX\(-180(?:\.0)?px\)$/);
+      expect(firstHandle.style.left).toBe("auto");
+      expect(firstHandle.style.right).toBe("0px");
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("hydrates RTL at its logical start without replacing the server table", async () => {
+    const build = (): void => { tableView(listProperty(["Ada"]), [
+      valueColumn("A", row => row, { prefWidth: 200 }),
+      valueColumn("B", row => row, { prefWidth: 200 }),
+      valueColumn("C", row => row, { prefWidth: 200 }),
+    ], { paging: true, direction: "rtl", columnResizePolicy: "unconstrained" }); };
+    const root = document.createElement("div");
+    root.innerHTML = (await renderToString(build)).html;
+    const grid = root.querySelector<HTMLElement>(".ui-table-view")!;
+    const viewport = root.querySelector<HTMLElement>(".ui-table-viewport")!;
+    const header = root.querySelector<HTMLElement>(".ui-table-header-content")!;
+    Object.defineProperty(viewport, "clientWidth", { configurable: true, value: 250 });
+    expect(grid.dir).toBe("rtl"); expect(viewport.scrollLeft).toBe(0);
+    const app = await hydrate(root, build);
+    try {
+      expect(root.querySelector(".ui-table-view")).toBe(grid);
+      expect(root.querySelector(".ui-table-viewport")).toBe(viewport);
+      expect(viewport.scrollLeft).toBe(350);
+      expect(header.style.transform).toMatch(/^translateX\(-350(?:\.0)?px\)$/);
+    } finally { app.dispose(); }
   });
 
   it("navigates an empty headerless table and synchronizes native scroll clamping", () => {

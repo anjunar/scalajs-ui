@@ -48,11 +48,14 @@ private[table] final class TableColumnMenu[S](table: TableView[S]) extends Abstr
         anchor = Some(element(trigger)),
         widthPx = Some(width),
         effectiveWidthProperty = Property(width),
-        offsetXPx = element(trigger).getBoundingClientRect().width - width,
+        offsetXPx =
+          if (table.directionProperty.get == TableDirection.RightToLeft) 0.0
+          else element(trigger).getBoundingClientRect().width - width,
         body = (_: Overlay) ?=>
           (_: Cursor) ?=> {
             val popup = summon[Overlay]
             popup.addClass("ui-table-column-menu-panel")
+            popup.setAttribute("dir", table.directionProperty.get.htmlValue)
             popup.setAttribute("role", "menu")
             popup.setAttribute("id", menuId)
             popup.addDisposable(
@@ -158,6 +161,7 @@ private[table] final class TableColumnMenu[S](table: TableView[S]) extends Abstr
       close(ready && registration.nonEmpty)
       if (ready) trigger.disabled = table.allColumns.isEmpty
     })
+    addDisposable(table.directionProperty.observeWithoutInitial(_ => close(ready)))
     addDisposable(Disposable { ready = false; close(false) })
     if (cursor.isBrowser) cursor.afterHydration { () =>
       if (!isDisposed) { ready = true; trigger.disabled = table.allColumns.isEmpty }

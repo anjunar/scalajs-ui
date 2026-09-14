@@ -1,6 +1,12 @@
 package ui.bridge
 
-import ui.control.table.{ColumnResizePolicy, TableSelectionMode, TableSort, TableView}
+import ui.control.table.{
+  ColumnResizePolicy,
+  TableDirection,
+  TableSelectionMode,
+  TableSort,
+  TableView
+}
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 
@@ -204,6 +210,12 @@ trait TableSortFacade extends js.Object {
 }
 
 private[bridge] object TableViewHandleBridge {
+  def parseDirection(direction: String): TableDirection = direction match {
+    case "ltr" => TableDirection.LeftToRight
+    case "rtl" => TableDirection.RightToLeft
+    case _     => throw new IllegalArgumentException("Table direction must be 'ltr' or 'rtl'")
+  }
+
   def parseResizePolicy(policy: String): ColumnResizePolicy = policy match {
     case "unconstrained"      => ColumnResizePolicy.Unconstrained
     case "all-columns"        => ColumnResizePolicy.AllColumns

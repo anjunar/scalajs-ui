@@ -238,6 +238,7 @@ export interface TableRowContext<T> {
 }
 
 export type TableSelectionMode = "single" | "multiple";
+export type TableDirection = "ltr" | "rtl";
 
 /** Absolute row plus current visible-leaf column index. A row-only focus uses column -1. */
 export interface TablePosition {
@@ -268,6 +269,10 @@ export type ColumnResizePolicy = "unconstrained" | "all-columns" | "last-column"
   | "subsequent-columns" | "flex-next-column" | "flex-last-column";
 
 export interface TableViewOptions<T = unknown> {
+  /** Inline layout direction. Mirrors column placement, horizontal navigation, resizing,
+   * reordering and menu alignment. Defaults to ltr.
+   */
+  readonly direction?: Reactive<TableDirection>;
   /** Enables table-managed editing. Defaults to false. */
   readonly editable?: Reactive<boolean>;
   /** Stable, unique entity identity. Preserves loaded selection/focus across accepted remote
@@ -486,6 +491,7 @@ export function tableView<T, Q = unknown>(
     "table-view",
     defined({
       source,
+      direction: options.direction,
       tableMenuButtonVisible: options.tableMenuButtonVisible,
       columnMenuText: options.columnMenuText,
       columnResizePolicy: options.columnResizePolicy,
