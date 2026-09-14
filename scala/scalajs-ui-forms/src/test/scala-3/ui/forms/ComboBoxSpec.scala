@@ -7,6 +7,10 @@ import ui.core.layout.Div.div
 import ui.core.layout.TextComponent.text
 import ui.core.render.{Cursor, SsrCursor}
 import ui.core.state.Property
+import ui.core.state.ListProperty
+import ui.control.table.TableColumn.*
+import ui.control.table.TableView.tableView
+import ui.control.table.forms.TableComboBoxCell.comboBoxCell
 import ui.forms.ComboBox.*
 import ui.forms.Form.form
 import ui.viewport.Viewport
@@ -207,6 +211,38 @@ class ComboBoxSpec extends AnyFlatSpec with Matchers {
     combo.valueProperty.get should be theSameInstanceAs replacement
     model.owner.get should be theSameInstanceAs replacement
 
+    Runtime.unmount(root)
+  }
+
+  it should "provide the table ComboBox cell factory without coupling controls to forms" in {
+    val selected = Property(members.head)
+    val rows     = ListProperty(scala.scalajs.js.Array(selected))
+    val choices  = ListProperty(scala.scalajs.js.Array(members*))
+    var ownerColumn: ui.control.table.TableColumn[Property[Member], Member] = null
+    var table: ui.control.table.TableView[Property[Member]]                 = null
+    val cursor                                                              = new SsrCursor()
+    val root                                                                = Runtime.mount(
+      new ComboRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          viewport {
+            table = tableView(rows) {
+              ui.control.table.TableView.editable = true
+              ownerColumn = column[Property[Member], Member]("Owner") {
+                cellValueFactory = _.value
+                comboBoxCell(choices, _.name, _.id)
+              }
+            }
+          }
+      },
+      cursor
+    )
+
+    cursor.collectHtml() should include("ui-table-combo-box-cell__display")
+    table.edit(0, ownerColumn) shouldBe true
+    cursor.collectHtml() should include("ui-table-combo-box-cell__editor")
+    cursor.collectHtml() should include("class=\"ui-combo-box\"")
+    table.commitEdit(members(1)) shouldBe true
+    selected.get shouldBe members(1)
     Runtime.unmount(root)
   }
 

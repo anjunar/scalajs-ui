@@ -5,15 +5,18 @@ import ui.control.datagrid.DataGrid
 import ui.control.table.{
   TableCheckBoxCell,
   TableCell,
+  TableChoiceBoxCell,
   TableColumn,
   TableEditCancelEvent,
   TableEditCancelReason,
   TableEditCommitEvent,
   TableEditStartEvent,
   TableRow,
+  TableProgressBarCell,
   TableTextFieldCell,
   TableView
 }
+import ui.control.table.forms.TableComboBoxCell
 import ui.control.tabs.Tabs
 import ui.control.virtuallist.VirtualListView
 import ui.core.component.AbstractComponent
@@ -114,6 +117,9 @@ private[bridge] trait ColumnFacade extends js.Object {
   val onEditCancel: js.UndefOr[js.Function1[js.Object, Unit]]      = js.native
   val standardCell: js.UndefOr[String]                             = js.native
   val editOnBlur: js.UndefOr[String]                               = js.native
+  val standardItems: js.UndefOr[js.Any]                            = js.native
+  val standardConverter: js.UndefOr[js.Function1[js.Any, String]]  = js.native
+  val standardIdentityBy: js.UndefOr[js.Function1[js.Any, js.Any]] = js.native
 
   /** `(row) => (scope) => void` -- the cell body, already wrapped in `withScope` on the TS side. */
   val cell: js.UndefOr[js.Function1[js.Any, js.Function1[ScopeHandleBridge, Unit]]] = js.native
@@ -124,6 +130,15 @@ private[bridge] trait ColumnFacade extends js.Object {
 }
 
 private[bridge] object ControlFactories {
+
+  private[bridge] def standardItems(column: ColumnFacade): CoreListProperty[js.Any] =
+    column.standardItems.fold(CoreListProperty[js.Any]()) {
+      case handle: ListPropertyHandle[?] =>
+        handle.underlyingList.asInstanceOf[CoreListProperty[js.Any]]
+      case values: js.Array[?] =>
+        CoreListProperty(values.asInstanceOf[js.Array[js.Any]])
+      case _ => CoreListProperty[js.Any]()
+    }
 
   /** A local `ListProperty` (already a `ListDataSource`) or a remote spec. */
   def source(value: js.Any)(using ExecutionContext): ListDataSource[js.Any] =
@@ -518,6 +533,33 @@ private[bridge] object TableViewFactory extends ComponentFactory {
           case "check-box" =>
             column.cellFactoryProperty.set(
               Some(_ => new TableCheckBoxCell[js.Any].asInstanceOf[TableCell[js.Any, js.Any]])
+            )
+          case "choice-box" =>
+            val items     = ControlFactories.standardItems(col)
+            val converter = col.standardConverter.fold((value: js.Any) =>
+              if (value == null) "" else value.toString
+            )(function => value => function(value))
+            val identity = col.standardIdentityBy.fold((value: js.Any) => value)(function =>
+              value => function(value)
+            )
+            column.cellFactoryProperty.set(
+              Some(_ => new TableChoiceBoxCell(items, converter, identity))
+            )
+          case "combo-box" =>
+            val items     = ControlFactories.standardItems(col)
+            val converter = col.standardConverter.fold((value: js.Any) =>
+              if (value == null) "" else value.toString
+            )(function => value => function(value))
+            val identity = col.standardIdentityBy.fold((value: js.Any) => value)(function =>
+              value => function(value)
+            )
+            column.cellFactoryProperty.set(
+              Some(_ => new TableComboBoxCell(items, converter, identity))
+            )
+          case "progress-bar" =>
+            column.editable = false
+            column.cellFactoryProperty.set(
+              Some(_ => new TableProgressBarCell[js.Any].asInstanceOf[TableCell[js.Any, js.Any]])
             )
           case _ => ()
         }

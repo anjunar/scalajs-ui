@@ -277,6 +277,18 @@ object TableColumn {
   def checkBoxCell[S](using column: TableColumn[S, Boolean]): Unit =
     column.cellFactoryProperty.set(Some(_ => new TableCheckBoxCell[S]))
 
+  def choiceBoxCell[S, T](
+      items: ListProperty[T],
+      converter: T => String = (value: T) => Option(value).fold("")(_.toString),
+      identityBy: T => Any = (value: T) => value.asInstanceOf[Any]
+  )(using column: TableColumn[S, T]): Unit =
+    column.cellFactoryProperty.set(Some(_ => new TableChoiceBoxCell(items, converter, identityBy)))
+
+  def progressBarCell[S](using column: TableColumn[S, Double]): Unit = {
+    column.editable = false
+    column.cellFactoryProperty.set(Some(_ => new TableProgressBarCell[S]))
+  }
+
   def sortable[S, T](using column: TableColumn[S, T]): Boolean =
     column.sortableProperty.get
 

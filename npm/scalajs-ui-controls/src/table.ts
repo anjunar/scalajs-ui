@@ -8,7 +8,7 @@
  * (`ControlFactories.scala`).
  */
 import { component, currentScope, withScope } from "@anjunar/scalajs-ui-core";
-import type { ComponentHandle, Reactive, ReadOnlyProperty, ScopeHandle } from "@anjunar/scalajs-ui-core";
+import type { ComponentHandle, ListProperty, Reactive, ReadOnlyProperty, ScopeHandle } from "@anjunar/scalajs-ui-core";
 import { body, defined, rowBody } from "./internal.js";
 import type { Source, SortSpec } from "./data-source.js";
 
@@ -68,9 +68,22 @@ export interface TextFieldColumnOptions<S> extends Omit<ValueColumnOptions<S, st
 
 export type CheckBoxColumnOptions<S> = Omit<ValueColumnOptions<S, boolean>, "cell">;
 
+export interface SelectionColumnOptions<S, V> extends Omit<ValueColumnOptions<S, V>, "cell"> {
+  /** Text shown for an item in the cell and selection control. */
+  readonly converter?: (value: V) => string;
+  /** Stable identity used when item instances are replaced. Defaults to the value itself. */
+  readonly identityBy?: (value: V) => unknown;
+}
+
+export type ProgressBarColumnOptions<S> = Omit<ValueColumnOptions<S, number>,
+  "cell" | "editable" | "onEditStart" | "editCommitHandler" | "onEditCommit" | "onEditCancel">;
+
 type StandardColumnDef<T> = ColumnDef<T> & {
-  readonly standardCell: "text-field" | "check-box";
+  readonly standardCell: "text-field" | "check-box" | "choice-box" | "combo-box" | "progress-bar";
   readonly editOnBlur?: TextFieldBlurPolicy;
+  readonly standardItems?: ListProperty<unknown> | readonly unknown[];
+  readonly standardConverter?: (value: unknown) => string;
+  readonly standardIdentityBy?: (value: unknown) => unknown;
 };
 
 export type ColumnGroupOptions<T> = Pick<ColumnDef<T>, "visible" | "onVisibilityChange" | "editable">;
@@ -124,6 +137,52 @@ export function checkBoxColumn<S>(
   return {
     ...valueColumn(text, value, options),
     standardCell: "check-box",
+  } as StandardColumnDef<S>;
+}
+
+/** A value column edited with a compact native select. */
+export function choiceBoxColumn<S, V>(
+  text: string,
+  value: (row: S) => Reactive<V>,
+  items: ListProperty<V> | readonly V[],
+  options: SelectionColumnOptions<S, V> = {}
+): ColumnDef<S> {
+  const { converter, identityBy, ...metadata } = options;
+  return {
+    ...valueColumn(text, value, metadata),
+    standardCell: "choice-box",
+    standardItems: items,
+    standardConverter: converter,
+    standardIdentityBy: identityBy,
+  } as StandardColumnDef<S>;
+}
+
+/** A value column edited with the Forms ComboBox and its viewport overlay. */
+export function comboBoxColumn<S, V>(
+  text: string,
+  value: (row: S) => Reactive<V>,
+  items: ListProperty<V> | readonly V[],
+  options: SelectionColumnOptions<S, V> = {}
+): ColumnDef<S> {
+  const { converter, identityBy, ...metadata } = options;
+  return {
+    ...valueColumn(text, value, metadata),
+    standardCell: "combo-box",
+    standardItems: items,
+    standardConverter: converter,
+    standardIdentityBy: identityBy,
+  } as StandardColumnDef<S>;
+}
+
+/** A read-only value column rendering numbers as progress from 0 to 1. */
+export function progressBarColumn<S>(
+  text: string,
+  value: (row: S) => Reactive<number>,
+  options: ProgressBarColumnOptions<S> = {}
+): ColumnDef<S> {
+  return {
+    ...valueColumn(text, value, { ...options, editable: false }),
+    standardCell: "progress-bar",
   } as StandardColumnDef<S>;
 }
 
@@ -365,6 +424,9 @@ export function tableView<T, Q = unknown>(
   const bridgeColumn = (col: ColumnDef<T>): Record<string, unknown> => defined({
     standardCell: (col as Partial<StandardColumnDef<T>>).standardCell,
     editOnBlur: (col as Partial<StandardColumnDef<T>>).editOnBlur,
+    standardItems: (col as Partial<StandardColumnDef<T>>).standardItems,
+    standardConverter: (col as Partial<StandardColumnDef<T>>).standardConverter,
+    standardIdentityBy: (col as Partial<StandardColumnDef<T>>).standardIdentityBy,
     text: col.text,
     columns: col.columns?.map(bridgeColumn),
     prefWidth: col.prefWidth,

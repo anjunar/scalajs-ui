@@ -60,6 +60,52 @@
   accent-color: var(--aj-accent);
 }
 
+.ui-table-choice-box-cell__display,
+.ui-table-combo-box-cell__display {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ui-table-choice-box-cell__editor,
+.ui-table-combo-box-cell__editor {
+  width: 100%;
+  min-width: 0;
+}
+
+.ui-table-choice-box-cell__editor {
+  height: calc(100% - 6px);
+  box-sizing: border-box;
+  padding: 0 6px;
+  color: inherit;
+  font: inherit;
+  background: var(--aj-surface);
+  border: 1px solid var(--aj-accent);
+  border-radius: 3px;
+  outline: none;
+}
+
+.ui-table-progress-bar-cell {
+  display: block;
+  width: 100%;
+}
+
+.ui-table-progress-bar-cell__track {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--aj-surface-muted);
+}
+
+.ui-table-progress-bar-cell__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--aj-accent);
+  transition: width 160ms ease;
+}
+
 .ui-table-view-cell-selection .ui-table-row.ui-table-row-selected {
   background-color: transparent;
   box-shadow: none;

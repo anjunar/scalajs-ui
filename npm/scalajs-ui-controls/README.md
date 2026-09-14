@@ -251,15 +251,30 @@ editing still requires the row's writable property or an explicit application ca
 
 ### Standard editable cells
 
-`textFieldColumn` and `checkBoxColumn` use the same observed-value and edit-event contract as
-`valueColumn`, while supplying the standard editor component:
+The standard column helpers use the same observed-value and edit-event contract as `valueColumn`,
+while supplying the corresponding cell component:
 
 ```ts
-const person = { name: property("Ada"), active: property(true) };
-tableView(listProperty([person]), [
-  textFieldColumn("Name", row => row.name),
-  checkBoxColumn("Active", row => row.active),
-], { editable: true, cellSelectionEnabled: true });
+const owners = [{ id: 1, name: "Ada" }, { id: 2, name: "Grace" }];
+const person = {
+  name: property("Ada"),
+  active: property(true),
+  role: property("author"),
+  owner: property(owners[0]),
+  progress: property(0.65),
+};
+viewport(() => {
+  tableView(listProperty([person]), [
+    textFieldColumn("Name", row => row.name),
+    checkBoxColumn("Active", row => row.active),
+    choiceBoxColumn("Role", row => row.role, ["author", "editor"]),
+    comboBoxColumn("Owner", row => row.owner, owners, {
+      converter: owner => owner.name,
+      identityBy: owner => owner.id,
+    }),
+    progressBarColumn("Progress", row => row.progress),
+  ], { editable: true, cellSelectionEnabled: true });
+});
 ```
 
 A text editor opens with double-click, F2 or Enter on the logically focused cell. Enter commits,
@@ -273,10 +288,17 @@ F2/Enter can also enter it as the focused editor; Escape cancels that open sessi
 toggles it. Both cells obey table, ancestor-column, column and cell editability. A writable
 `Property` receives the default commit; `editCommitHandler` remains the alternative for read-only
 or application-managed values.
+
+`choiceBoxColumn` uses a compact native select. `comboBoxColumn` uses the Forms ComboBox and must be
+inside a `viewport`, because its item list is rendered through the shared overlay implementation.
+The first Escape closes an open ComboBox popup; the next cancels the table edit. Popup focus does
+not finish the edit. Both helpers accept a fixed array or live `ListProperty`, plus typed
+`converter` and `identityBy` callbacks. `progressBarColumn` is always read-only and clamps its input
+to the 0–1 range while exposing 0–100 through ARIA.
 Cells at overlapping absolute row positions retain their component/DOM identity during
 scrolling and measurement when the item instance is unchanged. Leaving the virtual window,
 replacing an item, resetting the source list, or changing the renderer can recreate cells.
-Identity across data reordering and table-managed start/commit/cancel are not implemented yet.
+Identity across arbitrary data reordering without `rowKey` is not preserved.
 
 ### Column visibility and refresh
 
