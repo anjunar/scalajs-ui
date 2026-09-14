@@ -66,6 +66,17 @@ export interface TextFieldColumnOptions<S> extends Omit<ValueColumnOptions<S, st
   readonly editOnBlur?: TextFieldBlurPolicy;
 }
 
+export type TableTextParseResult<V> =
+  | { readonly ok: true; readonly value: V }
+  | { readonly ok: false; readonly error: string };
+
+export interface ConvertingTextFieldColumnOptions<S, V> extends Omit<ValueColumnOptions<S, V>, "cell"> {
+  /** Text shown outside editing and used as the initial editor value. Defaults to String(value). */
+  readonly formatter?: (value: V) => string;
+  /** What losing DOM focus does while editing. Invalid commits keep the session open. */
+  readonly editOnBlur?: TextFieldBlurPolicy;
+}
+
 export type CheckBoxColumnOptions<S> = Omit<ValueColumnOptions<S, boolean>, "cell">;
 
 export interface SelectionColumnOptions<S, V> extends Omit<ValueColumnOptions<S, V>, "cell"> {
@@ -79,11 +90,13 @@ export type ProgressBarColumnOptions<S> = Omit<ValueColumnOptions<S, number>,
   "cell" | "editable" | "onEditStart" | "editCommitHandler" | "onEditCommit" | "onEditCancel">;
 
 type StandardColumnDef<T> = ColumnDef<T> & {
-  readonly standardCell: "text-field" | "check-box" | "choice-box" | "combo-box" | "progress-bar";
+  readonly standardCell: "text-field" | "converting-text-field" | "check-box" | "choice-box" | "combo-box" | "progress-bar";
   readonly editOnBlur?: TextFieldBlurPolicy;
   readonly standardItems?: ListProperty<unknown> | readonly unknown[];
   readonly standardConverter?: (value: unknown) => string;
   readonly standardIdentityBy?: (value: unknown) => unknown;
+  readonly standardTextFormatter?: (value: unknown) => string;
+  readonly standardTextParser?: (text: string) => TableTextParseResult<unknown>;
 };
 
 export type ColumnGroupOptions<T> = Pick<ColumnDef<T>, "visible" | "onVisibilityChange" | "editable">;
@@ -124,6 +137,23 @@ export function textFieldColumn<S>(
   return {
     ...valueColumn(text, value, metadata),
     standardCell: "text-field",
+    editOnBlur,
+  } as StandardColumnDef<S>;
+}
+
+/** A typed text column whose parser reports conversion or validation failures explicitly. */
+export function convertingTextFieldColumn<S, V>(
+  text: string,
+  value: (row: S) => Reactive<V>,
+  parser: (text: string) => TableTextParseResult<V>,
+  options: ConvertingTextFieldColumnOptions<S, V> = {}
+): ColumnDef<S> {
+  const { formatter, editOnBlur, ...metadata } = options;
+  return {
+    ...valueColumn(text, value, metadata),
+    standardCell: "converting-text-field",
+    standardTextFormatter: formatter,
+    standardTextParser: parser,
     editOnBlur,
   } as StandardColumnDef<S>;
 }
@@ -427,6 +457,8 @@ export function tableView<T, Q = unknown>(
     standardItems: (col as Partial<StandardColumnDef<T>>).standardItems,
     standardConverter: (col as Partial<StandardColumnDef<T>>).standardConverter,
     standardIdentityBy: (col as Partial<StandardColumnDef<T>>).standardIdentityBy,
+    standardTextFormatter: (col as Partial<StandardColumnDef<T>>).standardTextFormatter,
+    standardTextParser: (col as Partial<StandardColumnDef<T>>).standardTextParser,
     text: col.text,
     columns: col.columns?.map(bridgeColumn),
     prefWidth: col.prefWidth,

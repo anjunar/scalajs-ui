@@ -6,6 +6,7 @@ import ui.control.table.{
   TableCheckBoxCell,
   TableCell,
   TableChoiceBoxCell,
+  TableConvertingTextFieldCell,
   TableColumn,
   TableEditCancelEvent,
   TableEditCancelReason,
@@ -99,27 +100,29 @@ private[bridge] trait TabFacade extends js.Object {
 
 @js.native
 private[bridge] trait ColumnFacade extends js.Object {
-  val text: String                                                 = js.native
-  val columns: js.UndefOr[js.Array[ColumnFacade]]                  = js.native
-  val prefWidth: js.UndefOr[Double]                                = js.native
-  val minWidth: js.UndefOr[Double]                                 = js.native
-  val maxWidth: js.UndefOr[Double]                                 = js.native
-  val resizable: js.UndefOr[js.Any]                                = js.native
-  val reorderable: js.UndefOr[js.Any]                              = js.native
-  val editable: js.UndefOr[js.Any]                                 = js.native
-  val sortable: js.UndefOr[Boolean]                                = js.native
-  val sortKey: js.UndefOr[String]                                  = js.native
-  val visible: js.UndefOr[js.Any]                                  = js.native
-  val onVisibilityChange: js.UndefOr[js.Function1[Boolean, Unit]]  = js.native
-  val onEditStart: js.UndefOr[js.Function1[js.Object, Unit]]       = js.native
-  val editCommitHandler: js.UndefOr[js.Function1[js.Object, Unit]] = js.native
-  val onEditCommit: js.UndefOr[js.Function1[js.Object, Unit]]      = js.native
-  val onEditCancel: js.UndefOr[js.Function1[js.Object, Unit]]      = js.native
-  val standardCell: js.UndefOr[String]                             = js.native
-  val editOnBlur: js.UndefOr[String]                               = js.native
-  val standardItems: js.UndefOr[js.Any]                            = js.native
-  val standardConverter: js.UndefOr[js.Function1[js.Any, String]]  = js.native
-  val standardIdentityBy: js.UndefOr[js.Function1[js.Any, js.Any]] = js.native
+  val text: String                                                    = js.native
+  val columns: js.UndefOr[js.Array[ColumnFacade]]                     = js.native
+  val prefWidth: js.UndefOr[Double]                                   = js.native
+  val minWidth: js.UndefOr[Double]                                    = js.native
+  val maxWidth: js.UndefOr[Double]                                    = js.native
+  val resizable: js.UndefOr[js.Any]                                   = js.native
+  val reorderable: js.UndefOr[js.Any]                                 = js.native
+  val editable: js.UndefOr[js.Any]                                    = js.native
+  val sortable: js.UndefOr[Boolean]                                   = js.native
+  val sortKey: js.UndefOr[String]                                     = js.native
+  val visible: js.UndefOr[js.Any]                                     = js.native
+  val onVisibilityChange: js.UndefOr[js.Function1[Boolean, Unit]]     = js.native
+  val onEditStart: js.UndefOr[js.Function1[js.Object, Unit]]          = js.native
+  val editCommitHandler: js.UndefOr[js.Function1[js.Object, Unit]]    = js.native
+  val onEditCommit: js.UndefOr[js.Function1[js.Object, Unit]]         = js.native
+  val onEditCancel: js.UndefOr[js.Function1[js.Object, Unit]]         = js.native
+  val standardCell: js.UndefOr[String]                                = js.native
+  val editOnBlur: js.UndefOr[String]                                  = js.native
+  val standardItems: js.UndefOr[js.Any]                               = js.native
+  val standardConverter: js.UndefOr[js.Function1[js.Any, String]]     = js.native
+  val standardIdentityBy: js.UndefOr[js.Function1[js.Any, js.Any]]    = js.native
+  val standardTextFormatter: js.UndefOr[js.Function1[js.Any, String]] = js.native
+  val standardTextParser: js.UndefOr[js.Function1[String, js.Any]]    = js.native
 
   /** `(row) => (scope) => void` -- the cell body, already wrapped in `withScope` on the TS side. */
   val cell: js.UndefOr[js.Function1[js.Any, js.Function1[ScopeHandleBridge, Unit]]] = js.native
@@ -138,6 +141,24 @@ private[bridge] object ControlFactories {
       case values: js.Array[?] =>
         CoreListProperty(values.asInstanceOf[js.Array[js.Any]])
       case _ => CoreListProperty[js.Any]()
+    }
+
+  private[bridge] def textParseResult(result: js.Any): Either[String, js.Any] =
+    if (result == null || js.isUndefined(result)) Left("Parser returned no result")
+    else {
+      val dynamic = result.asInstanceOf[js.Dynamic]
+      val ok      = dynamic.selectDynamic("ok")
+      if (js.typeOf(ok) != "boolean") Left("Parser result requires a Boolean 'ok' field")
+      else if (ok.asInstanceOf[Boolean]) {
+        val value = dynamic.selectDynamic("value")
+        if (js.isUndefined(value)) Left("Successful parser result requires a 'value' field")
+        else Right(value.asInstanceOf[js.Any])
+      } else {
+        val error = dynamic.selectDynamic("error")
+        if (js.typeOf(error) == "string" && error.asInstanceOf[String].nonEmpty)
+          Left(error.asInstanceOf[String])
+        else Left("Invalid value")
+      }
     }
 
   /** A local `ListProperty` (already a `ListDataSource`) or a remote spec. */
@@ -529,6 +550,21 @@ private[bridge] object TableViewFactory extends ComponentFactory {
               Some(_ =>
                 new TableTextFieldCell[js.Any](blurPolicy).asInstanceOf[TableCell[js.Any, js.Any]]
               )
+            )
+          case "converting-text-field" =>
+            val blurPolicy = col.editOnBlur.fold(TableTextFieldCell.BlurPolicy.Keep) {
+              case "commit" => TableTextFieldCell.BlurPolicy.Commit
+              case "cancel" => TableTextFieldCell.BlurPolicy.Cancel
+              case _        => TableTextFieldCell.BlurPolicy.Keep
+            }
+            val formatter = col.standardTextFormatter.fold((value: js.Any) =>
+              if (value == null) "" else value.toString
+            )(function => value => function(value))
+            val parser = col.standardTextParser.fold((_: String) =>
+              Left("No parser configured"): Either[String, js.Any]
+            )(function => value => ControlFactories.textParseResult(function(value)))
+            column.cellFactoryProperty.set(
+              Some(_ => new TableConvertingTextFieldCell(parser, formatter, blurPolicy))
             )
           case "check-box" =>
             column.cellFactoryProperty.set(

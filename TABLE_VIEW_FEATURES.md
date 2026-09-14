@@ -14,7 +14,7 @@ Ziel ist funktionale Parität für Datenbindung, Zellen und Zeilen, Auswahl, Fok
 
 Die öffentliche [TableView-API von JavaFX 26](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/TableView.html) bildet den Referenzumfang. Zell- und Spaltenverträge werden zusätzlich gegen deren eigene APIs geprüft. Geerbte Darstellungsfunktionen werden auf DOM, Komponenten-Slots und Web-CSS abgebildet.
 
-**Editierbare Inhalte sind bereits möglich.** `TableColumn.cell { row => … }` komponiert beliebige Komponenten. Darin können Eingabefelder stehen, die über die vorhandene Property-/Form-Bindung das Zeilenmodell ändern. Dieser Weg bleibt unterstützt. Davon getrennt sind der von der Tabelle verwaltete Kernablauf mit Editierposition, Start/Commit/Cancel und typisierten Ereignissen sowie integrierte Text-, Boolean- und Auswahlzellen vorhanden. Parser-/Validierungsfehler für konvertierende Editoren und deren vollständiger Zugänglichkeitsvertrag fehlen noch. „Editing fehlt“ wäre daher eine falsche Beschreibung des heutigen Stands.
+**Editierbare Inhalte sind bereits möglich.** `TableColumn.cell { row => … }` komponiert beliebige Komponenten. Darin können Eingabefelder stehen, die über die vorhandene Property-/Form-Bindung das Zeilenmodell ändern. Dieser Weg bleibt unterstützt. Davon getrennt sind der von der Tabelle verwaltete Kernablauf mit Editierposition, Start/Commit/Cancel und typisierten Ereignissen sowie integrierte Text-, Boolean-, Auswahl- und konvertierende Textzellen vorhanden. Parser-/Validierungsfehler bleiben in der Sitzung sichtbar und zugänglich mit dem Eingabefeld verbunden. „Editing fehlt“ wäre daher eine falsche Beschreibung des heutigen Stands.
 
 Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Erweiterungen. Sie bleiben Bestandteil aller neuen Funktionen. Insbesondere erscheinen Previous/Next nur im Paging-Modus.
 
@@ -224,7 +224,7 @@ Referenzen: [Cell-Editierablauf](https://openui.io/javadoc/26/javafx.controls/ja
 | E02 | Tabellenverwalteter Editiermodus | Vorhanden | `editable` auf Tabelle/Spalte/Zelle, aktuelle Position/Item/Original/Entwurf sowie `edit`, `updateEdit`, `commitEdit` und `cancelEdit` bilden einen Tabellenzustand in Scala und TypeScript. M4. |
 | E03 | Edit-Events und Schreiben ins Datenmodell | Vorhanden | Typisierte Start-/Commit-/Cancel-Ereignisse, Default-Writeback über `WritableProperty`, ersetzbarer Commit-Handler und nachgelagerter Beobachter sind vorhanden. M4. |
 | E04 | Standard-Zellfabriken | Vorhanden | TextField, CheckBox, ChoiceBox, ComboBox und ProgressBar sind als Scala-Zellen/DSL-Helfer und typisierte TypeScript-Spalten vorhanden. Die Forms-ComboBox bleibt Forms-seitig, sodass Controls keine zyklische Abhängigkeit erhält. M4/M6. |
-| E05 | Konvertierung, Fehler und Fokuswechsel | Teilweise | Text/Boolean/Auswahl besitzen IME-sichere Enter-/Escape-/Tab-Regeln und zeilenweise Tab-Reihenfolge; Text hat eine explizite Blur-Policy. ChoiceBox akzeptiert nur vorhandene Items und markiert fehlende Werte mit `aria-invalid`; ComboBox-Popup-Fokus beendet die Sitzung nicht. Parser-/Validierungsfehler für frei konvertierende Editoren samt Fehlermeldung fehlen. M4/M6. |
+| E05 | Konvertierung, Fehler und Fokuswechsel | Vorhanden | Text/Boolean/Auswahl besitzen IME-sichere Enter-/Escape-/Tab-Regeln und zeilenweise Tab-Reihenfolge; Text hat eine explizite Blur-Policy. `TableConvertingTextFieldCell`/`convertingTextFieldCell`/`convertingTextFieldColumn` halten ungültigen Rohtext aus dem typisierten Entwurf heraus, lassen die Sitzung offen und verbinden die sichtbare Meldung über `aria-invalid`/`aria-errormessage`. ChoiceBox lehnt fehlende Items ab; ComboBox-Popup-Fokus beendet die Sitzung nicht. M4/M6. |
 
 ### 3.6 Viewport, Darstellung und Zugänglichkeit
 
@@ -431,7 +431,11 @@ Default-Writeback verwendet das zu Sitzungsbeginn gelieferte `WritableProperty`;
 
 `TableProgressBarCell` ist nicht editierbar und projiziert Werte von 0 bis 1 zugänglich auf 0 bis 100 Prozent; Werte außerhalb werden begrenzt. Scala bietet `choiceBoxCell`, Forms-seitig `comboBoxCell` sowie `progressBarCell`. TypeScript bietet `choiceBoxColumn`, `comboBoxColumn` und `progressBarColumn`; Itemlisten können unveränderliche Arrays oder live beobachtete `ListProperty`s sein, `converter` und `identityBy` bleiben typisiert.
 
-Parsing-/Validierungsfehler für frei konvertierende Editoren müssen die Sitzung offen lassen und mit einer zugänglichen Fehlermeldung angezeigt werden. Die ChoiceBox deckt den fehlenden Listenwert nur mit `aria-invalid` ab; ein allgemeiner Parser-/Validatorvertrag ist das verbleibende E05-Stück.
+**Umgesetzt im zwanzigsten Ausbau – typisierte Konvertierung und Fehler:** `TableConvertingTextFieldCell[S,T]` erhält einen Formatter und einen Parser `String => Either[String,T]`. Ungültiger Rohtext bleibt lokal im Eingabefeld; der letzte gültige typisierte Entwurf und das Datenmodell bleiben unverändert. Enter, Tab und die Commit-Blur-Policy versuchen die Konvertierung. Ein Fehler hält die Sitzung offen; beim Tastatur-Commit bleibt auch der Fokus im Feld. Eingabefeld und Zelle werden markiert und die Meldung sichtbar mit `role=alert` gezeigt; `aria-errormessage` referenziert dieselbe Meldung. Nach gültiger Eingabe verschwindet der Fehler unmittelbar, und der normale einmalige Commit-/Fokuspfad läuft weiter. Leere Fehlermeldungen und geworfene Parserfehler erhalten eine sichere Ersatzmeldung.
+
+Die bestehende String-Zelle verwendet denselben Editorpfad mit einem immer erfolgreichen Parser. Scala bietet `convertingTextFieldCell`; TypeScript `convertingTextFieldColumn` mit dem expliziten Ergebnis `{ ok: true, value } | { ok: false, error }`. Dadurch bleibt die JavaScript-Grenze ohne Exceptions als regulärem Validierungsprotokoll typisiert; fehlerhafte untypisierte Ergebnisobjekte werden dennoch zugänglich zurückgewiesen.
+
+Abnahme des zwanzigsten Ausbaus am 14.09.2026: vollständiges Scala-Gate, Bridge-Full-Link, CSS-/Design-Prüfung und Demo-Gate mit 31 Routen grün. Controls umfassen jetzt 83 Bridge-Integrationstests plus 3 Tarball-Consumer-Tests. Der neue Browserfall prüft ungültigen Rohtext, erhaltenen typisierten Entwurf, Enter-/Tab-/Blur-Sperre, sichtbare und per ARIA referenzierte Fehler, geworfene Parserfehler, Fehlerkorrektur, einmaligen Commit und anschließende Fokusbewegung.
 
 Vorgeschlagene Standardregel für integrierte Editoren: Verlässt die Zeile tatsächlich den virtuellen Bereich, wird die Sitzung mit Cancel und einem dokumentierten Grund beendet. Bleibt dieselbe Zeile sichtbar, müssen Scroll-/Messupdates den Editor erhalten. Entfernen der Zeile/Spalte und Ersetzen der Quelle brechen ebenfalls kontrolliert ab. Async-Commit-Ergebnisse dürfen nur zur zugehörigen Sitzung/Generation zurückschreiben.
 
@@ -547,7 +551,7 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 - [x] M2: Austauschbare und erweiterbare Selection-/FocusModels einschließlich Ownership, Rebinding und Abgleich inaktiver Alternativen. M2 ist damit im vereinbarten Umfang abgeschlossen; anschließend M4 und die offenen M5/M6-Punkte.
 - [x] M4: Tabellenverwaltete Editiersitzung, Writable-Property-Writeback, ersetzbarer Commit-Handler, Ereignisse, Lifecycle-Abbruchgründe sowie Scala-/TypeScript-Handle.
 - [x] M4: Standard-Text-/Boolean-Editoren sowie F2/Enter/Escape/Tab- und explizite Blur-Regeln in Scala und TypeScript. M4 ist damit im festgelegten Umfang abgeschlossen.
-- [ ] M6: Auswahl-/Progress-Zellen und Popup-Fokusregeln sind ergänzt; Parser-/Validierungsfehler samt zugänglicher Fehlermeldung bleiben offen.
+- [x] M6: Auswahl-/Progress-Zellen, Popup-Fokusregeln und Parser-/Validierungsfehler samt zugänglicher Fehlermeldung.
 
 ## 6. Verifikation
 

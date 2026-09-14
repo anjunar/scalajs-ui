@@ -337,13 +337,21 @@ class TableCellSpec extends AnyFlatSpec with Matchers {
         val name: Property[String],
         val active: Property[Boolean],
         val role: Property[String],
-        val progress: Property[Double]
+        val progress: Property[Double],
+        val age: Property[Int]
     )
-    val row   = new EditableRow(Property("Ada"), Property(true), Property("author"), Property(0.65))
-    val roles = ListProperty(js.Array("author", "editor"))
+    val row = new EditableRow(
+      Property("Ada"),
+      Property(true),
+      Property("author"),
+      Property(0.65),
+      Property(42)
+    )
+    val roles                                           = ListProperty(js.Array("author", "editor"))
     var nameColumn: TableColumn[EditableRow, String]    = null
     var activeColumn: TableColumn[EditableRow, Boolean] = null
     var roleColumn: TableColumn[EditableRow, String]    = null
+    var ageColumn: TableColumn[EditableRow, Int]        = null
     val (root, table, cursor)                           = mountTable(ListProperty(js.Array(row))) {
       editable = true
       nameColumn = column[EditableRow, String]("Name") {
@@ -361,6 +369,10 @@ class TableCellSpec extends AnyFlatSpec with Matchers {
       column[EditableRow, Double]("Progress") {
         cellValueFactory = _.value.progress
         progressBarCell
+      }
+      ageColumn = column[EditableRow, Int]("Age") {
+        cellValueFactory = _.value.age
+        convertingTextFieldCell(text => text.toIntOption.toRight("Whole number required"))
       }
     }
 
@@ -383,6 +395,10 @@ class TableCellSpec extends AnyFlatSpec with Matchers {
     cursor.collectHtml() should include("Editor")
     table.commitEdit("editor") shouldBe true
     row.role.get shouldBe "editor"
+    table.edit(0, ageColumn) shouldBe true
+    cursor.collectHtml() should include("ui-table-text-field-cell__editor-host")
+    table.commitEdit(43) shouldBe true
+    row.age.get shouldBe 43
     Runtime.unmount(root)
   }
 
