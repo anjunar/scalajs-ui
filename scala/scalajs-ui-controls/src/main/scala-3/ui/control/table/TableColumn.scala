@@ -2,7 +2,7 @@ package ui.control.table
 
 import ui.core.component.{AbstractComponent, AbstractCustomComponent}
 import ui.core.render.Cursor
-import ui.core.state.{Property, ReadOnlyProperty}
+import ui.core.state.{ListProperty, Property, ReadOnlyProperty}
 
 class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponent {
   import TableColumn.{CellFactory, CellRenderer, CellValueFactory}
@@ -19,9 +19,13 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
   val sortKeyProperty: Property[Option[String]]                          = Property(None)
   val cellValueFactoryProperty: Property[Option[CellValueFactory[S, T]]] = Property(None)
   val cellFactoryProperty: Property[Option[CellFactory[S, T]]]           = Property(None)
+  val columns: ListProperty[TableColumn[S, ?]]                           =
+    new TableColumnChildren(this)
 
-  private val ownerProperty: Property[TableView[S] | Null]     = Property(null)
-  val tableViewProperty: ReadOnlyProperty[TableView[S] | Null] = ownerProperty
+  private val ownerProperty: Property[TableView[S] | Null]             = Property(null)
+  val tableViewProperty: ReadOnlyProperty[TableView[S] | Null]         = ownerProperty
+  private val parentProperty: Property[TableColumn[S, ?] | Null]       = Property(null)
+  val parentColumnProperty: ReadOnlyProperty[TableColumn[S, ?] | Null] = parentProperty
 
   /** Rendered width when visible/attached; otherwise the bounded preferred width. */
   val widthProperty: ReadOnlyProperty[Double] = ownerProperty.flatMap {
@@ -30,9 +34,14 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
         minWidthProperty.flatMap(_ => maxWidthProperty.map(_ => widthSpec(prefWidth).initial))
       )
     case table =>
-      table.renderedWidthsProperty.map(widths =>
-        widths.lift(table.getVisibleLeafIndex(this)).getOrElse(widthSpec(prefWidth).initial)
-      )
+      table.renderedWidthsProperty.map { widths =>
+        val descendants = table.visibleLeavesUnder(this)
+        if (columns.nonEmpty)
+          descendants
+            .map(column => widths.lift(table.getVisibleLeafIndex(column)).getOrElse(0.0))
+            .sum
+        else widths.lift(table.getVisibleLeafIndex(this)).getOrElse(widthSpec(prefWidth).initial)
+      }
   }
   private[table] def widthSpec(preferred: Double): TableColumnLayout.Column =
     TableColumnLayout.Column(
@@ -49,17 +58,27 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
   private[control] def invalidateRenderer(): Unit =
     rendererRevisionProperty.set(rendererRevisionProperty.get + 1)
 
-  private[control] def attach(table: TableView[S]): Unit = {
+  private[control] def attach(
+      table: TableView[S],
+      parent: TableColumn[S, ?] | Null = null
+  ): Unit = {
     require(!isDisposed, "Cannot attach a disposed TableColumn")
     require(
       ownerProperty.get == null || (ownerProperty.get eq table),
       "A TableColumn cannot belong to two TableViews"
     )
     ownerProperty.set(table)
+    parentProperty.set(parent)
   }
 
   private[control] def detach(table: TableView[S]): Unit =
     if (ownerProperty.get eq table) ownerProperty.set(null)
+
+  private[table] def setParentColumn(
+      expected: TableColumn[S, ?] | Null,
+      parent: TableColumn[S, ?] | Null
+  ): Unit =
+    if (parentProperty.get == null || (parentProperty.get eq expected)) parentProperty.set(parent)
 
   private[control] def observableValue(item: S, index: Int): ReadOnlyProperty[T] | Null =
     ownerProperty.get match {
@@ -96,17 +115,18 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
   def visible: Boolean                = visibleProperty.get
   def visible_=(value: Boolean): Unit = visibleProperty.set(value)
 
-  def prefWidth: Double                   = prefWidthProperty.get
-  def prefWidth_=(value: Double): Unit    = prefWidthProperty.set(value)
-  def minWidth: Double                    = minWidthProperty.get
-  def minWidth_=(value: Double): Unit     = minWidthProperty.set(value)
-  def maxWidth: Double                    = maxWidthProperty.get
-  def maxWidth_=(value: Double): Unit     = maxWidthProperty.set(value)
-  def resizable: Boolean                  = resizableProperty.get
-  def resizable_=(value: Boolean): Unit   = resizableProperty.set(value)
-  def width: Double                       = widthProperty.get
-  def reorderable: Boolean                = reorderableProperty.get
-  def reorderable_=(value: Boolean): Unit = reorderableProperty.set(value)
+  def prefWidth: Double                      = prefWidthProperty.get
+  def prefWidth_=(value: Double): Unit       = prefWidthProperty.set(value)
+  def minWidth: Double                       = minWidthProperty.get
+  def minWidth_=(value: Double): Unit        = minWidthProperty.set(value)
+  def maxWidth: Double                       = maxWidthProperty.get
+  def maxWidth_=(value: Double): Unit        = maxWidthProperty.set(value)
+  def resizable: Boolean                     = resizableProperty.get
+  def resizable_=(value: Boolean): Unit      = resizableProperty.set(value)
+  def width: Double                          = widthProperty.get
+  def reorderable: Boolean                   = reorderableProperty.get
+  def reorderable_=(value: Boolean): Unit    = reorderableProperty.set(value)
+  def parentColumn: TableColumn[S, ?] | Null = parentColumnProperty.get
 
   def setCellRenderer(renderer: CellRenderer[S]): Unit =
     cellRenderer.set(Some(renderer))
@@ -153,6 +173,16 @@ object TableColumn {
       body: TableColumn[S, T] ?=> Cursor ?=> Unit
   )(using TableView[S], Cursor): TableColumn[S, T] =
     tableColumn(text)(body)
+
+  /** Declares a group. Child columns composed in `body` are moved below it atomically. */
+  def columnGroup[S](text: String)(
+      body: TableColumn[S, Any] ?=> Cursor ?=> Unit
+  )(using table: TableView[S], cursor: Cursor): TableColumn[S, Any] = {
+    val group = new TableColumn[S, Any](text)
+    table.withColumnParent(group) { body(using group)(using cursor) }
+    table.registerColumn(group)
+    group
+  }
 
   def prefWidth[S, T](using column: TableColumn[S, T]): Double =
     column.prefWidthProperty.get

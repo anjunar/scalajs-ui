@@ -1,7 +1,10 @@
-import { attr, button, classes, div, onClick, property, style, text, when } from "@anjunar/scalajs-ui-core";
-import { column, remoteSource, tableView } from "@anjunar/scalajs-ui-controls";
+import { attr, button, classes, div, element, onClick, onInput, property, style, text, when } from "@anjunar/scalajs-ui-core";
+import { column, columnGroup, remoteSource, tableView } from "@anjunar/scalajs-ui-controls";
+import type { Property, UiEvent } from "@anjunar/scalajs-ui-core";
 import type { ColumnResizePolicy, RemotePage, RemoteSource, SortSpec, TableSelectionMode, TableViewHandle } from "@anjunar/scalajs-ui-controls";
 import { translated } from "../../app/i18n.js";
+
+const input = element("input");
 
 interface Book {
   readonly title: string;
@@ -51,10 +54,23 @@ function loadPage(query: Query): Promise<RemotePage<Book, Query>> {
   });
 }
 
+function inputValue(event: UiEvent): string {
+  return (event.target as HTMLInputElement | null)?.value ?? "";
+}
+
 export function controlsTablePage(): void {
   const showAuthors = property(true);
   const selectionMode = property<TableSelectionMode>("multiple");
   const resizePolicy = property<ColumnResizePolicy>("flex-last-column");
+  const notes = new Map<string, Property<string>>();
+  const noteFor = (book: Book): Property<string> => {
+    let note = notes.get(book.title);
+    if (note === undefined) {
+      note = property("");
+      notes.set(book.title, note);
+    }
+    return note;
+  };
   let table!: TableViewHandle<Book>;
   const initialQuery: Query = { offset: 0, limit: PAGE_SIZE, sorting: [] };
   const source: RemoteSource<Book, Query> = remoteSource({
@@ -98,6 +114,7 @@ export function controlsTablePage(): void {
     div(() => text(translated("Drag a column edge to resize. Focus its grip and use arrow keys for keyboard resizing.")));
     div(() => text(translated("Double-click a column edge to fit its content, or press Enter on the focused grip.")));
     div(() => text(translated("Drag a column header to move it. Or focus the header and press Alt+Shift+Left/Right.")));
+    div(() => text(translated("The note field is bound per book. Its focus and text selection stay in place while neighboring columns change.")));
     button(translated("Toggle constrained / free column widths"), {}, () => onClick(() =>
       resizePolicy.set(resizePolicy.get === "unconstrained" ? "flex-last-column" : "unconstrained")));
     button(translated("Go to row 500"), {}, () => onClick(() => table.scrollToIndex(499)));
@@ -114,9 +131,22 @@ export function controlsTablePage(): void {
       table = tableView(
         source,
         [
-          column(translated("Title").get, (book) => text(book.title), { prefWidth: 280, minWidth: 140, maxWidth: 900, sortable: true, sortKey: "title" }),
-          column(translated("Author").get, (book) => text(book.author), { prefWidth: 220, minWidth: 100, maxWidth: 600, sortable: true, sortKey: "author", visible: showAuthors, onVisibilityChange: value => showAuthors.set(value) }),
-          column(translated("Year").get, (book) => text(String(book.year)), { prefWidth: 100, minWidth: 70, maxWidth: 300, sortable: true, sortKey: "year" }),
+          columnGroup(translated("Book").get, [
+            column(translated("Title").get, (book) => text(book.title), { prefWidth: 280, minWidth: 140, maxWidth: 900, sortable: true, sortKey: "title" }),
+            column(translated("Author").get, (book) => text(book.author), { prefWidth: 220, minWidth: 100, maxWidth: 600, sortable: true, sortKey: "author", visible: showAuthors, onVisibilityChange: value => showAuthors.set(value) }),
+          ]),
+          columnGroup(translated("Details").get, [
+            column(translated("Year").get, (book) => text(String(book.year)), { prefWidth: 100, minWidth: 70, maxWidth: 300, sortable: true, sortKey: "year" }),
+            column(translated("Note").get, (book) => {
+              const note = noteFor(book);
+              input(() => {
+                classes("w-full", "rounded-control", "border", "border-line", "px-2", "py-1");
+                attr("aria-label", `${translated("Note").get}: ${book.title}`);
+                attr("value", note);
+                onInput((event) => note.set(inputValue(event)));
+              });
+            }, { prefWidth: 240, minWidth: 140, maxWidth: 600 }),
+          ]),
         ],
         {
           rowKey: (book) => book.title,

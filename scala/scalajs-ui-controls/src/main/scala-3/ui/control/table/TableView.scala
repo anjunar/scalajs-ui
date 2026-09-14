@@ -27,6 +27,7 @@ import ui.core.state.{
 }
 import ui.core.statement.Foreach.foreach
 import ui.core.statement.DynamicComponentRenderer.dynamic
+import ui.core.statement.KeyedChildren
 import org.scalajs.dom
 
 import scala.concurrent.ExecutionContext
@@ -47,12 +48,13 @@ final class TableView[S] private (
 
   val columns: ListProperty[TableColumn[S, ?]]                          = new TableColumnList(this)
   val rowFactoryProperty: Property[Option[TableView[S] => TableRow[S]]] = Property(None)
-  /** Optional stable entity identity used to restore selection and focus after a source reset.
-    * Keys must be unique in a result. Resolution scans loaded values only and never fetches gaps.
+
+  /** Optional stable entity identity used to restore selection and focus after a source reset. Keys
+    * must be unique in a result. Resolution scans loaded values only and never fetches gaps.
     */
-  val rowKeyProperty: Property[Option[S => Any]]                        = Property(None)
-  private val rowRendererRevisionProperty                               = Property(0)
-  private[table] val visibleColumns = ListProperty[TableColumn[S, ?]]()
+  val rowKeyProperty: Property[Option[S => Any]] = Property(None)
+  private val rowRendererRevisionProperty        = Property(0)
+  private[table] val visibleColumns              = ListProperty[TableColumn[S, ?]]()
   val visibleLeafColumns: ReadOnlyProperty[Vector[TableColumn[S, ?]]] =
     visibleColumns.map(_.toVector)
   private val placeholderVisibleProperty                       = Property(true)
@@ -78,16 +80,160 @@ final class TableView[S] private (
   val selectedIndicesProperty: ReadOnlyProperty[Vector[Int]] =
     selectionModel.selectedIndicesProperty
   val selectedItemsProperty: ReadOnlyProperty[Vector[S]] = selectionModel.selectedItemsProperty
-  val rowDoubleClickHandlerProperty: Property[Option[S => Unit]] = Property(None)
-  val onScrollToProperty: Property[Option[Int => Unit]]           = Property(None)
+  val rowDoubleClickHandlerProperty: Property[Option[S => Unit]]            = Property(None)
+  val onScrollToProperty: Property[Option[Int => Unit]]                     = Property(None)
   val onScrollToColumnProperty: Property[Option[TableColumn[S, ?] => Unit]] = Property(None)
-  val headerRowsProperty: Property[Int]                          = Property(0)
+  val headerRowsProperty: Property[Int]                                     = Property(0)
 
   private final class VisibleRow(val index: Int, val item: Option[S])
 
   private val visibleRowsProperty         = ListProperty[VisibleRow]()
   private val columnStateRevisionProperty = Property(0)
+  private val columnTreeRevisionProperty  = Property(0)
   private val headerStateRevisionProperty = Property(0)
+  private[table] val allColumnsProperty: ReadOnlyProperty[Vector[TableColumn[S, ?]]] =
+    columnTreeRevisionProperty.map(_ => allColumns)
+
+  private final case class HeaderEntry(
+      column: TableColumn[S, ?],
+      depth: Int,
+      leafIndex: Int,
+      leafCount: Int,
+      rowSpan: Int,
+      leaf: Boolean
+  )
+
+  private def currentHeaderEntries: Vector[HeaderEntry] = {
+    final case class Raw(
+        column: TableColumn[S, ?],
+        depth: Int,
+        leafIndex: Int,
+        leafCount: Int,
+        leaf: Boolean
+    )
+    val raw      = Vector.newBuilder[Raw]
+    var nextLeaf = 0
+    var maxDepth = 0
+    def visit(column: TableColumn[S, ?], depth: Int, ancestorsVisible: Boolean): Int = {
+      if (!ancestorsVisible || !column.visible) 0
+      else {
+        val start    = nextLeaf
+        val children = column.columns.toVector
+        val count    = if (children.isEmpty) {
+          nextLeaf += 1
+          maxDepth = math.max(maxDepth, depth)
+          1
+        } else children.map(visit(_, depth + 1, ancestorsVisible = true)).sum
+        if (count > 0) raw += Raw(column, depth, start, count, children.isEmpty)
+        count
+      }
+    }
+    columns.toVector.foreach(visit(_, 0, ancestorsVisible = true))
+    raw
+      .result()
+      .map(entry =>
+        HeaderEntry(
+          entry.column,
+          entry.depth,
+          entry.leafIndex,
+          entry.leafCount,
+          if (entry.leaf) maxDepth - entry.depth + 1 else 1,
+          entry.leaf
+        )
+      )
+      .sortBy(entry => (entry.depth, entry.leafIndex))
+  }
+
+  private[table] val headerRowCountProperty: ReadOnlyProperty[Int] =
+    columnStateRevisionProperty.map(_ =>
+      currentHeaderEntries.map(entry => entry.depth + entry.rowSpan).maxOption.getOrElse(1)
+    )
+
+  private final class HeaderSlot(initial: HeaderEntry, browser: Boolean) extends Div {
+    private val entryProperty            = Property(initial)
+    def update(entry: HeaderEntry): Unit = entryProperty.set(entry)
+
+    override def compose(cursor: Cursor): Unit = DslLayer.render(this, cursor) {
+      val column      = initial.column
+      val typedColumn = column.asInstanceOf[TableColumn[S, Any]]
+      setAttribute("role", "columnheader")
+      classes = Seq("ui-table-header-cell")
+      addDisposable(entryProperty.observe { entry =>
+        setStyle("grid-column", s"${entry.leafIndex + 1} / span ${entry.leafCount}")
+        setStyle("grid-row", s"${entry.depth + 1} / span ${entry.rowSpan}")
+        setAttribute("aria-colindex", (entry.leafIndex + 1).toString)
+        if (entry.leafCount > 1) setAttribute("aria-colspan", entry.leafCount.toString)
+        else removeAttribute("aria-colspan")
+        if (entry.rowSpan > 1) setAttribute("aria-rowspan", entry.rowSpan.toString)
+        else removeAttribute("aria-rowspan")
+      })
+      text(column.textProperty) {}
+
+      if (initial.leaf) {
+        addClass("ui-table-header-cell-leaf")
+        addDisposable(renderedWidthsProperty.observe { widths =>
+          if (isBound) {
+            val width =
+              s"${widths.lift(getVisibleLeafIndex(column)).getOrElse(typedColumn.prefWidth)}px"
+            setStyle("width", width)
+            setStyle("min-width", width)
+          }
+        })
+        classIf(
+          "ui-table-header-cell-last",
+          visibleLeafColumns.map(_.lastOption.contains(column))
+        )
+        DslLayer.child(new TableColumnResizeHandle(TableView.this, column)) {}
+        columnHeaders.update(column, this)
+        addDisposable(Disposable { columnHeaders.remove(column) })
+        addDisposable(
+          new TableColumnReorderGesture(
+            TableView.this,
+            column,
+            this,
+            additive => toggleSort(column, additive),
+            browser
+          )
+        )
+        classCondition(
+          "ui-table-header-cell-sortable",
+          headerStateRevisionProperty.map(_ => isRemoteSortable(typedColumn))
+        )
+        addDisposable(headerStateRevisionProperty.observe { _ =>
+          if (!isDisposed) {
+            val sorting  = currentRemoteSorting
+            val priority = sortKeyOf(column).fold(-1)(key => sorting.indexWhere(_.field == key))
+            if (priority >= 0) setAttribute("data-sort-priority", (priority + 1).toString)
+            else removeAttribute("data-sort-priority")
+            if (
+              priority == 0 && visibleColumns
+                .find(c => sortKeyOf(c) == sortKeyOf(column))
+                .contains(column)
+            ) setAttribute("aria-sort", if (sorting.head.ascending) "ascending" else "descending")
+            else removeAttribute("aria-sort")
+            if (priority >= 0)
+              setAttribute(
+                "aria-description",
+                s"${if (sorting(priority).ascending) "Ascending" else "Descending"}, ${priority + 1}/${sorting.size}"
+              )
+            else removeAttribute("aria-description")
+          }
+        })
+        classCondition(
+          "ui-table-header-cell-sorted",
+          headerStateRevisionProperty.map(_ => currentSortFor(typedColumn).nonEmpty)
+        )
+        classCondition(
+          "ui-table-header-cell-sorted-asc",
+          headerStateRevisionProperty.map(_ => currentSortFor(typedColumn).exists(_.ascending))
+        )
+        classCondition(
+          "ui-table-header-cell-sorted-desc",
+          headerStateRevisionProperty.map(_ => currentSortFor(typedColumn).exists(!_.ascending))
+        )
+      } else addClass("ui-table-header-cell-group")
+    }
+  }
 
   /** Requested remote sort descriptors, not a promise that the corresponding load succeeded. */
   val sortingProperty: ReadOnlyProperty[Vector[RemoteSort]] =
@@ -105,6 +251,7 @@ final class TableView[S] private (
   private var pendingScrollColumn: Option[TableColumn[S, ?]] = None
   private var pendingColumnMove: Option[(TableColumn[S, ?], Int)] = None
   private var pendingAutoFit: Option[TableColumn[S, ?]]           = None
+  private var columnParentStack: List[TableColumn[S, ?]]          = Nil
   private val mountedCells                      = mutable.LinkedHashSet.empty[TableCell[S, ?]]
   private var composingTarget: Option[dom.Node] = None
   private var headerViewport: Div | Null        = null
@@ -114,6 +261,18 @@ final class TableView[S] private (
 
   private[table] def checkColumnMutation(): Unit =
     if (isBound) HostMutationGuard.checkRemoval(host)
+
+  private[table] def validateRootColumns(candidate: Seq[TableColumn[S, ?]]): Unit =
+    TableColumnTree.validate(candidate, this)
+
+  private[table] def validateColumnChildren(
+      parent: TableColumn[S, ?],
+      candidate: Seq[TableColumn[S, ?]]
+  ): Unit = {
+    require(!isDisposed, "Cannot change the columns of a disposed TableView")
+    checkColumnMutation()
+    TableColumnTree.validate(columns.toVector, this, Some(parent -> candidate))
+  }
 
   private[table] def registerCell(cell: TableCell[S, ?]): Unit = {
     mountedCells.add(cell)
@@ -184,20 +343,24 @@ final class TableView[S] private (
     * Reorderable restricts user gestures, not this API. Hydration defers the latest valid request.
     */
   def moveColumn(column: TableColumn[S, ?], toVisibleIndex: Int): Boolean = {
-    val visible = columns.toVector.filter(_.visible)
+    val visible = visibleLeafColumns.get
     val from    = visible.indexOf(column)
+    val target  = visible.lift(toVisibleIndex)
+    val parent  = Option(column).flatMap(value => Option(value.parentColumn)).orNull
     if (
       !browserRendering || from < 0 || toVisibleIndex < 0 || toVisibleIndex >= visible.size ||
-      from == toVisibleIndex || !canMoveColumns
+      from == toVisibleIndex || target.isEmpty ||
+      !(Option(target.get.parentColumn).orNull eq parent) || !canMoveColumns
     ) false
     else if (!scrollNavigationMounted) {
       pendingColumnMove = Some((column, toVisibleIndex))
       true
     } else {
-      val target    = visible(toVisibleIndex)
-      val remaining = columns.toVector.filterNot(_ eq column)
-      val insertion = remaining.indexOf(target) + (if (from < toVisibleIndex) 1 else 0)
-      columns.setAll(remaining.patch(insertion, Seq(column), 0))
+      val siblings  = if (parent == null) columns else parent.columns
+      val targetCol = target.get
+      val remaining = siblings.toVector.filterNot(_ eq column)
+      val insertion = remaining.indexOf(targetCol) + (if (from < toVisibleIndex) 1 else 0)
+      siblings.setAll(remaining.patch(insertion, Seq(column), 0))
       true
     }
   }
@@ -342,7 +505,7 @@ final class TableView[S] private (
 
   override protected def handleRemoteItemsChange(change: RemoteListChange[S]): Unit = {
     change match {
-      case RemoteListChange.Reset()            =>
+      case RemoteListChange.Reset() =>
         selectionModel.reconcileReset(allowReferenceFallback = false)
         focusModel.reconcileReset(allowReferenceFallback = false)
       case RemoteListChange.Structural(change) =>
@@ -399,24 +562,38 @@ final class TableView[S] private (
   def items: ListDataSource[S]                                   = dataSource
   def getVisibleLeafIndex(column: TableColumn[S, ?]): Int        = visibleColumns.indexOf(column)
   def getVisibleLeafColumn(index: Int): TableColumn[S, ?] | Null = visibleColumns.lift(index).orNull
-  def $getColumns: ListProperty[TableColumn[S, ?]]               = columns
-  def $getFixedCellSize: Double                                  = rowHeightProperty.get
-  def setFixedCellSize(value: Double): Unit                      = rowHeightProperty.set(value)
+  private[table] def visibleLeavesUnder(column: TableColumn[S, ?]): Vector[TableColumn[S, ?]] =
+    TableColumnTree.visibleLeaves(Seq(column))
+  private[table] def allColumns: Vector[TableColumn[S, ?]] =
+    TableColumnTree.nodes(columns.toVector).map(_.column)
+  def $getColumns: ListProperty[TableColumn[S, ?]] = columns
+  def $getFixedCellSize: Double                    = rowHeightProperty.get
+  def setFixedCellSize(value: Double): Unit        = rowHeightProperty.set(value)
 
   private[control] def registerColumn(column: TableColumn[S, ?]): Unit = {
-    if (!columns.contains(column)) columns.addOne(column)
+    columnParentStack.headOption match {
+      case Some(parent) => if (!parent.columns.contains(column)) parent.columns.addOne(column)
+      case None         => if (!columns.contains(column)) columns.addOne(column)
+    }
+  }
+
+  private[control] def withColumnParent[T](parent: TableColumn[S, ?])(body: => T): T = {
+    columnParentStack = parent :: columnParentStack
+    try body
+    finally columnParentStack = columnParentStack.tail
   }
 
   /** Detaching releases table-owned listeners; a removed column can be reused by its caller. */
   private def syncColumns(): Unit = {
-    val current = columns.toVector
+    val tree    = TableColumnTree.nodes(columns.toVector)
+    val current = tree.map(_.column)
     attachedColumns.keys.filterNot(current.contains).toVector.foreach { column =>
       attachedColumns.remove(column).foreach(_.dispose())
       userColumnWidths.remove(column)
       column.detach(this)
     }
-    current.filterNot(attachedColumns.contains).foreach { column =>
-      column.attach(this)
+    tree.foreach(node => node.column.attach(this, node.parent))
+    tree.map(_.column).filterNot(attachedColumns.contains).foreach { column =>
       val subscriptions = new CompositeDisposable()
       subscriptions.add(column.prefWidthProperty.observeWithoutInitial { _ =>
         userColumnWidths.remove(column)
@@ -428,14 +605,16 @@ final class TableView[S] private (
       subscriptions.add(column.sortableProperty.observeWithoutInitial(_ => bumpHeaderState()))
       subscriptions.add(column.sortKeyProperty.observeWithoutInitial(_ => bumpHeaderState()))
       subscriptions.add(column.visibleProperty.observeWithoutInitial(_ => syncVisibleColumns()))
+      subscriptions.add(column.columns.observeWithoutInitial(_ => syncColumns()))
       attachedColumns.put(column, subscriptions)
     }
+    columnTreeRevisionProperty.set(columnTreeRevisionProperty.get + 1)
     syncVisibleColumns()
   }
 
   /** A visibility change removes only hidden cells, retaining all other column instances. */
   private def syncVisibleColumns(): Unit = {
-    val wanted = columns.toVector.filter(_.visible)
+    val wanted = TableColumnTree.visibleLeaves(columns.toVector)
     if (visibleColumns.toVector != wanted) visibleColumns.setAll(wanted)
     bumpColumnState()
     placeholderVisibleProperty.set(renderableCount == 0 || visibleColumns.isEmpty)
@@ -492,12 +671,14 @@ final class TableView[S] private (
       def updateCounts(): Unit = {
         setAttribute(
           "aria-rowcount",
-          (renderableCount.toLong + (if (showHeaderProperty.get) 1 else 0)).toString
+          (renderableCount.toLong +
+            (if (showHeaderProperty.get) headerRowCountProperty.get else 0)).toString
         )
         setAttribute("aria-colcount", visibleColumns.length.toString)
       }
       addDisposable(itemStateRevisionProperty.observe(_ => updateCounts()))
       addDisposable(visibleLeafColumns.observe(_ => updateCounts()))
+      addDisposable(headerRowCountProperty.observe(_ => updateCounts()))
       addDisposable(showHeaderProperty.observe(_ => updateCounts()))
       resolvedCrawlId.foreach(setAttribute("id", _))
       if (browserRendering) {
@@ -573,118 +754,67 @@ final class TableView[S] private (
             overflow = "hidden"
             width = "100%"
             flex = "0 0 auto"
-            height = rowHeightProperty.map(value => s"${math.max(30.0, value)}px")
+            height = headerRowCountProperty.flatMap(rows =>
+              rowHeightProperty.map(value => s"${rows * math.max(30.0, value)}px")
+            )
           }
 
           div {
+            val content = summon[Div]
             classes = Seq("ui-table-header-content")
-            summon[Div].setAttribute("role", "row")
-            summon[Div].setAttribute("aria-rowindex", "1")
+            content.setAttribute("role", "rowgroup")
             style {
-              display = "flex"
+              display = "grid"
               width = totalColumnWidthProperty.map(value => s"${value}px")
               minWidth = totalColumnWidthProperty.map(value => s"${value}px")
               height = "100%"
               transform = scrollLeftProperty.map(value => s"translateX(-${value}px)")
             }
+            addDisposable(
+              renderedWidthsProperty.observe(widths =>
+                content.setStyle(
+                  "grid-template-columns",
+                  widths.map(value => s"${value}px").mkString(" ")
+                )
+              )
+            )
+            addDisposable(
+              headerRowCountProperty.observe(rows =>
+                content.setStyle(
+                  "grid-template-rows",
+                  s"repeat($rows, ${math.max(30.0, rowHeightProperty.get)}px)"
+                )
+              )
+            )
+            addDisposable(
+              rowHeightProperty.observe(value =>
+                content.setStyle(
+                  "grid-template-rows",
+                  s"repeat(${headerRowCountProperty.get}, ${math.max(30.0, value)}px)"
+                )
+              )
+            )
 
-            DslLayer.child(
-              new TableColumnProjection(
-                TableView.this,
-                column => {
-                  val typedColumn = column.asInstanceOf[TableColumn[S, Any]]
-                  val headerCell  = div {
-                    val cell = summon[Div]
-                    cell.setAttribute("role", "columnheader")
-                    cell.addDisposable(
-                      visibleLeafColumns.observe(_ =>
-                        if (!cell.isDisposed)
-                          cell.setAttribute(
-                            "aria-colindex",
-                            (getVisibleLeafIndex(column) + 1).toString
-                          )
-                      )
-                    )
-                    classes = Seq("ui-table-header-cell")
-                    classIf(
-                      "ui-table-header-cell-last",
-                      visibleLeafColumns.map(_.lastOption.contains(column))
-                    )
-                    val widthProperty = renderedWidthsProperty.map { widths =>
-                      s"${widths.lift(getVisibleLeafIndex(column)).getOrElse(typedColumn.prefWidth)}px"
-                    }
-                    style {
-                      position = "relative"
-                      width = widthProperty
-                      minWidth = widthProperty
-                      flex = "0 0 auto"
-                      boxSizing = "border-box"
-                    }
-                    text(column.textProperty) {}
-                    DslLayer.child(new TableColumnResizeHandle(TableView.this, column)) {}
-                  }
-                  columnHeaders.update(column, headerCell)
-                  headerCell.addDisposable(Disposable { columnHeaders.remove(column) })
-                  headerCell.addDisposable(
-                    new TableColumnReorderGesture(
-                      TableView.this,
-                      column,
-                      headerCell,
-                      additive => toggleSort(column, additive),
-                      cursor.isBrowser
-                    )
-                  )
-                  headerCell.classCondition(
-                    "ui-table-header-cell-sortable",
-                    headerStateRevisionProperty.map(_ => isRemoteSortable(typedColumn))
-                  )
-                  headerCell.addDisposable(headerStateRevisionProperty.observe { _ =>
-                    if (!headerCell.isDisposed) {
-                      val sorting  = currentRemoteSorting
-                      val priority =
-                        sortKeyOf(column).fold(-1)(key => sorting.indexWhere(_.field == key))
-                      if (priority >= 0)
-                        headerCell.setAttribute("data-sort-priority", (priority + 1).toString)
-                      else headerCell.removeAttribute("data-sort-priority")
-                      // ARIA permits aria-sort on one header only. Other terms retain their
-                      // direction/priority as an accessible description and visible indicator.
-                      if (
-                        priority == 0 && visibleColumns
-                          .find(c => sortKeyOf(c) == sortKeyOf(column))
-                          .contains(column)
-                      )
-                        headerCell.setAttribute(
-                          "aria-sort",
-                          if (sorting.head.ascending) "ascending" else "descending"
-                        )
-                      else headerCell.removeAttribute("aria-sort")
-                      if (priority >= 0)
-                        headerCell.setAttribute(
-                          "aria-description",
-                          s"${if (sorting(priority).ascending) "Ascending" else "Descending"}, ${priority + 1}/${sorting.size}"
-                        )
-                      else headerCell.removeAttribute("aria-description")
-                    }
-                  })
-                  headerCell.classCondition(
-                    "ui-table-header-cell-sorted",
-                    headerStateRevisionProperty.map(_ => currentSortFor(typedColumn).nonEmpty)
-                  )
-                  headerCell.classCondition(
-                    "ui-table-header-cell-sorted-asc",
-                    headerStateRevisionProperty.map(_ =>
-                      currentSortFor(typedColumn).exists(_.ascending)
-                    )
-                  )
-                  headerCell.classCondition(
-                    "ui-table-header-cell-sorted-desc",
-                    headerStateRevisionProperty.map(_ =>
-                      currentSortFor(typedColumn).exists(!_.ascending)
-                    )
-                  )
-                }
+            val initial = currentHeaderEntries
+            val keyed   = DslLayer.child(
+              new KeyedChildren[(TableColumn[S, ?], Boolean), HeaderEntry, HeaderSlot](
+                initial,
+                entry => entry.column -> entry.leaf,
+                entry => new HeaderSlot(entry, cursor.isBrowser),
+                (slot, entry) => slot.update(entry)
               )
             ) {}
+            var ready = !cursor.isHydrating
+            addDisposable(columnStateRevisionProperty.observeWithoutInitial { _ =>
+              if (ready) keyed.setItems(currentHeaderEntries)
+            })
+            cursor.afterHydration { () =>
+              if (!content.isDisposed) {
+                ready = true
+                val current = currentHeaderEntries
+                if (current != initial) keyed.setItems(current)
+              }
+            }
           }
         }
       }
@@ -1081,7 +1211,7 @@ object TableView {
   def rowFactory_=[S](using table: TableView[S])(factory: TableView[S] => TableRow[S]): Unit =
     table.rowFactoryProperty.set(Option(factory))
 
-  def rowKey[S](using table: TableView[S]): Option[S => Any] = table.rowKeyProperty.get
+  def rowKey[S](using table: TableView[S]): Option[S => Any]      = table.rowKeyProperty.get
   def rowKey_=[S](using table: TableView[S])(key: S => Any): Unit =
     table.rowKeyProperty.set(Option(key))
 

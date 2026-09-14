@@ -39,7 +39,7 @@ private[table] final class TableColumnMenu[S](table: TableView[S]) extends Abstr
     }
   }
 
-  private def open(last: Boolean = false): Unit = if (ready && table.columns.nonEmpty) {
+  private def open(last: Boolean = false): Unit = if (ready && table.allColumns.nonEmpty) {
     if (registration.isEmpty) {
       table.cancelColumnDrag()
       val width  = math.min(240.0, math.max(0.0, dom.window.innerWidth - 16.0))
@@ -58,7 +58,7 @@ private[table] final class TableColumnMenu[S](table: TableView[S]) extends Abstr
             popup.addDisposable(
               table.columnMenuTextProperty.observe(popup.setAttribute("aria-label", _))
             )
-            entries = table.columns.toVector.zipWithIndex.map { (column, index) =>
+            entries = table.allColumns.zipWithIndex.map { (column, index) =>
               button(column.textProperty) {
                 val item = summon[Button]
                 item.addClass("ui-table-column-menu-item")
@@ -154,13 +154,13 @@ private[table] final class TableColumnMenu[S](table: TableView[S]) extends Abstr
         }
       }
     }
-    addDisposable(table.columns.observeWithoutInitial { columns =>
+    addDisposable(table.allColumnsProperty.observeWithoutInitial { _ =>
       close(ready && registration.nonEmpty)
-      if (ready) trigger.disabled = columns.isEmpty
+      if (ready) trigger.disabled = table.allColumns.isEmpty
     })
     addDisposable(Disposable { ready = false; close(false) })
     if (cursor.isBrowser) cursor.afterHydration { () =>
-      if (!isDisposed) { ready = true; trigger.disabled = table.columns.isEmpty }
+      if (!isDisposed) { ready = true; trigger.disabled = table.allColumns.isEmpty }
     }
   }
 }

@@ -42,8 +42,23 @@ class TableRow[S] private[control] (
       setAttribute("role", "row")
       val owner = requireTableView()
       addDisposable(
-        owner.showHeaderProperty.observe(show =>
-          setAttribute("aria-rowindex", (indexProperty.get.toLong + (if (show) 2 else 1)).toString)
+        owner.headerRowCountProperty.observe(_ =>
+          setAttribute(
+            "aria-rowindex",
+            (indexProperty.get.toLong +
+              (if (owner.showHeaderProperty.get) owner.headerRowCountProperty.get + 1
+               else 1)).toString
+          )
+        )
+      )
+      addDisposable(
+        owner.showHeaderProperty.observe(_ =>
+          setAttribute(
+            "aria-rowindex",
+            (indexProperty.get.toLong +
+              (if (owner.showHeaderProperty.get) owner.headerRowCountProperty.get + 1
+               else 1)).toString
+          )
         )
       )
       addDisposable(

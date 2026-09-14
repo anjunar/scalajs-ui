@@ -206,7 +206,7 @@ async function main() {
     })).text();
     check(
       "/controls/table -- saved remote scroll window reaches SSR",
-      savedTableHtml.includes('aria-rowindex="495"') &&
+      savedTableHtml.includes('aria-rowindex="496"') &&
         savedTableHtml.includes("ui-table-cell-loading-placeholder") &&
         !savedTableHtml.includes("The Long Route 1"),
       "SSR ignored the request cookie and rendered the initial page"
