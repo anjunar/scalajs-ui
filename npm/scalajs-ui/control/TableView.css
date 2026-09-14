@@ -233,7 +233,11 @@
   outline: 1px solid var(--aj-accent-strong);
   outline-offset: -1px;
 }
-.ui-table-view:focus .ui-table-row-focused {
+.ui-table-view:focus .ui-table-row-focused:not(.ui-table-row-cell-focused) {
+  outline: 2px solid var(--aj-accent-strong);
+  outline-offset: -2px;
+}
+.ui-table-view:focus .ui-table-cell-focused {
   outline: 2px solid var(--aj-accent-strong);
   outline-offset: -2px;
 }

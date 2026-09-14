@@ -19,7 +19,13 @@ private[table] object TableRowKeyboard {
     val focus    = table.focusModel
     val previous = focus.focusedIndex
     val shortcut = key.ctrlKey || key.metaKey
-    val next     = key.key match {
+    if (key.key == "ArrowLeft" || key.key == "ArrowRight") {
+      key.preventDefault(); key.stopPropagation()
+      if (key.key == "ArrowLeft") focus.focusLeftCell() else focus.focusRightCell()
+      Option(focus.focusedColumn).foreach(table.scrollToColumn)
+      return
+    }
+    val next = key.key match {
       case "ArrowDown" => Some(if (previous < 0) 0 else math.min(count - 1, previous + 1))
       case "ArrowUp"   => Some(math.max(0, previous - 1))
       case "Home"      => Some(0)
@@ -32,7 +38,10 @@ private[table] object TableRowKeyboard {
     next match {
       case Some(index) =>
         key.preventDefault(); key.stopPropagation()
-        focus.focus(index)
+        Option(focus.focusedColumn) match {
+          case Some(column) => focus.focus(index, column)
+          case None         => focus.focus(index)
+        }
         if (!shortcut || key.shiftKey)
           table.selectionModel.click(index, shortcut, key.shiftKey, previous)
         table.scrollTo(index)

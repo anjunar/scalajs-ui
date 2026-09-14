@@ -3,6 +3,7 @@ package ui.control.table
 import ui.core.component.AbstractComponent
 import ui.core.dsl.ClassDsl.{addClass, classIf}
 import ui.core.dsl.DslLayer
+import ui.core.dsl.EventDsl.onClick
 import ui.core.dsl.StyleDsl.*
 import ui.core.layout.TextComponent.text
 import ui.core.render.Cursor
@@ -13,6 +14,8 @@ class TableCell[S, T] extends AbstractComponent {
 
   val itemProperty: Property[T | Null]              = Property(null)
   val emptyProperty: Property[Boolean]              = Property(true)
+  private val focusedState: Property[Boolean]       = Property(false)
+  val focusedProperty: ReadOnlyProperty[Boolean]    = focusedState
   private val indexState: Property[Int]             = Property(-1)
   val indexProperty: ReadOnlyProperty[Int]          = indexState
   private var boundRow: TableRow[S] | Null          = null
@@ -42,6 +45,35 @@ class TableCell[S, T] extends AbstractComponent {
       classIf("ui-table-cell-empty", emptyProperty)
       for (column <- Option(boundColumn); table <- Option(tableView)) {
         table.registerCell(this)
+        addDisposable(
+          table.focusedCellProperty.observe(position =>
+            focusedState.set(
+              Option(position).exists(current =>
+                current.row == indexProperty.get && (current.tableColumn eq column)
+              )
+            )
+          )
+        )
+        classIf("ui-table-cell-focused", focusedProperty)
+        onClick { event =>
+          event.raw match {
+            case mouse: org.scalajs.dom.MouseEvent if !emptyProperty.get =>
+              val element = host
+                .asInstanceOf[ui.core.render.DomHostElement]
+                .node
+                .asInstanceOf[org.scalajs.dom.Element]
+              if (TableRowKeyboard.isRowBackground(mouse, element) && table.canMoveColumns) {
+                mouse.stopPropagation()
+                table.selectionModel.click(
+                  indexProperty.get,
+                  mouse.ctrlKey || mouse.metaKey,
+                  mouse.shiftKey
+                )
+                table.focusCellFromPointer(indexProperty.get, column)
+              }
+            case _ => ()
+          }
+        }
         addDisposable(
           table.visibleLeafColumns.observe(_ =>
             if (!isDisposed)

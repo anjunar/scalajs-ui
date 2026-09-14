@@ -85,6 +85,76 @@ class TableFocusSpec extends AnyFlatSpec with Matchers {
     }
   }
 
+  it should "keep stable cell coordinates across rows and column reordering" in {
+    val values = ListProperty(js.Array(Person("A"), Person("B"), Person("C")))
+    mounted(values) { table =>
+      val first  = table.getVisibleLeafColumn(0)
+      val second = new TableColumn[Person, String]("Second")
+      table.columns.addOne(second)
+      val focus = table.focusModel
+
+      focus.focus(1, second)
+      focus.focusedIndex shouldBe 1
+      focus.focusedItem shouldBe values.get(1)
+      focus.focusedColumn shouldBe second
+      focus.focusedCell.asInstanceOf[TablePosition[Person]].row shouldBe 1
+      focus.focusedCell.asInstanceOf[TablePosition[Person]].column shouldBe 1
+      focus.isFocused(1, second) shouldBe true
+
+      var observedColumn = -1
+      val subscription   = focus.focusedCellProperty.observeWithoutInitial(position =>
+        observedColumn = Option(position).fold(-1)(_.column)
+      )
+      table.columns.setAll(Seq(second, first))
+      observedColumn shouldBe 0
+      focus.focusedColumn shouldBe second
+
+      values.insert(0, Person("Before"))
+      focus.focusedCell.asInstanceOf[TablePosition[Person]].row shouldBe 2
+      focus.focusedCell.asInstanceOf[TablePosition[Person]].column shouldBe 0
+      second.visible = false
+      focus.focusedIndex shouldBe 2
+      focus.focusedColumn shouldBe null
+      focus.focusedCell.asInstanceOf[TablePosition[Person]].column shouldBe -1
+
+      focus.focus(2, first)
+      values.remove(2)
+      focus.focusedCell shouldBe null
+      subscription.dispose()
+    }
+  }
+
+  it should "navigate cell coordinates without changing selection" in {
+    val values = ListProperty(js.Array("a", "b", "c"))
+    mounted(values) { table =>
+      val first  = table.getVisibleLeafColumn(0)
+      val second = new TableColumn[String, String]("Second")
+      table.columns.addOne(second)
+      val focus = table.focusModel
+      table.select(2)
+
+      focus.focus(1)
+      focus.focusRightCell()
+      focus.focusedCell shouldBe TablePosition(table, 1, first)
+      focus.focusRightCell()
+      focus.focusedCell shouldBe TablePosition(table, 1, second)
+      focus.focusRightCell()
+      focus.focusedCell shouldBe TablePosition(table, 1, second)
+      focus.focusAboveCell()
+      focus.focusedCell shouldBe TablePosition(table, 0, second)
+      focus.focusAboveCell()
+      focus.focusedCell shouldBe TablePosition(table, 0, second)
+      focus.focusBelowCell(); focus.focusPrevious()
+      focus.focusedCell shouldBe TablePosition(table, 0, second)
+      focus.focusLeftCell()
+      focus.focusedCell shouldBe TablePosition(table, 0, first)
+      table.selectedIndexProperty.get shouldBe 2
+
+      focus.focus(1, new TableColumn[String, String]("Foreign"))
+      focus.focusedCell shouldBe null
+    }
+  }
+
   it should "stop accepting focus operations after disposal" in {
     val values                   = ListProperty(js.Array("a", "b"))
     var table: TableView[String] = null

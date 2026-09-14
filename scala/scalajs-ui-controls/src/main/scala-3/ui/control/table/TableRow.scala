@@ -65,6 +65,14 @@ class TableRow[S] private[control] (
         owner.focusedIndexProperty.observe(index => focusedState.set(index == indexProperty.get))
       )
       classIf("ui-table-row-focused", focusedProperty)
+      classIf(
+        "ui-table-row-cell-focused",
+        owner.focusedCellProperty.map(position =>
+          Option(position).exists(current =>
+            current.row == indexProperty.get && current.tableColumn != null
+          )
+        )
+      )
       if (cursor.isBrowser) owner.registerRow(this)
       if (indexProperty.get % 2 == 0) addClass("ui-table-row-even")
       else addClass("ui-table-row-odd")

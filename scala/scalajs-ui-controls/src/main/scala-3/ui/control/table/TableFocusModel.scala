@@ -2,34 +2,97 @@ package ui.control.table
 
 import ui.core.state.{ListDataSource, Property, ReadOnlyProperty}
 
-/** Logical row focus, independent of selection, scrolling and native DOM focus. A known remote gap
-  * has an index but no focused item. Cell coordinates follow separately.
+/** Logical row/cell focus, independent of selection, scrolling and native DOM focus. A known remote
+  * gap has an index but no focused item. Columns use stable leaf references across reordering.
   */
 final class TableFocusModel[S] private[table] (table: TableView[S]) {
-  private case class State(index: Int, item: Option[S])
-  private val state                                   = Property(State(-1, None))
+  private case class State(
+      index: Int,
+      item: Option[S],
+      column: Option[TableColumn[S, ?]]
+  )
+  private val state                                   = Property(State(-1, None, None))
   val focusedIndexProperty: ReadOnlyProperty[Int]     = state.map(_.index)
   val focusedItemProperty: ReadOnlyProperty[S | Null] = state.map(_.item.orNull)
-  def focusedIndex: Int                               = state.get.index
-  def focusedItem: S | Null                           = focusedItemProperty.get
-  def isFocused(index: Int): Boolean                  = index >= 0 && index == focusedIndex
-  private def count: Int                              = math.max(0, table.items.totalLength)
-
-  def focus(index: Int): Unit = if (!table.isDisposed) {
-    val next =
-      if (index >= 0 && index < count) State(index, table.items.itemAt(index))
-      else State(-1, None)
-    val old      = state.get
-    val sameItem = (old.item, next.item) match {
-      case (Some(a), Some(b)) => a.asInstanceOf[AnyRef] eq b.asInstanceOf[AnyRef]
-      case (None, None)       => true
-      case _                  => false
-    }
-    if (old.index != next.index || !sameItem) state.setAlways(next)
+  val focusedCellProperty: ReadOnlyProperty[TablePosition[S] | Null] = state.map { current =>
+    if (current.index < 0) null
+    else TablePosition(table, current.index, current.column.orNull)
   }
-  def focusNext(): Unit              = if (focusedIndex < count - 1) focus(focusedIndex + 1)
-  def focusPrevious(): Unit          = if (focusedIndex > 0) focus(focusedIndex - 1)
-  private[table] def refresh(): Unit = focus(focusedIndex)
+  def focusedIndex: Int                       = state.get.index
+  def focusedItem: S | Null                   = focusedItemProperty.get
+  def focusedCell: TablePosition[S] | Null    = focusedCellProperty.get
+  def focusedColumn: TableColumn[S, ?] | Null = state.get.column.orNull
+  def isFocused(index: Int): Boolean          = index >= 0 && index == focusedIndex
+  def isFocused(index: Int, column: TableColumn[S, ?]): Boolean =
+    isFocused(index) && state.get.column.contains(column)
+  private def count: Int = math.max(0, table.items.totalLength)
+
+  /** Focuses a row without a cell coordinate. */
+  def focus(index: Int): Unit = publish(index, None)
+
+  /** Focuses one visible leaf cell. Invalid coordinates clear focus. */
+  def focus(index: Int, column: TableColumn[S, ?]): Unit =
+    Option(column).filter(table.getVisibleLeafIndex(_) >= 0) match {
+      case Some(leaf) => publish(index, Some(leaf))
+      case None       => publish(-1, None)
+    }
+
+  def focusLeftCell(): Unit  = moveHorizontal(-1)
+  def focusRightCell(): Unit = moveHorizontal(1)
+  def focusAboveCell(): Unit = moveVertical(-1)
+  def focusBelowCell(): Unit = moveVertical(1)
+
+  def focusNext(): Unit =
+    if (focusedIndex < count - 1) publish(focusedIndex + 1, state.get.column)
+  def focusPrevious(): Unit =
+    if (focusedIndex > 0) publish(focusedIndex - 1, state.get.column)
+
+  private def moveHorizontal(delta: Int): Unit = if (!table.isDisposed && focusedIndex >= 0) {
+    val leaves  = table.visibleLeafColumns.get
+    val current = state.get.column.flatMap(column =>
+      leaves.indexOf(column) match {
+        case -1    => None
+        case index => Some(index)
+      }
+    )
+    val next = current match {
+      case Some(index) => math.max(0, math.min(leaves.size - 1, index + delta))
+      case None        => if (delta < 0) leaves.size - 1 else 0
+    }
+    leaves.lift(next).foreach(column => publish(focusedIndex, Some(column)))
+  }
+
+  private def moveVertical(delta: Int): Unit = if (!table.isDisposed && focusedIndex >= 0) {
+    val next = math.max(0, math.min(count - 1, focusedIndex + delta))
+    publish(next, state.get.column)
+  }
+
+  private def publish(index: Int, column: Option[TableColumn[S, ?]]): Unit =
+    if (!table.isDisposed) {
+      val next =
+        if (index >= 0 && index < count)
+          State(index, table.items.itemAt(index), column.filter(table.getVisibleLeafIndex(_) >= 0))
+        else State(-1, None, None)
+      val old      = state.get
+      val sameItem = (old.item, next.item) match {
+        case (Some(a), Some(b)) => a.asInstanceOf[AnyRef] eq b.asInstanceOf[AnyRef]
+        case (None, None)       => true
+        case _                  => false
+      }
+      if (old.index != next.index || !sameItem || old.column != next.column) state.setAlways(next)
+    }
+
+  private[table] def refresh(): Unit = publish(focusedIndex, state.get.column)
+
+  /** Hidden/removed leaves degrade a cell coordinate to its still-focused row. Reordering keeps the
+    * column reference and republishes so derived visible indices update.
+    */
+  private[table] def reconcileColumns(): Unit = if (!table.isDisposed && focusedIndex >= 0) {
+    val current = state.get
+    val column  = current.column.filter(table.getVisibleLeafIndex(_) >= 0)
+    if (current.column != column) publish(current.index, None)
+    else if (column.nonEmpty) state.setAlways(current)
+  }
 
   private[table] def reconcile(change: ListDataSource.Change[S]): Unit = {
     if (table.isDisposed) return
@@ -49,11 +112,12 @@ final class TableFocusModel[S] private[table] (table: TableView[S]) {
       case ListDataSource.Reset(_)    => resetIndex(old, allowReferenceFallback = true)
       case _                          => old.index
     }
-    focus(next)
+    publish(next, old.column)
   }
 
   private[table] def reconcileReset(allowReferenceFallback: Boolean): Unit =
-    if (!table.isDisposed) focus(resetIndex(state.get, allowReferenceFallback))
+    if (!table.isDisposed)
+      publish(resetIndex(state.get, allowReferenceFallback), state.get.column)
 
   private def resetIndex(old: State, allowReferenceFallback: Boolean): Int =
     table.rowKeyProperty.get match {

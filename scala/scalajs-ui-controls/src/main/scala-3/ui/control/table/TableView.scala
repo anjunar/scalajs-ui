@@ -75,7 +75,9 @@ final class TableView[S] private (
   val focusModel                                      = new TableFocusModel(this)
   val focusedIndexProperty: ReadOnlyProperty[Int]     = focusModel.focusedIndexProperty
   val focusedItemProperty: ReadOnlyProperty[S | Null] = focusModel.focusedItemProperty
-  val selectedIndexProperty: ReadOnlyProperty[Int]    = selectionModel.selectedIndexProperty
+  val focusedCellProperty: ReadOnlyProperty[TablePosition[S] | Null] =
+    focusModel.focusedCellProperty
+  val selectedIndexProperty: ReadOnlyProperty[Int]           = selectionModel.selectedIndexProperty
   val selectedItemProperty: ReadOnlyProperty[S | Null]       = selectionModel.selectedItemProperty
   val selectedIndicesProperty: ReadOnlyProperty[Vector[Int]] =
     selectionModel.selectedIndicesProperty
@@ -253,6 +255,8 @@ final class TableView[S] private (
   private var pendingAutoFit: Option[TableColumn[S, ?]]           = None
   private var columnParentStack: List[TableColumn[S, ?]]          = Nil
   private val mountedCells                      = mutable.LinkedHashSet.empty[TableCell[S, ?]]
+  private val mountedCellIds                    = mutable.Map.empty[TableCell[S, ?], String]
+  private var nextCellFocusId                   = 0L
   private var composingTarget: Option[dom.Node] = None
   private var headerViewport: Div | Null        = null
   private[table] val columnHeaders              = mutable.Map.empty[TableColumn[S, ?], Div]
@@ -276,8 +280,26 @@ final class TableView[S] private (
 
   private[table] def registerCell(cell: TableCell[S, ?]): Unit = {
     mountedCells.add(cell)
-    cell.addDisposable(Disposable { mountedCells.remove(cell) })
+    ensureCellFocusId(cell)
+    updateActiveRow()
+    cell.addDisposable(Disposable {
+      mountedCells.remove(cell)
+      mountedCellIds.remove(cell)
+      updateActiveRow()
+    })
   }
+
+  private def ensureCellFocusId(cell: TableCell[S, ?]): Option[String] =
+    rowFocusPrefix.map { prefix =>
+      mountedCellIds.getOrElseUpdate(
+        cell, {
+          nextCellFocusId += 1
+          val id = s"${prefix}cell-$nextCellFocusId"
+          cell.setAttribute("id", id)
+          id
+        }
+      )
+    }
 
   private[table] def registerRow(row: TableRow[S]): Unit = {
     val index = row.indexProperty.get
@@ -291,10 +313,21 @@ final class TableView[S] private (
   }
 
   private def updateActiveRow(): Unit = if (browserRendering && !isDisposed) {
-    val id = for {
-      prefix <- rowFocusPrefix
-      row    <- mountedRows.get(focusModel.focusedIndex) if !row.isDisposed
-    } yield s"$prefix${row.indexProperty.get}"
+    val focusedColumn = Option(focusModel.focusedColumn)
+    val id            = focusedColumn match {
+      case Some(column) =>
+        mountedCells.iterator
+          .find(cell =>
+            !cell.isDisposed && cell.indexProperty.get == focusModel.focusedIndex &&
+              (cell.tableColumn eq column)
+          )
+          .flatMap(ensureCellFocusId)
+      case None =>
+        for {
+          prefix <- rowFocusPrefix
+          row    <- mountedRows.get(focusModel.focusedIndex) if !row.isDisposed
+        } yield s"$prefix${row.indexProperty.get}"
+    }
     id match {
       case Some(value) => setAttribute("aria-activedescendant", value)
       case None        => removeAttribute("aria-activedescendant")
@@ -303,6 +336,16 @@ final class TableView[S] private (
 
   private[table] def focusRowFromPointer(index: Int): Unit = if (canMoveColumns) {
     focusModel.focus(index)
+    domElement(this).foreach(
+      _.asInstanceOf[js.Dynamic].focus(js.Dynamic.literal(preventScroll = true))
+    )
+  }
+
+  private[table] def focusCellFromPointer(
+      index: Int,
+      column: TableColumn[S, ?]
+  ): Unit = if (canMoveColumns) {
+    focusModel.focus(index, column)
     domElement(this).foreach(
       _.asInstanceOf[js.Dynamic].focus(js.Dynamic.literal(preventScroll = true))
     )
@@ -616,6 +659,7 @@ final class TableView[S] private (
   private def syncVisibleColumns(): Unit = {
     val wanted = TableColumnTree.visibleLeaves(columns.toVector)
     if (visibleColumns.toVector != wanted) visibleColumns.setAll(wanted)
+    focusModel.reconcileColumns()
     bumpColumnState()
     placeholderVisibleProperty.set(renderableCount == 0 || visibleColumns.isEmpty)
     recomputeVisible()
@@ -663,6 +707,7 @@ final class TableView[S] private (
       setAttribute("role", "grid")
       setAttribute("tabindex", "0")
       addDisposable(focusedIndexProperty.observe(_ => updateActiveRow()))
+      addDisposable(focusedCellProperty.observe(_ => updateActiveRow()))
       addDisposable(
         selectionModel.selectionModeProperty.observe(mode =>
           setAttribute("aria-multiselectable", (mode == TableSelectionMode.Multiple).toString)
@@ -949,6 +994,7 @@ final class TableView[S] private (
         mountedRows.foreach { (index, row) =>
           row.setAttribute("id", s"${rowFocusPrefix.get}$index")
         }
+        mountedCells.foreach(ensureCellFocusId)
         updateActiveRow()
         val move = pendingColumnMove
         pendingColumnMove = None
