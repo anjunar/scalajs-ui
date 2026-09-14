@@ -40,8 +40,8 @@ class TableFocusModel[S](final val tableView: TableView[S]) {
       case None       => publish(-1, None)
     }
 
-  def focusLeftCell(): Unit  = moveHorizontal(-1)
-  def focusRightCell(): Unit = moveHorizontal(1)
+  def focusLeftCell(): Unit  = moveHorizontal(table.horizontalColumnDelta(-1))
+  def focusRightCell(): Unit = moveHorizontal(table.horizontalColumnDelta(1))
   def focusAboveCell(): Unit = moveVertical(-1)
   def focusBelowCell(): Unit = moveVertical(1)
 

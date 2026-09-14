@@ -21,7 +21,15 @@ private[table] final class TableColumnResizeHandle[S](
   override def compose(cursor: Cursor): Unit = DslLayer.render(this, cursor) {
     addClass("ui-table-column-resize-handle")
     setStyle("position", "absolute")
-    setStyle("right", "0")
+    addDisposable(table.directionProperty.observe {
+      case TableDirection.LeftToRight =>
+        setStyle("left", "auto")
+        setStyle("right", "0")
+      case TableDirection.RightToLeft =>
+        setStyle("left", "0")
+        setStyle("right", "auto")
+    })
+    addDisposable(table.directionProperty.observeWithoutInitial(_ => finishDrag()))
     setStyle("top", "0")
     setStyle("bottom", "0")
     setStyle("width", "8px")
@@ -72,7 +80,10 @@ private[table] final class TableColumnResizeHandle[S](
           event.preventDefault()
           event.stopPropagation()
           val step = if (key.shiftKey) 1.0 else 10.0
-          table.resizeColumn(column, if (key.key == "ArrowLeft") -step else step)
+          table.resizeColumn(
+            column,
+            table.horizontalResizeDelta(if (key.key == "ArrowLeft") -step else step)
+          )
         case _ => ()
       }
     }
@@ -90,7 +101,10 @@ private[table] final class TableColumnResizeHandle[S](
             val move: js.Function1[dom.PointerEvent, Unit] = next =>
               if (next.pointerId == pointerId) {
                 next.preventDefault()
-                table.resizeColumn(column, startWidth + next.clientX - startX - column.width)
+                table.resizeColumn(
+                  column,
+                  startWidth + table.horizontalResizeDelta(next.clientX - startX) - column.width
+                )
               }
             val up: js.Function1[dom.PointerEvent, Unit] =
               next => if (next.pointerId == pointerId) finishDrag()

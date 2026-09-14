@@ -59,7 +59,7 @@ private[table] final class TableColumnReorderGesture[S](
             table.moveColumn(
               column,
               table.getVisibleLeafIndex(column) +
-                (if (key.key == "ArrowLeft") -1 else 1)
+                table.horizontalColumnDelta(if (key.key == "ArrowLeft") -1 else 1)
             )
           }
         case _ => ()

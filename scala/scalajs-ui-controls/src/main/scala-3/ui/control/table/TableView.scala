@@ -69,16 +69,19 @@ final class TableView[S] private (
   private[table] val visibleColumns              = ListProperty[TableColumn[S, ?]]()
   val visibleLeafColumns: ReadOnlyProperty[Vector[TableColumn[S, ?]]] =
     visibleColumns.map(_.toVector)
-  private val placeholderVisibleProperty                       = Property(true)
-  val showHeaderProperty: Property[Boolean]                    = Property(true)
-  val tableMenuButtonVisibleProperty: Property[Boolean]        = Property(false)
-  val columnMenuTextProperty: Property[String]                 = Property("Columns")
-  val showFooterProperty: Property[Boolean]                    = Property(true)
-  val rowHeightProperty: Property[Double]                      = Property(32.0)
-  val prefWidthProperty: Property[Option[Double]]              = Property(None)
-  val fixedHeightProperty: Property[Option[Double]]            = Property(None)
-  val scrollLeftProperty: Property[Double]                     = Property(0.0)
-  val viewportWidthProperty: Property[Double]                  = Property(800.0)
+  private val placeholderVisibleProperty                = Property(true)
+  val showHeaderProperty: Property[Boolean]             = Property(true)
+  val tableMenuButtonVisibleProperty: Property[Boolean] = Property(false)
+  val columnMenuTextProperty: Property[String]          = Property("Columns")
+  val showFooterProperty: Property[Boolean]             = Property(true)
+  val rowHeightProperty: Property[Double]               = Property(32.0)
+  val prefWidthProperty: Property[Option[Double]]       = Property(None)
+  val fixedHeightProperty: Property[Option[Double]]     = Property(None)
+
+  /** Horizontal offset from the inline start: left in LTR, right in RTL. */
+  val scrollLeftProperty: Property[Double]        = Property(0.0)
+  val directionProperty: Property[TableDirection] = Property(TableDirection.LeftToRight)
+  val viewportWidthProperty: Property[Double]     = Property(800.0)
   val columnResizePolicyProperty: Property[ColumnResizePolicy] = Property(
     ColumnResizePolicy.FlexLastColumn
   )
@@ -321,9 +324,16 @@ final class TableView[S] private (
   private var nextCellFocusId                   = 0L
   private var composingTarget: Option[dom.Node] = None
   private var headerViewport: Div | Null        = null
+  private val physicalScrollLeftProperty        = Property(0.0)
   private[table] val columnHeaders              = mutable.Map.empty[TableColumn[S, ?], Div]
   private[table] val columnDropMarker = Property[Option[(TableColumn[S, ?], Boolean)]](None)
   private[table] var cancelColumnDrag: () => Unit = () => ()
+
+  private[table] def horizontalColumnDelta(physicalDelta: Int): Int =
+    if (directionProperty.get == TableDirection.RightToLeft) -physicalDelta else physicalDelta
+
+  private[table] def horizontalResizeDelta(physicalDelta: Double): Double =
+    if (directionProperty.get == TableDirection.RightToLeft) -physicalDelta else physicalDelta
 
   private[table] def checkColumnMutation(): Unit =
     if (isBound) HostMutationGuard.checkRemoval(host)
@@ -532,11 +542,13 @@ final class TableView[S] private (
       val bounds = viewport.getBoundingClientRect()
       if (x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom) None
       else {
-        val visible = visibleLeafColumns.get
+        val visible     = visibleLeafColumns.get
+        val rightToLeft = directionProperty.get == TableDirection.RightToLeft
         Some(visible.indexWhere { column =>
           columnHeaders.get(column).flatMap(header => domElement(header)).exists { header =>
             val rect = header.getBoundingClientRect()
-            x < (rect.left + rect.right) / 2
+            if (rightToLeft) x > (rect.left + rect.right) / 2
+            else x < (rect.left + rect.right) / 2
           }
         } match { case -1 => visible.size; case index => index })
       }
@@ -577,6 +589,26 @@ final class TableView[S] private (
   /** Index in the current visible leaf projection, resolved to a column at request time. */
   def scrollToColumnIndex(index: Int): Unit = scrollToColumn(getVisibleLeafColumn(index))
 
+  private def horizontalMaximum(viewport: dom.html.Element): Double =
+    math.max(0.0, renderedWidthsProperty.get.sum - viewport.clientWidth.toDouble)
+
+  private def logicalHorizontalOffset(viewport: dom.html.Element, physical: Double): Double = {
+    val maximum = horizontalMaximum(viewport)
+    val raw     =
+      if (directionProperty.get == TableDirection.RightToLeft) maximum - physical else physical
+    math.max(0.0, math.min(raw, maximum))
+  }
+
+  private def applyLogicalHorizontalOffset(viewport: dom.html.Element): Unit = {
+    val maximum  = horizontalMaximum(viewport)
+    val logical  = math.max(0.0, math.min(scrollLeftProperty.get, maximum))
+    val physical =
+      if (directionProperty.get == TableDirection.RightToLeft) maximum - logical else logical
+    viewport.scrollLeft = physical
+    physicalScrollLeftProperty.set(viewport.scrollLeft)
+    scrollLeftProperty.set(logicalHorizontalOffset(viewport, viewport.scrollLeft))
+  }
+
   private def flushColumnScrollRequest(): Unit =
     if (!isDisposed && scrollNavigationMounted)
       pendingScrollColumn.foreach { column =>
@@ -589,14 +621,12 @@ final class TableView[S] private (
             val next   = TableScrollPosition.reveal(
               widths.take(index).sum,
               widths(index),
-              viewport.scrollLeft,
+              scrollLeftProperty.get,
               viewport.clientWidth.toDouble,
               widths.sum
             )
-            viewport.scrollLeft = next
-            scrollLeftProperty.set(
-              viewport.scrollLeft
-            ) // Includes native clamping; sync header now.
+            scrollLeftProperty.set(next)
+            applyLogicalHorizontalOffset(viewport) // Includes native clamping; sync header now.
             onScrollToColumnProperty.get.foreach(_(column))
           }
       }
@@ -689,13 +719,19 @@ final class TableView[S] private (
     } finally editModel.endItemRefresh()
   }
 
-  /** Only TableView scrolls horizontally. */
+  /** Only TableView scrolls horizontally. Keep a browser-independent inline-start offset. */
   override protected def onScrollLeftChanged(scrollLeft: Double): Unit =
-    scrollLeftProperty.set(scrollLeft)
+    domElement(viewportComponent).foreach { viewport =>
+      physicalScrollLeftProperty.set(scrollLeft)
+      scrollLeftProperty.set(logicalHorizontalOffset(viewport, scrollLeft))
+    }
 
   /** Column widths are distributed across the measured width. */
   override protected def onViewportWidthMeasured(width: Double): Unit =
+    val logical = scrollLeftProperty.get
     viewportWidthProperty.set(width)
+    scrollLeftProperty.set(logical)
+    domElement(viewportComponent).foreach(applyLogicalHorizontalOffset)
 
   val renderedWidthsProperty: ReadOnlyProperty[Vector[Double]] =
     viewportWidthProperty.flatMap { viewportWidth =>
@@ -877,6 +913,9 @@ final class TableView[S] private (
         "ui-table-view-cell-selection",
         selectionModelProperty.flatMap(_.cellSelectionEnabledProperty)
       )
+      addDisposable(
+        directionProperty.observe(direction => setAttribute("dir", direction.htmlValue))
+      )
       setAttribute("role", "grid")
       setAttribute("tabindex", "0")
       addDisposable(focusedIndexProperty.observe(_ => updateActiveRow()))
@@ -971,6 +1010,7 @@ final class TableView[S] private (
           classes = Seq("ui-table-header-viewport")
           style {
             position = "relative"
+            css("direction", "ltr") // Match the normalized body scroll coordinate.
             overflow = "hidden"
             width = "100%"
             flex = "0 0 auto"
@@ -988,8 +1028,13 @@ final class TableView[S] private (
               width = totalColumnWidthProperty.map(value => s"${value}px")
               minWidth = totalColumnWidthProperty.map(value => s"${value}px")
               height = "100%"
-              transform = scrollLeftProperty.map(value => s"translateX(-${value}px)")
+              transform = physicalScrollLeftProperty.map(value => s"translateX(-${value}px)")
             }
+            addDisposable(
+              directionProperty.observe(direction =>
+                content.setStyle("direction", direction.htmlValue)
+              )
+            )
             addDisposable(
               renderedWidthsProperty.observe(widths =>
                 content.setStyle(
@@ -1052,6 +1097,7 @@ final class TableView[S] private (
           classes = Seq("ui-table-viewport")
           style {
             position = "relative"
+            css("direction", "ltr") // Normalize native scrollLeft across browsers.
             display = placeholderVisibleProperty.map(empty => if (empty) "none" else "block")
             width = "100%"
             height = "100%"
@@ -1064,7 +1110,6 @@ final class TableView[S] private (
               case _                                => "hidden"
             }
           }
-
           on("scroll") { event =>
             event.raw match {
               case raw: dom.Event =>
@@ -1077,11 +1122,22 @@ final class TableView[S] private (
           }
 
           div {
+            val content = summon[Div]
             classes = Seq("ui-table-content")
             style {
               width = totalColumnWidthProperty.map(value => s"${value}px")
               minWidth = totalColumnWidthProperty.map(value => s"${value}px")
             }
+            addDisposable(
+              directionProperty.observe(direction =>
+                content.setStyle("direction", direction.htmlValue)
+              )
+            )
+            addDisposable(
+              totalColumnWidthProperty.observeWithoutInitial(_ =>
+                domElement(viewportComponent).foreach(applyLogicalHorizontalOffset)
+              )
+            )
 
             contentHeaderComponent = div {
               classes = Seq("ui-table-content-header")
@@ -1171,6 +1227,7 @@ final class TableView[S] private (
         }
         mountedCells.foreach(ensureCellFocusId)
         updateActiveRow()
+        domElement(viewportComponent).foreach(applyLogicalHorizontalOffset)
         val move = pendingColumnMove
         pendingColumnMove = None
         move.foreach { case (column, index) => moveColumn(column, index) }
@@ -1196,10 +1253,14 @@ final class TableView[S] private (
       attachedColumns.clear()
     })
     addDisposable(displayModeProperty.observeWithoutInitial(_ => refreshItemState()))
+    addDisposable(directionProperty.observeWithoutInitial { _ =>
+      cancelColumnDrag()
+      domElement(viewportComponent).foreach(applyLogicalHorizontalOffset)
+    })
     addDisposable(columnResizePolicyProperty.observeWithoutInitial { _ =>
       bumpColumnState()
       scrollLeftProperty.set(0.0)
-      domElement(viewportComponent).foreach(_.scrollLeft = 0.0)
+      domElement(viewportComponent).foreach(applyLogicalHorizontalOffset)
       scheduleViewportMeasure()
     })
     addDisposable(pageSizeProperty.observeWithoutInitial { _ =>
@@ -1465,6 +1526,12 @@ object TableView {
   def fixedCellSize(using table: TableView[?]): Double                = table.rowHeightProperty.get
   def fixedCellSize_=(value: Double)(using table: TableView[?]): Unit =
     table.rowHeightProperty.set(value)
+
+  def direction(using table: TableView[?]): TableDirection = table.directionProperty.get
+  def direction_=(value: TableDirection)(using table: TableView[?]): Unit =
+    table.directionProperty.set(value)
+  def direction_=(value: ReadOnlyProperty[TableDirection])(using table: TableView[?]): Unit =
+    table.addDisposable(value.observe(table.directionProperty.set))
 
   def showHeader(using table: TableView[?]): Boolean                = table.showHeaderProperty.get
   def showHeader_=(value: Boolean)(using table: TableView[?]): Unit =
