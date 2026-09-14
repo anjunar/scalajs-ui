@@ -14,7 +14,7 @@ Ziel ist funktionale Parität für Datenbindung, Zellen und Zeilen, Auswahl, Fok
 
 Die öffentliche [TableView-API von JavaFX 26](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/TableView.html) bildet den Referenzumfang. Zell- und Spaltenverträge werden zusätzlich gegen deren eigene APIs geprüft. Geerbte Darstellungsfunktionen werden auf DOM, Komponenten-Slots und Web-CSS abgebildet.
 
-**Editierbare Inhalte sind bereits möglich.** `TableColumn.cell { row => … }` komponiert beliebige Komponenten. Darin können Eingabefelder stehen, die über die vorhandene Property-/Form-Bindung das Zeilenmodell ändern. Dieser Weg bleibt unterstützt. Davon getrennt ist der noch fehlende, von der Tabelle verwaltete JavaFX-Editierablauf mit Editierposition, Start/Commit/Cancel und typisierten Ereignissen. „Editing fehlt“ wäre daher eine falsche Beschreibung des heutigen Stands.
+**Editierbare Inhalte sind bereits möglich.** `TableColumn.cell { row => … }` komponiert beliebige Komponenten. Darin können Eingabefelder stehen, die über die vorhandene Property-/Form-Bindung das Zeilenmodell ändern. Dieser Weg bleibt unterstützt. Davon getrennt ist inzwischen auch der von der Tabelle verwaltete Kernablauf mit Editierposition, Start/Commit/Cancel und typisierten Ereignissen vorhanden; integrierte Standardeditoren und deren Tastatur-/Validierungsregeln fehlen noch. „Editing fehlt“ wäre daher eine falsche Beschreibung des heutigen Stands.
 
 Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Erweiterungen. Sie bleiben Bestandteil aller neuen Funktionen. Insbesondere erscheinen Previous/Next nur im Paging-Modus.
 
@@ -168,7 +168,7 @@ Referenzen: [TableColumn](https://openui.io/javadoc/26/javafx.controls/javafx/sc
 | D02 | Eigene Zellinhalte, einschließlich Eingabefeldern | Vorhanden | `cell(row)` beibehalten; Lebensdauer und Fokus bei Änderungen absichern. M1. |
 | D03 | Typisierter, beobachtbarer Zellwert `S → T` | Vorhanden | Scala-Factory und Zellwert-Lookups sowie TypeScript-`valueColumn` mit beobachteten Werten/Snapshots; `getCellData` und `getCellObservableValue` erschließen dieselben sichtbaren Blattkoordinaten im TypeScript-Handle. M1. |
 | D04 | Austauschbare `cellFactory`, Default-Zelle | Vorhanden | Integrierte `TableCell[S,T]`, Default-Text und eigener `renderContent`; TypeScript bietet den typisierten Content-Callback in `valueColumn`. M1. |
-| D05 | Zellkontext und Zustände | Teilweise | Item/empty, Tabelle, Zeile, Spalte, Index sowie öffentliche focused-/selected-Properties sind angebunden. Öffentliche Kontextprojektion und editing fehlen noch. M2/M4. |
+| D05 | Zellkontext und Zustände | Teilweise | Item/empty, Tabelle, Zeile, Spalte, Index sowie öffentliche focused-/selected-/editing-Properties sind angebunden. Die vollständige öffentliche Kontextprojektion fehlt noch. M2/M4. |
 | D06 | `rowFactory` und Zeilenkontext | Vorhanden | Scala-RowFactory und TypeScript-`row`-Renderer mit item/index/empty/selected, eigenen Inhalten und optionalen Standardzellen. Stil, native Tooltips und Events über Komponentenmittel; fertige Menü-/Tooltip-Presenter bleiben M6. |
 | D07 | `refresh()` für nicht beobachtete Änderungen | Vorhanden | Scala-Methode und TypeScript-Handle, einschließlich bisheriger Zeilenrenderer; nach Unmount wirkungslos. M1. |
 | D08 | Platzhalter bei leerer Tabelle/ohne sichtbare Spalten | Vorhanden | Eigener Platzhalter erscheint auch ohne sichtbare Spalten; zu diesem Zeitpunkt werden keine Datenzeilen gerendert. Gruppenmodell später mitprüfen. M1/M5. |
@@ -221,8 +221,8 @@ Referenzen: [Cell-Editierablauf](https://openui.io/javadoc/26/javafx.controls/ja
 | ID | Funktion | Stand | Umsetzung |
 | --- | --- | --- | --- |
 | E01 | Direkt editierbare Inhalte über eingebettete Controls | Vorhanden | Renderer komponiert das Control; Anwendung stellt dessen Datenbindung bereit. DOM-Identität, Fokus, Textauswahl und Modellbindung über Scroll-/Breitenänderungen in jsdom sowie Unicode-Eingabe, Tastaturisolation, Remount und Spaltensichtbarkeit im echten Browser abgesichert. Native OS-IME-Abnahme bleibt M5/M6. |
-| E02 | Tabellenverwalteter Editiermodus | Offen | editable auf Tabelle/Spalte/Zelle, editingCell und `edit(row,column)`; Start/Commit/Cancel als ein Zustandsablauf. M4. |
-| E03 | Edit-Events und Schreiben ins Datenmodell | Teilweise | Manuelle Bindung/Eventhandler sind möglich. Typisierte Tabellenereignisse, Default-Writeback und ersetzbare Commit-Behandlung ergänzen. M4. |
+| E02 | Tabellenverwalteter Editiermodus | Vorhanden | `editable` auf Tabelle/Spalte/Zelle, aktuelle Position/Item/Original/Entwurf sowie `edit`, `updateEdit`, `commitEdit` und `cancelEdit` bilden einen Tabellenzustand in Scala und TypeScript. M4. |
+| E03 | Edit-Events und Schreiben ins Datenmodell | Vorhanden | Typisierte Start-/Commit-/Cancel-Ereignisse, Default-Writeback über `WritableProperty`, ersetzbarer Commit-Handler und nachgelagerter Beobachter sind vorhanden. M4. |
 | E04 | Standard-Zellfabriken | Offen | TextField-, CheckBox-, ChoiceBox-, ComboBox- und ProgressBar-Zellen; vorhandene UI-/Binding-Primitiven wiederverwenden. M4/M6. |
 | E05 | Konvertierung, Fehler und Fokuswechsel | Teilweise | Eingebettete Controls können das selbst verwalten. Für integrierte Editoren gemeinsame Verträge für Enter/Escape/Tab, Parserfehler und Blur definieren. M4. |
 
@@ -234,7 +234,7 @@ Referenzen: [Cell-Editierablauf](https://openui.io/javadoc/26/javafx.controls/ja
 | V02 | Variable Zeilenhöhen/fixedCellSize-Semantik | Teilweise | Heutiger Alias setzt nur rowHeight. Gemessene Zeilen ergänzen; positive feste Höhe von variabler Höhe unterscheiden. M6. |
 | V03 | `scrollTo(index/item)`, `onScrollTo` | Vorhanden | Zeilennavigation und Ausführungsbenachrichtigung in Scala/TypeScript, bekannte ungeladene Remote-Positionen, Paging, Header und Hydration vorhanden. M2. |
 | V04 | Horizontales Scrollen und Spaltennavigation | Teilweise | Header-Synchronisation, Policy-abhängiges overflow, Navigation und Ausführungsbenachrichtigung in Scala/TypeScript vorhanden. RTL fehlt. M2/M5. |
-| V05 | Zeilen-/Zellzustände und CSS-Anpassung | Teilweise | selected/odd/even/loading, Zeilen-/Zell-focused und Zell-selected vorhanden; editing/disabled und Spaltenstil ergänzen. M2/M4/M6. |
+| V05 | Zeilen-/Zellzustände und CSS-Anpassung | Teilweise | selected/odd/even/loading, Zeilen-/Zell-focused sowie Zell-selected/editing vorhanden; disabled und Spaltenstil ergänzen. M2/M4/M6. |
 | V06 | Zugänglicher Tabellen-/Grid-Vertrag | Teilweise | Rollen, Indizes/Zähler, aria-selected für Zeilen/Zellen, Zeilen-/Zellfokus per vorhandener active-descendant-ID sowie primäres aria-sort, Richtungs-/Prioritätsbeschreibung und aria-busy vorhanden. Umfassende Screenreader-Abnahme fehlt. M2/M5/M6. |
 | V07 | Angepasste Darstellung, Menüs, Tooltips, RTL | Teilweise | Eigene Zellkomposition vorhanden. Zeilen-/Header-Slots, spiegelbare Navigation und Overlay-Integration vervollständigen. M5/M6. |
 
@@ -413,15 +413,15 @@ Sortierung und Filterung finden ausschließlich über die Remote-Abfrage statt, 
 
 Normale Headerklicks ändern die primäre Sortierung; additive Bedienung erhält andere Sortierspalten. Richtungswechsel und Entfernen einer Spalte aus der Sortierung aktualisieren Anzeige und Daten gemeinsam. `sort()`, geänderte Sortierproperties und Benutzeraktionen führen durch denselben Policy-/Eventpfad. Fehler, abgebrochene Sortierung und verspätete Antworten dürfen keinen falschen Headerzustand hinterlassen. Bei einem neuen Ergebnis Paging auf die erste Seite und Scroll-/Edit-/Auswahlzustand gemäß den Modellregeln behandeln.
 
-### 4.6 Tabellenverwaltetes Editing ergänzen
+### 4.6 Tabellenverwaltetes Editing
 
 Dieser Abschnitt erweitert vorhandene editierbare Renderer um einen gemeinsamen Ablauf; ein dauerhaft eingebettetes Feld muss nicht künstlich in diesen Ablauf gezwungen werden.
 
-Geplante Editiersitzung: Zeilenidentität, aktuelle Tabellenposition, Spalte, Originalwert, Entwurf und Status. Nur editierbare Tabelle, Spalte und Zelle mit geladenem Ziel dürfen eine Sitzung beginnen.
+**Umgesetzt im siebzehnten Ausbau – Editiersitzung und Schreibvertrag:** Eine Sitzung hält Zeilenobjekt, aktuelle stabile `TablePosition`, Spalte, Originalwert und Entwurf. Nur eine editierbare Tabelle, editierbare Spaltenkette und – sofern gemountet – editierbare Zelle mit geladenem Wert dürfen beginnen. Lokale Inserts/Removes bilden die Zeilenposition fort; Ersetzen/Entfernen der Zielzeile, Reset, ausgeblendete/entfernte/deaktivierte Spalten, deaktivierte Tabelle, verlassenes Zellfenster und Disposal brechen mit einem expliziten Grund ab.
 
-Standardablauf: `Idle → Editing → Commit oder Cancel → Idle`. Start/Cancel/Commit-Ereignisse enthalten Tabelle, Spalte, Zeilenidentität, Position und alte/neue Werte. Ein Edit kann über API oder Benutzeraktion beginnen. `edit(-1, null)` bzw. ein klarer Scala-Cancel-Aufruf beendet die aktive Sitzung.
+Der Ablauf ist `Idle → Editing → Commit oder Cancel → Idle`. Start/Cancel/Commit-Ereignisse enthalten Tabelle, Spalte, Zeilenobjekt, Position und alte/neue beziehungsweise Entwurfswerte. Scala stellt `edit`, `updateEdit`, `commitEdit` und `cancelEdit` bereit; das TypeScript-Handle spiegelt diese Befehle und die lesbaren Zustände. Eine neue gültige Zielzelle cancelt die alte Sitzung kontrolliert, ein ungültiges Ziel verändert sie nicht.
 
-Default-Writeback verwendet ein beschreibbares Zell-Property. Ein eigener Commit-Handler kann dieses Verhalten ersetzen; zusätzliche Beobachter erhalten Ereignisse, ohne das Default-Schreiben zu verdrängen. Für unveränderliche Datensätze schreibt der Adapter eine Kopie über den korrekt abgebildeten Quellindex zurück. Remote-Speichern ist ein zusätzlicher anwendungsspezifischer asynchroner Vertrag, kein vorhandenes Feature von `RemoteListProperty`.
+Default-Writeback verwendet das zu Sitzungsbeginn gelieferte `WritableProperty`; die Bridge erhält die Schreibfähigkeit eines TypeScript-`Property`. Ein eigener Commit-Handler ersetzt dieses Verhalten, während `onEditCommit` anschließend weiterhin beobachtet. Ein nur lesbarer Wert ohne eigenen Handler lässt den Commit kontrolliert offen. Für unveränderliche Datensätze und Remote-Speichern bleibt der Commit-Handler der explizite anwendungsspezifische Vertrag; die lesende `ListDataSource` wurde dafür nicht aufgeweicht.
 
 Enter bestätigt, Escape verwirft. Parsing-/Validierungsfehler lassen den Editor offen und werden zugänglich angezeigt. Tab/Shift+Tab bestätigen nur bei gültigem Wert und wechseln nach dokumentierter Regel. Blur wird explizit konfiguriert; Popup-Fokus innerhalb eines Editors ist kein unbeabsichtigtes Ende.
 
@@ -537,8 +537,12 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 - [x] M1: Spaltenbaum und Blattspaltenmodell sowie TypeScript-Zellwert-Lookups ergänzen.
 - [x] M2: Zell-/Rechteckauswahl, ausgewählte Positionen, Zell-/Zeilenmodus sowie Ctrl/Cmd-/Shift-Bedienung in Scala und TypeScript.
 - [x] M2: Austauschbare und erweiterbare Selection-/FocusModels einschließlich Ownership, Rebinding und Abgleich inaktiver Alternativen. M2 ist damit im vereinbarten Umfang abgeschlossen; anschließend M4 und die offenen M5/M6-Punkte.
+- [x] M4: Tabellenverwaltete Editiersitzung, Writable-Property-Writeback, ersetzbarer Commit-Handler, Ereignisse, Lifecycle-Abbruchgründe sowie Scala-/TypeScript-Handle.
+- [ ] M4: Standard-Text-/Boolean-Editoren sowie Enter/Escape/Tab-, Blur- und Validierungsregeln ergänzen.
 
 ## 6. Verifikation
+
+Abnahme des siebzehnten Ausbaus am 14.09.2026: vollständiges Scala-Gate mit **443 Tests**, Bridge-Full-Link, CSS-/Design-Gate und npm-Gates für Controls (80 Integrationstests + 3 Paket-Consumer), Core (114 + 8) sowie Demo (Typecheck, Client-/SSR-Builds, Eine-Runtime-Nachweis und 31 Routen) grün. Vier neue Scala-Fälle prüfen Sitzung/Properties/CSS, genau einen Default-Writeback, ersetzbaren Commit samt nachgelagertem Beobachter, read-only Werte, Positionsfortschreibung, sämtliche wesentlichen Cancel-Gründe, Zellberechtigung und Disposal. Der reale Bridge-Test deckt zusätzlich den Erhalt der TypeScript-`Property`-Schreibfähigkeit, typisierte Callbacks, Custom Commit und das öffentliche Handle ab.
 
 Abnahme des sechzehnten Ausbaus am 14.09.2026: vollständiges Scala-Gate mit **439 Tests**, Bridge-Full-Link und npm-Gates für Controls (79 Integrationstests + 3 Paket-Consumer), Core (114 + 8) sowie Demo (Typecheck, Client-/SSR-Builds, Eine-Runtime-Nachweis und 31 Routen) grün. Fünf neue Tabellenfälle prüfen eigene Unterklassen, Wechselbenachrichtigungen, Zustandsisolation, fortlaufenden Datenabgleich inaktiver Alternativen, Disposal, atomare Ablehnung von `null`/fremden Modellen und die tatsächliche Row-/Cell-/CSS-/ARIA-Umschaltung. Ein Core-Regressionstest sichert das korrekte Abonnieren und Umhängen von `flatMap(...).observeWithoutInitial`.
 
@@ -625,7 +629,7 @@ Vorhandene Web-Funktionen – serverseitiges Paging, Remote-Range-Loading, SSR/H
 ## 8. Definition of Done
 
 - [ ] Jede ID der Feature-Matrix hat eine Implementierung und eine nachvollziehbare Abnahme oder eine ausdrücklich dokumentierte Abweichung vom Referenzumfang.
-- [ ] Bereits eingebettete editierbare Controls funktionieren weiter; integriertes Editing ist als zusätzlicher Vertrag dokumentiert.
+- [x] Bereits eingebettete editierbare Controls funktionieren weiter; integriertes Editing ist als zusätzlicher Vertrag dokumentiert.
 - [ ] Auswahl, Fokus, Sortierung, Editing und Spaltenlayout verwenden konsistente Identitäten und Koordinaten.
 - [ ] Bestehende lokale Listen sowie lückenhafte und per Remote-Abfrage sortierte/gefilterte Quellen haben verständliche Schreib- und Änderungsregeln.
 - [ ] Scala- und TypeScript-API erschließen denselben Funktionsumfang ohne zweite Runtime.

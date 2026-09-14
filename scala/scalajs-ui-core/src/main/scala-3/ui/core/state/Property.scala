@@ -3,7 +3,7 @@ package ui.core.state
 import scala.collection.mutable
 import scala.util.DynamicVariable
 
-final class Property[T](private var value: T) extends ReadOnlyProperty[T] {
+final class Property[T](private var value: T) extends WritableProperty[T] {
 
   private val listeners                                   = mutable.ArrayBuffer.empty[T => Unit]
   private var disposableOwner: CompositeDisposable | Null = null

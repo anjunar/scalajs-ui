@@ -14,12 +14,21 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
   val maxWidthProperty: Property[Double]                                 = Property(Double.MaxValue)
   val resizableProperty: Property[Boolean]                               = Property(true)
   val reorderableProperty: Property[Boolean]                             = Property(true)
+  val editableProperty: Property[Boolean]                                = Property(true)
   val cellRenderer: Property[Option[CellRenderer[S]]]                    = Property(None)
   val sortableProperty: Property[Boolean]                                = Property(false)
   val sortKeyProperty: Property[Option[String]]                          = Property(None)
   val cellValueFactoryProperty: Property[Option[CellValueFactory[S, T]]] = Property(None)
   val cellFactoryProperty: Property[Option[CellFactory[S, T]]]           = Property(None)
-  val columns: ListProperty[TableColumn[S, ?]]                           =
+  val editCommitHandlerProperty: Property[Option[TableEditCommitEvent[S, T] => Unit]] =
+    Property(None)
+  val onEditStartProperty: Property[Option[TableEditStartEvent[S, T] => Unit]] =
+    Property(None)
+  val onEditCommitProperty: Property[Option[TableEditCommitEvent[S, T] => Unit]] =
+    Property(None)
+  val onEditCancelProperty: Property[Option[TableEditCancelEvent[S, T] => Unit]] =
+    Property(None)
+  val columns: ListProperty[TableColumn[S, ?]] =
     new TableColumnChildren(this)
 
   private val ownerProperty: Property[TableView[S] | Null]             = Property(null)
@@ -126,6 +135,8 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
   def width: Double                          = widthProperty.get
   def reorderable: Boolean                   = reorderableProperty.get
   def reorderable_=(value: Boolean): Unit    = reorderableProperty.set(value)
+  def editable: Boolean                      = editableProperty.get
+  def editable_=(value: Boolean): Unit       = editableProperty.set(value)
   def parentColumn: TableColumn[S, ?] | Null = parentColumnProperty.get
 
   def setCellRenderer(renderer: CellRenderer[S]): Unit =
@@ -133,6 +144,40 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
 }
 
 object TableColumn {
+  def columnEditable[S, T](using column: TableColumn[S, T]): Boolean = column.editable
+  def columnEditable_=[S, T](value: Boolean)(using column: TableColumn[S, T]): Unit =
+    column.editable = value
+  def columnEditable_=[S, T](value: ReadOnlyProperty[Boolean])(using
+      column: TableColumn[S, T]
+  ): Unit =
+    column.addDisposable(value.observe(column.editableProperty.set))
+
+  def onEditStart[S, T](using
+      column: TableColumn[S, T]
+  )(
+      handler: TableEditStartEvent[S, T] => Unit
+  ): Unit = column.onEditStartProperty.set(Some(handler))
+
+  /** Replaces the default writable-property update for this column. */
+  def editCommitHandler[S, T](using
+      column: TableColumn[S, T]
+  )(
+      handler: TableEditCommitEvent[S, T] => Unit
+  ): Unit = column.editCommitHandlerProperty.set(Some(handler))
+
+  /** Observes successful commits after default or custom write-back. */
+  def onEditCommit[S, T](using
+      column: TableColumn[S, T]
+  )(
+      handler: TableEditCommitEvent[S, T] => Unit
+  ): Unit = column.onEditCommitProperty.set(Some(handler))
+
+  def onEditCancel[S, T](using
+      column: TableColumn[S, T]
+  )(
+      handler: TableEditCancelEvent[S, T] => Unit
+  ): Unit = column.onEditCancelProperty.set(Some(handler))
+
   def reorderable[S, T](using column: TableColumn[S, T]): Boolean = column.reorderable
   def reorderable_=[S, T](value: Boolean)(using column: TableColumn[S, T]): Unit =
     column.reorderable = value

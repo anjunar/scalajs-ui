@@ -14,6 +14,9 @@ class TableCell[S, T] extends AbstractComponent {
 
   val itemProperty: Property[T | Null]              = Property(null)
   val emptyProperty: Property[Boolean]              = Property(true)
+  val editableProperty: Property[Boolean]           = Property(true)
+  private val editingState: Property[Boolean]       = Property(false)
+  val editingProperty: ReadOnlyProperty[Boolean]    = editingState
   private val focusedState: Property[Boolean]       = Property(false)
   val focusedProperty: ReadOnlyProperty[Boolean]    = focusedState
   private val selectedState: Property[Boolean]      = Property(false)
@@ -24,6 +27,9 @@ class TableCell[S, T] extends AbstractComponent {
   private var boundColumn: TableColumn[S, T] | Null = null
   private var valueSubscription: Disposable         = Disposable.empty
 
+  def editable: Boolean                     = editableProperty.get
+  def editable_=(value: Boolean): Unit      = editableProperty.set(value)
+  def editing: Boolean                      = editingProperty.get
   def tableRow: TableRow[S] | Null          = boundRow
   def tableColumn: TableColumn[S, T] | Null = boundColumn
   def tableView: TableView[S] | Null        =
@@ -57,6 +63,31 @@ class TableCell[S, T] extends AbstractComponent {
           )
         )
         classIf("ui-table-cell-focused", focusedProperty)
+        addDisposable(
+          table.editingCellProperty.observe(position =>
+            editingState.set(
+              Option(position).exists(current =>
+                current.row == indexProperty.get && (current.tableColumn eq column)
+              )
+            )
+          )
+        )
+        classIf("ui-table-cell-editing", editingProperty)
+        def updateEditableState(): Unit =
+          setAttribute(
+            "aria-readonly",
+            (!table.editableProperty.get || !table.isColumnEditable(column) ||
+              !editableProperty.get).toString
+          )
+        updateEditableState()
+        addDisposable(table.editableProperty.observeWithoutInitial(_ => updateEditableState()))
+        addDisposable(
+          table.columnEditabilityRevisionProperty.observeWithoutInitial(_ => updateEditableState())
+        )
+        addDisposable(editableProperty.observeWithoutInitial { _ =>
+          updateEditableState()
+          table.editModel.cellEditableChanged(this)
+        })
         addDisposable(
           table.selectedCellsProperty.observe(_ =>
             selectedState.set(
@@ -149,6 +180,14 @@ class TableCell[S, T] extends AbstractComponent {
 }
 
 object TableCell {
+  def cellEditable[S, T](using cell: TableCell[S, T]): Boolean = cell.editableProperty.get
+  def cellEditable_=[S, T](value: Boolean)(using cell: TableCell[S, T]): Unit =
+    cell.editableProperty.set(value)
+  def cellEditable_=[S, T](value: ReadOnlyProperty[Boolean])(using cell: TableCell[S, T]): Unit =
+    cell.addDisposable(value.observe(cell.editableProperty.set))
+
+  def editing[S, T](using cell: TableCell[S, T]): Boolean = cell.editingProperty.get
+
   def cell[S, T](
       body: TableCell[S, T] ?=> Cursor ?=> Unit
   )(using AbstractComponent, Cursor): TableCell[S, T] =

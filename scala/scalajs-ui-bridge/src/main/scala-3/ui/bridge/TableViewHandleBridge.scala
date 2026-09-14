@@ -71,6 +71,27 @@ final class TableViewHandleBridge(private val table: TableView[js.Any]) extends 
       )
     )
   )
+  val editingCell = new ReadOnlyPropertyHandle(
+    table.editingCellProperty.map(position =>
+      Option(position).fold[js.Object | Null](null)(current =>
+        js.Dynamic.literal(row = current.row, column = current.column)
+      )
+    )
+  )
+  val editingItem       = new ReadOnlyPropertyHandle(table.editingItemProperty)
+  val originalEditValue = new ReadOnlyPropertyHandle(table.originalEditValueProperty)
+  val editingValue      = new ReadOnlyPropertyHandle(table.editingValueProperty)
+  def editCell(rowIndex: Double, columnIndex: Double): Boolean =
+    columnAt(columnIndex).exists(column =>
+      validIndex(rowIndex) && table.edit(
+        rowIndex.toInt,
+        column.asInstanceOf[ui.control.table.TableColumn[js.Any, js.Any]]
+      )
+    )
+  def updateEdit(value: js.Any): Boolean             = table.updateEdit(value)
+  def commitEdit(value: js.UndefOr[js.Any]): Boolean =
+    value.fold(table.commitEdit())(table.commitEdit)
+  def cancelEdit(): Boolean           = table.cancelEdit()
   def focusIndex(index: Double): Unit =
     table.focusModel.focus(if (validIndex(index)) index.toInt else -1)
   def focusCell(rowIndex: Double, columnIndex: Double): Unit =
