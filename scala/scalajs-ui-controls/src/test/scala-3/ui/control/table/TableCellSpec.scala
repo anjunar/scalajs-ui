@@ -430,6 +430,47 @@ class TableCellSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(root)
   }
 
+  it should "rebind row, cell, CSS and ARIA state when the selection model changes" in {
+    val source                                  = ListProperty(js.Array("Ada"))
+    var name: TableColumn[String, String]       = null
+    var renderedCell: TableCell[String, String] = null
+    val (root, table, cursor)                   = mountTable(source) {
+      name = column[String, String]("Name") {
+        cellFactory = _ =>
+          new TableCell[String, String] {
+            override protected def renderContent(using AbstractComponent, Cursor): Unit = {
+              renderedCell = this
+              text("Ada") {}
+            }
+          }
+      }
+    }
+
+    val original = table.selectionModel
+    original.select(0)
+    cursor.collectHtml() should include("ui-table-row-selected")
+    renderedCell.selectedProperty.get shouldBe false
+
+    val replacement = new TableSelectionModel(table)
+    replacement.selectionMode = TableSelectionMode.Multiple
+    replacement.cellSelectionEnabled = true
+    replacement.select(0, name)
+    table.selectionModel = replacement
+
+    renderedCell.selectedProperty.get shouldBe true
+    cursor.collectHtml() should include("ui-table-cell-selected")
+    cursor.collectHtml() should not include "ui-table-row-selected"
+    table.host.attribute("aria-multiselectable") shouldBe Some("true")
+    table.host.attribute("class").get should include("ui-table-view-cell-selection")
+
+    table.selectionModel = original
+    renderedCell.selectedProperty.get shouldBe false
+    cursor.collectHtml() should include("ui-table-row-selected")
+    table.host.attribute("aria-multiselectable") shouldBe Some("false")
+    table.host.attribute("class").get should not include "ui-table-view-cell-selection"
+    Runtime.unmount(root)
+  }
+
   private final class CountingValue(underlying: Property[String]) extends ReadOnlyProperty[String] {
     var listeners                                              = 0
     override def get: String                                   = underlying.get

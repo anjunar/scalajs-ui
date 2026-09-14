@@ -61,7 +61,7 @@ final class TableViewHandleBridge(private val table: TableView[js.Any]) extends 
       additive.getOrElse(false)
     )
   def clearSort(): Boolean = table.clearSort()
-  private val model        = table.selectionModel
+  private def model        = table.selectionModel
   val focusedIndex         = new ReadOnlyPropertyHandle(table.focusedIndexProperty)
   val focusedItem          = new ReadOnlyPropertyHandle(table.focusedItemProperty)
   val focusedCell          = new ReadOnlyPropertyHandle(
@@ -93,18 +93,22 @@ final class TableViewHandleBridge(private val table: TableView[js.Any]) extends 
     )
   def resizeColumn(index: Double, delta: Double): Boolean =
     validIndex(index) && table.resizeColumn(table.getVisibleLeafColumn(index.toInt), delta)
-  val selectionMode = new ReadOnlyPropertyHandle(model.selectionModeProperty.map {
-    case TableSelectionMode.Single   => "single"
-    case TableSelectionMode.Multiple => "multiple"
-  })
-  val cellSelectionEnabled = new ReadOnlyPropertyHandle(model.cellSelectionEnabledProperty)
-  val selectedCells        = new ReadOnlyPropertyHandle(
-    model.selectedCellsProperty.map(
+  val selectionMode = new ReadOnlyPropertyHandle(
+    table.selectionModelProperty.flatMap(_.selectionModeProperty).map {
+      case TableSelectionMode.Single   => "single"
+      case TableSelectionMode.Multiple => "multiple"
+    }
+  )
+  val cellSelectionEnabled = new ReadOnlyPropertyHandle(
+    table.selectionModelProperty.flatMap(_.cellSelectionEnabledProperty)
+  )
+  val selectedCells = new ReadOnlyPropertyHandle(
+    table.selectedCellsProperty.map(
       _.map(position => js.Dynamic.literal(row = position.row, column = position.column)).toJSArray
     )
   )
-  val selectedIndices = new ReadOnlyPropertyHandle(model.selectedIndicesProperty.map(_.toJSArray))
-  val selectedItems   = new ReadOnlyPropertyHandle(model.selectedItemsProperty.map(_.toJSArray))
+  val selectedIndices = new ReadOnlyPropertyHandle(table.selectedIndicesProperty.map(_.toJSArray))
+  val selectedItems   = new ReadOnlyPropertyHandle(table.selectedItemsProperty.map(_.toJSArray))
   private def validIndex(index: Double): Boolean =
     index.isWhole && index >= 0 && index <= Int.MaxValue
   val selectedIndex                    = new ReadOnlyPropertyHandle(table.selectedIndexProperty)

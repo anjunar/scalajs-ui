@@ -9,7 +9,10 @@ enum TableSelectionMode {
 /** Runtime-owned row/cell selection. One snapshot keeps mode, lead, results and Shift anchors
   * coherent. Unloaded remote positions are selected coordinates, not fabricated selected items.
   */
-final class TableSelectionModel[S] private[table] (table: TableView[S]) {
+class TableSelectionModel[S](final val tableView: TableView[S]) {
+  require(tableView != null, "A selection model requires a TableView")
+  protected val table: TableView[S] = tableView
+  table.registerSelectionModel(this)
   private case class Entry(index: Int, item: Option[S])
   private case class Coordinate(row: Int, column: TableColumn[S, ?])
   private case class CellEntry(coordinate: Coordinate, item: Option[S])
@@ -234,7 +237,7 @@ final class TableSelectionModel[S] private[table] (table: TableView[S]) {
     if (valid(previous)) select(previous)
   }
 
-  private[table] def click(
+  protected[table] def click(
       index: Int,
       toggle: Boolean,
       extend: Boolean,
@@ -258,7 +261,7 @@ final class TableSelectionModel[S] private[table] (table: TableView[S]) {
     else clearAndSelect(index)
   }
 
-  private[table] def clickCell(
+  protected[table] def clickCell(
       index: Int,
       column: TableColumn[S, ?],
       toggle: Boolean,
@@ -295,7 +298,7 @@ final class TableSelectionModel[S] private[table] (table: TableView[S]) {
     else clearAndSelect(index, column)
   }
 
-  private[table] def refresh(): Unit = {
+  protected[table] def refresh(): Unit = {
     val previous = state.get
     if (previous.cellSelectionEnabled)
       publishCells(previous.cells.map(_.coordinate), previous.cellLead, previous.cellAnchor)
@@ -303,7 +306,7 @@ final class TableSelectionModel[S] private[table] (table: TableView[S]) {
   }
 
   /** Drop hidden/removed cells and republish visible indices after column reordering. */
-  private[table] def reconcileColumns(): Unit = {
+  protected[table] def reconcileColumns(): Unit = {
     val previous = state.get
     if (previous.cellSelectionEnabled)
       publishCells(
@@ -315,7 +318,7 @@ final class TableSelectionModel[S] private[table] (table: TableView[S]) {
   }
 
   /** Rebase selected occurrences and Shift anchors using absolute structural coordinates. */
-  private[table] def reconcile(change: ListDataSource.Change[S]): Unit = {
+  protected[table] def reconcile(change: ListDataSource.Change[S]): Unit = {
     if (table.isDisposed) return
     val previous                                                        = state.get
     def splice(index: Int, from: Int, removed: Int, inserted: Int): Int =
@@ -339,7 +342,7 @@ final class TableSelectionModel[S] private[table] (table: TableView[S]) {
   /** Accepted remote replacements invalidate positions. A configured row key may resolve the same
     * loaded entities at their new positions; without one, remote resets clear the model.
     */
-  private[table] def reconcileReset(allowReferenceFallback: Boolean): Unit = {
+  protected[table] def reconcileReset(allowReferenceFallback: Boolean): Unit = {
     if (table.isDisposed) return
     val previous = state.get
     publishRemapped(previous, resetMapping(previous, allowReferenceFallback))

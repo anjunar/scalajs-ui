@@ -162,7 +162,10 @@ class TableRow[S] private[control] (
     itemState.set(value.orNull)
     placeholder = value.isEmpty
     emptyState.set(placeholder)
-    selectedState.set(!placeholder && owner.selectionModel.isSelected(rowIndex))
+    selectedState.set(
+      !placeholder && !owner.selectionModel.cellSelectionEnabled &&
+        owner.selectionModel.isSelected(rowIndex)
+    )
   }
 
   private[control] def bind(
