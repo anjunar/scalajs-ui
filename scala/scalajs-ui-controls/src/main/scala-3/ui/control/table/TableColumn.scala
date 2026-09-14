@@ -274,6 +274,15 @@ object TableColumn {
   )(using column: TableColumn[S, String]): Unit =
     column.cellFactoryProperty.set(Some(_ => new TableTextFieldCell[S](blurPolicy)))
 
+  def convertingTextFieldCell[S, T](
+      parser: String => Either[String, T],
+      formatter: T => String = (value: T) => Option(value).fold("")(_.toString),
+      blurPolicy: TableTextFieldCell.BlurPolicy = TableTextFieldCell.BlurPolicy.Keep
+  )(using column: TableColumn[S, T]): Unit =
+    column.cellFactoryProperty.set(
+      Some(_ => new TableConvertingTextFieldCell(parser, formatter, blurPolicy))
+    )
+
   def checkBoxCell[S](using column: TableColumn[S, Boolean]): Unit =
     column.cellFactoryProperty.set(Some(_ => new TableCheckBoxCell[S]))
 

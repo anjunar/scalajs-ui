@@ -262,10 +262,17 @@ const person = {
   role: property("author"),
   owner: property(owners[0]),
   progress: property(0.65),
+  age: property(42),
 };
 viewport(() => {
   tableView(listProperty([person]), [
     textFieldColumn("Name", row => row.name),
+    convertingTextFieldColumn("Age", row => row.age, text => {
+      const value = Number(text);
+      return Number.isInteger(value) && value >= 0
+        ? { ok: true, value }
+        : { ok: false, error: "Whole number required" };
+    }),
     checkBoxColumn("Active", row => row.active),
     choiceBoxColumn("Role", row => row.role, ["author", "editor"]),
     comboBoxColumn("Owner", row => row.owner, owners, {
@@ -282,6 +289,13 @@ Escape cancels, and Tab/Shift+Tab commits before moving logical focus to the nex
 cell in row-major order. Tab does not automatically open another edit session. IME composition
 keeps these keys inside the input. Losing DOM focus keeps the session open by default; set
 `editOnBlur: "commit"` or `"cancel"` when the application needs another explicit policy.
+
+`convertingTextFieldColumn` keeps the table draft strongly typed. Its parser returns either
+`{ ok: true, value }` or `{ ok: false, error }`; invalid raw text stays in the input without
+changing the typed draft or row property. Enter, Tab and `editOnBlur: "commit"` leave an invalid
+session open. The visible message is linked from the input with `aria-errormessage`, and disappears
+as soon as parsing succeeds. A Scala column uses the equivalent `convertingTextFieldCell` helper
+with `String => Either[String, T]`.
 
 A checkbox remains visible and commits each click or Space toggle as one start/commit operation.
 F2/Enter can also enter it as the focused editor; Escape cancels that open session and Enter

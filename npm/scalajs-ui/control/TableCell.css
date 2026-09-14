@@ -33,6 +33,10 @@
   box-shadow: inset 0 0 0 2px var(--aj-accent);
 }
 
+.ui-table-cell.ui-table-cell-edit-error {
+  box-shadow: inset 0 0 0 2px var(--aj-danger);
+}
+
 .ui-table-text-field-cell__display {
   min-width: 0;
   overflow: hidden;
@@ -51,6 +55,35 @@
   border: 1px solid var(--aj-accent);
   border-radius: 3px;
   outline: none;
+}
+
+.ui-table-text-field-cell__editor-host {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+}
+
+.ui-table-text-field-cell__editor-host:has(.ui-table-text-field-cell__error:not(:empty))
+  .ui-table-text-field-cell__editor {
+  height: 18px;
+  border-color: var(--aj-danger);
+}
+
+.ui-table-text-field-cell__error {
+  min-width: 0;
+  height: 10px;
+  overflow: hidden;
+  color: var(--aj-danger);
+  font-size: 10px;
+  line-height: 10px;
+  text-overflow: ellipsis;
+}
+
+.ui-table-text-field-cell__error:empty {
+  height: 0;
 }
 
 .ui-table-check-box-cell__editor {

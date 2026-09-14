@@ -45,7 +45,7 @@ import {
 } from "@anjunar/scalajs-ui-core";
 import { div, text } from "@anjunar/scalajs-ui-core";
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
-import { carousel, checkBoxColumn, choiceBoxColumn, columnGroup, comboBoxColumn, dataGrid, progressBarColumn, remoteSource, tab, tableView, tabs, textFieldColumn, valueColumn, virtualList } from "../src/index.js";
+import { carousel, checkBoxColumn, choiceBoxColumn, columnGroup, comboBoxColumn, convertingTextFieldColumn, dataGrid, progressBarColumn, remoteSource, tab, tableView, tabs, textFieldColumn, valueColumn, virtualList } from "../src/index.js";
 import type { ColumnResizePolicy, TablePosition, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
 
 const linkedArtifact = resolve(process.cwd(), "../scalajs-ui-bridge/dist/fullopt/main.js");
@@ -1195,6 +1195,89 @@ describe("table-view", () => {
       const choices = root.querySelectorAll<HTMLElement>(".ui-combo-box__item");
       choices[1]!.click();
       expect(owner.get).toEqual(owners[1]);
+      expect(table.editingCell.get).toBeNull();
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("keeps converted text edits open and accessible until parsing succeeds", () => {
+    const age = property(42);
+    const note = property("ready");
+    const committed = vi.fn();
+    type Row = { age: typeof age; note: typeof note };
+    const rows = listProperty<Row>([{ age, note }]);
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<Row>;
+    const app = mount(root, () => {
+      table = tableView(rows, [
+        convertingTextFieldColumn("Age", row => row.age, text => {
+          if (text === "explode") throw new Error("Parser exploded");
+          const value = Number(text);
+          return Number.isInteger(value) && value >= 0
+            ? { ok: true, value }
+            : { ok: false, error: "Whole number required" };
+        }, { editOnBlur: "commit", onEditCommit: committed }),
+        textFieldColumn("Note", row => row.note),
+      ], { paging: true, editable: true, cellSelectionEnabled: true });
+    });
+    try {
+      const cell = root.querySelector<HTMLElement>(".ui-table-cell")!;
+      cell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      const editor = root.querySelector<HTMLInputElement>(".ui-table-text-field-cell__editor")!;
+      expect(editor.value).toBe("42");
+
+      editor.value = "not a number";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      expect(table.editingValue.get).toBe(42);
+      editor.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Enter",
+      }));
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      expect(editor.getAttribute("aria-invalid")).toBe("true");
+      editor.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Tab",
+      }));
+
+      expect(age.get).toBe(42);
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 0 });
+      expect(document.activeElement).toBe(editor);
+      expect(editor.getAttribute("aria-invalid")).toBe("true");
+      const errorId = editor.getAttribute("aria-errormessage")!;
+      expect(errorId).not.toBe("");
+      expect(root.querySelector<HTMLElement>(`#${errorId}`)!.textContent).toBe("Whole number required");
+      expect(cell.classList.contains("ui-table-cell-edit-error")).toBe(true);
+
+      editor.value = "explode";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      expect(root.querySelector<HTMLElement>(`#${errorId}`)!.textContent).toContain("Parser exploded");
+
+      editor.value = "43";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      expect(table.editingValue.get).toBe(43);
+      expect(editor.getAttribute("aria-invalid")).toBe("false");
+      expect(editor.hasAttribute("aria-errormessage")).toBe(false);
+      editor.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Tab",
+      }));
+
+      expect(age.get).toBe(43);
+      expect(table.editingCell.get).toBeNull();
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 1 });
+      expect(committed).toHaveBeenCalledOnce();
+      expect(committed).toHaveBeenCalledWith(expect.objectContaining({ oldValue: 42, newValue: 43 }));
+
+      cell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      const blurEditor = root.querySelector<HTMLInputElement>(".ui-table-text-field-cell__editor")!;
+      blurEditor.value = "invalid on blur";
+      blurEditor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      blurEditor.blur();
+      expect(age.get).toBe(43);
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      expect(blurEditor.getAttribute("aria-invalid")).toBe("true");
+      blurEditor.focus();
+      blurEditor.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Escape",
+      }));
       expect(table.editingCell.get).toBeNull();
     } finally { app.dispose(); root.remove(); }
   });
