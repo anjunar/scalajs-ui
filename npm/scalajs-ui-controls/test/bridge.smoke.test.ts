@@ -45,7 +45,7 @@ import {
 } from "@anjunar/scalajs-ui-core";
 import { div, text } from "@anjunar/scalajs-ui-core";
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
-import { carousel, checkBoxColumn, columnGroup, dataGrid, remoteSource, tab, tableView, tabs, textFieldColumn, valueColumn, virtualList } from "../src/index.js";
+import { carousel, checkBoxColumn, choiceBoxColumn, columnGroup, comboBoxColumn, dataGrid, progressBarColumn, remoteSource, tab, tableView, tabs, textFieldColumn, valueColumn, virtualList } from "../src/index.js";
 import type { ColumnResizePolicy, TablePosition, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
 
 const linkedArtifact = resolve(process.cwd(), "../scalajs-ui-bridge/dist/fullopt/main.js");
@@ -1136,6 +1136,66 @@ describe("table-view", () => {
       expect(name.get).toBe("Lovelace");
       expect(document.activeElement).toBe(grid);
       expect(started).toHaveBeenCalled();
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("edits selection cells and renders clamped progress through the standard factories", () => {
+    const role = property("missing");
+    const owner = property({ id: 1, name: "Alice" });
+    const progress = property(1.25);
+    const owners = [{ id: 1, name: "Alice" }, { id: 2, name: "Bob" }];
+    const roles = listProperty(["author", "editor"]);
+    type Row = { role: typeof role; owner: typeof owner; progress: typeof progress };
+    const rows = listProperty<Row>([{ role, owner, progress }]);
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<Row>;
+    const app = mount(root, () => component("viewport", {}, () => {
+      table = tableView(rows, [
+        choiceBoxColumn("Role", row => row.role, roles, {
+          converter: value => value.toUpperCase(),
+        }),
+        comboBoxColumn("Owner", row => row.owner, owners, {
+          converter: value => value.name,
+          identityBy: value => value.id,
+        }),
+        progressBarColumn("Progress", row => row.progress),
+      ], { paging: true, editable: true });
+    }));
+    try {
+      const cells = root.querySelectorAll<HTMLElement>(".ui-table-cell");
+      const progressBar = cells[2]!.querySelector<HTMLElement>("[role=progressbar]")!;
+      expect(progressBar.getAttribute("aria-valuenow")).toBe("100");
+      expect(progressBar.querySelector<HTMLElement>(".ui-table-progress-bar-cell__fill")!.style.width).toBe("100%");
+      progress.set(-0.5);
+      expect(progressBar.getAttribute("aria-valuenow")).toBe("0");
+      expect(progressBar.querySelector<HTMLElement>(".ui-table-progress-bar-cell__fill")!.style.width).toBe("0%");
+      expect(table.editCell(0, 2)).toBe(false);
+
+      cells[0]!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      const choice = root.querySelector<HTMLSelectElement>(".ui-table-choice-box-cell__editor")!;
+      expect(choice.getAttribute("aria-invalid")).toBe("true");
+      roles.add("reviewer");
+      expect(Array.from(choice.options, option => option.textContent)).toEqual(["AUTHOR", "EDITOR", "REVIEWER"]);
+      choice.selectedIndex = 1;
+      choice.dispatchEvent(new Event("change", { bubbles: true }));
+      expect(role.get).toBe("editor");
+      expect(table.editingCell.get).toBeNull();
+
+      cells[1]!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      let combo = root.querySelector<HTMLElement>(".ui-table-combo-box-cell__editor .ui-combo-box")!;
+      expect(combo.getAttribute("aria-expanded")).toBe("true");
+      combo.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }));
+      expect(combo.getAttribute("aria-expanded")).toBe("false");
+      expect(table.editingCell.get).toEqual({ row: 0, column: 1 });
+      combo.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }));
+      expect(table.editingCell.get).toBeNull();
+
+      cells[1]!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      combo = root.querySelector<HTMLElement>(".ui-table-combo-box-cell__editor .ui-combo-box")!;
+      const choices = root.querySelectorAll<HTMLElement>(".ui-combo-box__item");
+      choices[1]!.click();
+      expect(owner.get).toEqual(owners[1]);
+      expect(table.editingCell.get).toBeNull();
     } finally { app.dispose(); root.remove(); }
   });
 

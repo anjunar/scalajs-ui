@@ -1,6 +1,6 @@
 # TableView: Feature-Stand und Implementierungsplan
 
-Stand: 14.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltenbaum/Gruppenheader, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, stabile Zeilenschlüssel, RowFactory, Mehrfach- und Zell-/Rechteckauswahl, austauschbare Selection-/FocusModels, Zeilen-/Spaltennavigation samt Ereignissen, Spalten-Resizing, Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung sowie Remote-Mehrspaltensortierung · Referenz: JavaFX 26.
+Stand: 14.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltenbaum/Gruppenheader, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, stabile Zeilenschlüssel, RowFactory, Mehrfach- und Zell-/Rechteckauswahl, austauschbare Selection-/FocusModels, Zeilen-/Spaltennavigation samt Ereignissen, Spalten-Resizing, Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung, Standardzellen sowie Remote-Mehrspaltensortierung · Referenz: JavaFX 26.
 
 Dieses Dokument beschreibt, welche Funktionen unsere TableView bereits unterstützt und wie wir die fehlenden Fähigkeiten der JavaFX-TableView ergänzen. Es ist ein Implementierungsplan; als **geplant** bezeichnete Modelle, Methoden und Dateien existieren noch nicht.
 
@@ -14,7 +14,7 @@ Ziel ist funktionale Parität für Datenbindung, Zellen und Zeilen, Auswahl, Fok
 
 Die öffentliche [TableView-API von JavaFX 26](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/TableView.html) bildet den Referenzumfang. Zell- und Spaltenverträge werden zusätzlich gegen deren eigene APIs geprüft. Geerbte Darstellungsfunktionen werden auf DOM, Komponenten-Slots und Web-CSS abgebildet.
 
-**Editierbare Inhalte sind bereits möglich.** `TableColumn.cell { row => … }` komponiert beliebige Komponenten. Darin können Eingabefelder stehen, die über die vorhandene Property-/Form-Bindung das Zeilenmodell ändern. Dieser Weg bleibt unterstützt. Davon getrennt sind der von der Tabelle verwaltete Kernablauf mit Editierposition, Start/Commit/Cancel und typisierten Ereignissen sowie integrierte Text-/Boolean-Zellen vorhanden. Auswahlzellen, Konverter-/Validierungsfehler und deren Zugänglichkeitsvertrag fehlen noch. „Editing fehlt“ wäre daher eine falsche Beschreibung des heutigen Stands.
+**Editierbare Inhalte sind bereits möglich.** `TableColumn.cell { row => … }` komponiert beliebige Komponenten. Darin können Eingabefelder stehen, die über die vorhandene Property-/Form-Bindung das Zeilenmodell ändern. Dieser Weg bleibt unterstützt. Davon getrennt sind der von der Tabelle verwaltete Kernablauf mit Editierposition, Start/Commit/Cancel und typisierten Ereignissen sowie integrierte Text-, Boolean- und Auswahlzellen vorhanden. Parser-/Validierungsfehler für konvertierende Editoren und deren vollständiger Zugänglichkeitsvertrag fehlen noch. „Editing fehlt“ wäre daher eine falsche Beschreibung des heutigen Stands.
 
 Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Erweiterungen. Sie bleiben Bestandteil aller neuen Funktionen. Insbesondere erscheinen Previous/Next nur im Paging-Modus.
 
@@ -223,8 +223,8 @@ Referenzen: [Cell-Editierablauf](https://openui.io/javadoc/26/javafx.controls/ja
 | E01 | Direkt editierbare Inhalte über eingebettete Controls | Vorhanden | Renderer komponiert das Control; Anwendung stellt dessen Datenbindung bereit. DOM-Identität, Fokus, Textauswahl und Modellbindung über Scroll-/Breitenänderungen in jsdom sowie Unicode-Eingabe, Tastaturisolation, Remount und Spaltensichtbarkeit im echten Browser abgesichert. Native OS-IME-Abnahme bleibt M5/M6. |
 | E02 | Tabellenverwalteter Editiermodus | Vorhanden | `editable` auf Tabelle/Spalte/Zelle, aktuelle Position/Item/Original/Entwurf sowie `edit`, `updateEdit`, `commitEdit` und `cancelEdit` bilden einen Tabellenzustand in Scala und TypeScript. M4. |
 | E03 | Edit-Events und Schreiben ins Datenmodell | Vorhanden | Typisierte Start-/Commit-/Cancel-Ereignisse, Default-Writeback über `WritableProperty`, ersetzbarer Commit-Handler und nachgelagerter Beobachter sind vorhanden. M4. |
-| E04 | Standard-Zellfabriken | Teilweise | `TableTextFieldCell`/`textFieldCell`/`textFieldColumn` und `TableCheckBoxCell`/`checkBoxCell`/`checkBoxColumn` sind vorhanden. ChoiceBox-, ComboBox- und ProgressBar-Zellen fehlen. M4/M6. |
-| E05 | Konvertierung, Fehler und Fokuswechsel | Teilweise | Text/Boolean besitzen IME-sichere Enter-/Escape-/Tab-Regeln, zeilenweise Tab-Reihenfolge und eine explizite Text-Blur-Policy. Parser-/Validierungsfehler für konvertierende und Auswahl-Editoren fehlen. M4/M6. |
+| E04 | Standard-Zellfabriken | Vorhanden | TextField, CheckBox, ChoiceBox, ComboBox und ProgressBar sind als Scala-Zellen/DSL-Helfer und typisierte TypeScript-Spalten vorhanden. Die Forms-ComboBox bleibt Forms-seitig, sodass Controls keine zyklische Abhängigkeit erhält. M4/M6. |
+| E05 | Konvertierung, Fehler und Fokuswechsel | Teilweise | Text/Boolean/Auswahl besitzen IME-sichere Enter-/Escape-/Tab-Regeln und zeilenweise Tab-Reihenfolge; Text hat eine explizite Blur-Policy. ChoiceBox akzeptiert nur vorhandene Items und markiert fehlende Werte mit `aria-invalid`; ComboBox-Popup-Fokus beendet die Sitzung nicht. Parser-/Validierungsfehler für frei konvertierende Editoren samt Fehlermeldung fehlen. M4/M6. |
 
 ### 3.6 Viewport, Darstellung und Zugänglichkeit
 
@@ -257,7 +257,7 @@ Die folgenden Bausteine beschreiben die Zielarchitektur. `TableSelectionModel`, 
 
 Diese tabellenspezifischen Bausteine gehören nach `ui.control.table`. Allgemeine Datenansichten oder generische Geometrie gehören bei tatsächlichem gemeinsamen Bedarf in `scalajs-ui-core` bzw. `ui.control.virtualized`.
 
-[build.sbt](build.sbt) legt seit dem zehnten Ausbau fest: Controls hängen produktiv an Core und Viewport; Forms hängen an Controls und Viewport. Das Spaltenmenü verwendet auf ausdrücklichen Wunsch den bestehenden Viewport-/Overlay-Pfad, statt eine zweite Popup-Implementierung einzuführen. Ein aktiviertes Menü benötigt einen umgebenden Viewport; Tabellen ohne Menü weiterhin nicht. **Controls dürfen nicht für Zell-Editoren von Forms abhängig werden**, da sonst ein Zyklus entsteht. Die Editorverträge und einfache native Text-/Boolean-Editoren liegen deshalb in Controls. Auswahlzellen auf Basis der Forms-Controls benötigen später ein Integrationsmodul oder Forms-seitige Helfer.
+[build.sbt](build.sbt) legt seit dem zehnten Ausbau fest: Controls hängen produktiv an Core und Viewport; Forms hängen an Controls und Viewport. Das Spaltenmenü verwendet auf ausdrücklichen Wunsch den bestehenden Viewport-/Overlay-Pfad, statt eine zweite Popup-Implementierung einzuführen. Ein aktiviertes Menü benötigt einen umgebenden Viewport; Tabellen ohne Menü weiterhin nicht. **Controls dürfen nicht für Zell-Editoren von Forms abhängig werden**, da sonst ein Zyklus entsteht. Die Editorverträge, nativen Text-/Boolean-/ChoiceBox-Zellen und die ProgressBar liegen deshalb in Controls. `TableComboBoxCell` und `comboBoxCell` liegen Forms-seitig; die Bridge darf beide Module zusammenführen.
 
 ### 4.2 Zellbindung und Erhalt bestehender Editoren
 
@@ -427,11 +427,15 @@ Default-Writeback verwendet das zu Sitzungsbeginn gelieferte `WritableProperty`;
 
 `TableCheckBoxCell` bleibt als Checkbox sichtbar und führt jede Benutzerumschaltung atomar als Start/Commit aus. F2/Enter kann zusätzlich eine Sitzung auf der Checkbox öffnen; Enter schaltet um, Escape verwirft und Tab verwendet dieselbe Fokusreihenfolge. Tabelle, gesamte Spaltenkette und Zelle müssen editierbar sein. Scala bietet `textFieldCell(...)`/`checkBoxCell`, TypeScript die typisierten `textFieldColumn(...)`/`checkBoxColumn(...)`; beide Wege verwenden weiterhin Writable-Property-Writeback oder den eigenen Commit-Handler.
 
-Parsing-/Validierungsfehler für künftige konvertierende Editoren müssen die Sitzung offen lassen und zugänglich angezeigt werden. Popup-Fokus innerhalb eines künftigen Auswahl-Editors darf kein unbeabsichtigtes Ende sein.
+**Umgesetzt im neunzehnten Ausbau – Auswahl- und Fortschrittszellen:** `TableChoiceBoxCell` verwendet während der Sitzung ein natives Select über einer live beobachteten Itemliste. F2/Enter/Doppelklick starten, Auswahl oder Enter bestätigen, Escape verwirft und Tab/Shift+Tab bestätigt mit derselben zeilenweisen Fokusfolge. Ein nicht mehr vorhandener Entwurf bleibt offen und wird als `aria-invalid` markiert. `TableComboBoxCell` liegt wegen der Abhängigkeitsrichtung im Forms-Modul und öffnet die vorhandene ComboBox im vorhandenen Viewport-Overlay. Das erste Escape schließt das Popup, ein weiteres verwirft die Sitzung; Fokus im Popup löst weder Commit noch Cancel aus. Eine Auswahl bestätigt genau einmal.
+
+`TableProgressBarCell` ist nicht editierbar und projiziert Werte von 0 bis 1 zugänglich auf 0 bis 100 Prozent; Werte außerhalb werden begrenzt. Scala bietet `choiceBoxCell`, Forms-seitig `comboBoxCell` sowie `progressBarCell`. TypeScript bietet `choiceBoxColumn`, `comboBoxColumn` und `progressBarColumn`; Itemlisten können unveränderliche Arrays oder live beobachtete `ListProperty`s sein, `converter` und `identityBy` bleiben typisiert.
+
+Parsing-/Validierungsfehler für frei konvertierende Editoren müssen die Sitzung offen lassen und mit einer zugänglichen Fehlermeldung angezeigt werden. Die ChoiceBox deckt den fehlenden Listenwert nur mit `aria-invalid` ab; ein allgemeiner Parser-/Validatorvertrag ist das verbleibende E05-Stück.
 
 Vorgeschlagene Standardregel für integrierte Editoren: Verlässt die Zeile tatsächlich den virtuellen Bereich, wird die Sitzung mit Cancel und einem dokumentierten Grund beendet. Bleibt dieselbe Zeile sichtbar, müssen Scroll-/Messupdates den Editor erhalten. Entfernen der Zeile/Spalte und Ersetzen der Quelle brechen ebenfalls kontrolliert ab. Async-Commit-Ergebnisse dürfen nur zur zugehörigen Sitzung/Generation zurückschreiben.
 
-Die verbleibenden Standardfabriken decken Auswahl und Fortschritt ab. JavaFX verwendet für CheckBox-Zellen eine direkte bidirektionale Property-Bindung ohne gewöhnlichen Edit-Commit-Zyklus. Unsere Checkbox bleibt ebenfalls dauerhaft eingebettet, leitet die atomare Umschaltung aber absichtlich durch das einheitliche Start-/Commit-Ereignis- und Schreibmodell. Quelle: [CheckBoxTableCell, JavaFX 25](https://openui.io/javadoc/25/javafx.controls/javafx/scene/control/cell/CheckBoxTableCell.html); Detailabgleich mit JavaFX 26 bleibt Teil der Paritätsabnahme.
+JavaFX verwendet für CheckBox-Zellen eine direkte bidirektionale Property-Bindung ohne gewöhnlichen Edit-Commit-Zyklus. Unsere Checkbox bleibt ebenfalls dauerhaft eingebettet, leitet die atomare Umschaltung aber absichtlich durch das einheitliche Start-/Commit-Ereignis- und Schreibmodell. Quelle: [CheckBoxTableCell, JavaFX 25](https://openui.io/javadoc/25/javafx.controls/javafx/scene/control/cell/CheckBoxTableCell.html); Detailabgleich mit JavaFX 26 bleibt Teil der Paritätsabnahme.
 
 ### 4.7 Spaltenbaum, Breiten und Header
 
@@ -503,7 +507,7 @@ Die öffentliche Tabellenfassade liegt in `npm/scalajs-ui-controls`; `tableView(
 
 Die Rückgabe wird nach abgeschlossenem Mount über einen internen Factory-Callback aus der Bridge an die TypeScript-Fassade übergeben. Indexoperationen werden bei jedem Aufruf gegen die aktuelle sichtbare Blattfolge aufgelöst. Stabile öffentliche Spaltenhandles oder IDs können später für referenzbasierte Operationen ergänzt werden; sie sind für den jetzigen Paritätsstand nicht erforderlich.
 
-Jeder Meilenstein liefert Scala-API, Bridge-Anbindung, TypeScript-Typen, Lifecycle und ein Beispiel gemeinsam. Auswahl-/Popup-Zellfactory-Helfer werden wegen der Abhängigkeitsrichtung später in Forms oder einem Integrationsmodul angeboten. Keine zweite Auswahl-/Sortier-/Editierimplementierung in TypeScript. Callbacks müssen im vorhandenen Render-Scope laufen; Handles nach Unmount dürfen keine entfernten Komponenten weiter bedienen.
+Jeder Meilenstein liefert Scala-API, Bridge-Anbindung, TypeScript-Typen, Lifecycle und ein Beispiel gemeinsam. Der Auswahl-/Popup-Zellfactory-Helfer liegt wegen der Abhängigkeitsrichtung in Forms; die TypeScript-Bridge führt ihn mit der Tabelle zusammen. Keine zweite Auswahl-/Sortier-/Editierimplementierung in TypeScript. Callbacks müssen im vorhandenen Render-Scope laufen; Handles nach Unmount dürfen keine entfernten Komponenten weiter bedienen.
 
 ## 5. Umsetzungsreihenfolge und Abnahme
 
@@ -543,7 +547,7 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 - [x] M2: Austauschbare und erweiterbare Selection-/FocusModels einschließlich Ownership, Rebinding und Abgleich inaktiver Alternativen. M2 ist damit im vereinbarten Umfang abgeschlossen; anschließend M4 und die offenen M5/M6-Punkte.
 - [x] M4: Tabellenverwaltete Editiersitzung, Writable-Property-Writeback, ersetzbarer Commit-Handler, Ereignisse, Lifecycle-Abbruchgründe sowie Scala-/TypeScript-Handle.
 - [x] M4: Standard-Text-/Boolean-Editoren sowie F2/Enter/Escape/Tab- und explizite Blur-Regeln in Scala und TypeScript. M4 ist damit im festgelegten Umfang abgeschlossen.
-- [ ] M6: Auswahl-/Progress-Zellen sowie Parser-/Validierungsfehler und Popup-Fokusregeln ergänzen.
+- [ ] M6: Auswahl-/Progress-Zellen und Popup-Fokusregeln sind ergänzt; Parser-/Validierungsfehler samt zugänglicher Fehlermeldung bleiben offen.
 
 ## 6. Verifikation
 

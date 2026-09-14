@@ -332,11 +332,18 @@ class TableCellSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(root)
   }
 
-  it should "provide text-field and check-box cell factories through the Scala DSL" in {
-    final class EditableRow(val name: Property[String], val active: Property[Boolean])
-    val row = new EditableRow(Property("Ada"), Property(true))
+  it should "provide the standard control cell factories through the Scala DSL" in {
+    final class EditableRow(
+        val name: Property[String],
+        val active: Property[Boolean],
+        val role: Property[String],
+        val progress: Property[Double]
+    )
+    val row   = new EditableRow(Property("Ada"), Property(true), Property("author"), Property(0.65))
+    val roles = ListProperty(js.Array("author", "editor"))
     var nameColumn: TableColumn[EditableRow, String]    = null
     var activeColumn: TableColumn[EditableRow, Boolean] = null
+    var roleColumn: TableColumn[EditableRow, String]    = null
     val (root, table, cursor)                           = mountTable(ListProperty(js.Array(row))) {
       editable = true
       nameColumn = column[EditableRow, String]("Name") {
@@ -347,10 +354,22 @@ class TableCellSpec extends AnyFlatSpec with Matchers {
         cellValueFactory = _.value.active
         checkBoxCell
       }
+      roleColumn = column[EditableRow, String]("Role") {
+        cellValueFactory = _.value.role
+        choiceBoxCell(roles, _.capitalize)
+      }
+      column[EditableRow, Double]("Progress") {
+        cellValueFactory = _.value.progress
+        progressBarCell
+      }
     }
 
     cursor.collectHtml() should include("ui-table-text-field-cell__display")
     cursor.collectHtml() should include("ui-table-check-box-cell__editor")
+    cursor.collectHtml() should include("ui-table-choice-box-cell__display")
+    cursor.collectHtml() should include("ui-table-progress-bar-cell__fill")
+    cursor.collectHtml() should include("width: 65%")
+    cursor.collectHtml() should include("aria-valuenow=\"65\"")
     table.edit(0, nameColumn) shouldBe true
     cursor.collectHtml() should include("ui-table-text-field-cell__editor")
     table.commitEdit("Grace") shouldBe true
@@ -359,6 +378,11 @@ class TableCellSpec extends AnyFlatSpec with Matchers {
     table.edit(0, activeColumn) shouldBe true
     table.commitEdit(false) shouldBe true
     row.active.get shouldBe false
+    table.edit(0, roleColumn) shouldBe true
+    cursor.collectHtml() should include("ui-table-choice-box-cell__editor")
+    cursor.collectHtml() should include("Editor")
+    table.commitEdit("editor") shouldBe true
+    row.role.get shouldBe "editor"
     Runtime.unmount(root)
   }
 
