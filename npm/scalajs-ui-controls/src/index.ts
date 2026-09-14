@@ -7,7 +7,7 @@ export { tab, tabs } from "./tabs.js";
 export type { CarouselOptions } from "./carousel.js";
 export { carousel } from "./carousel.js";
 
-export type { ColumnDef, ColumnGroupOptions, ColumnResizePolicy, TableRowContext, TableSelectionMode, TableSort, TableViewHandle, TableViewOptions, ValueColumnOptions } from "./table.js";
+export type { ColumnDef, ColumnGroupOptions, ColumnResizePolicy, TablePosition, TableRowContext, TableSelectionMode, TableSort, TableViewHandle, TableViewOptions, ValueColumnOptions } from "./table.js";
 export { column, columnGroup, valueColumn, tableView } from "./table.js";
 
 export type { DataGridOptions, VirtualListOptions } from "./collections.js";

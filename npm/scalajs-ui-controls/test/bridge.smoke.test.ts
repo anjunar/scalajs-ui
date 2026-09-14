@@ -785,6 +785,64 @@ describe("table-view", () => {
     } finally { app.dispose(); root.remove(); }
   });
 
+  it("tracks stable cell focus through keyboard navigation, reordering and visibility", () => {
+    const showMiddle = property(true);
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty([0, 1, 2]), [
+        valueColumn("A", row => `a${row}`),
+        valueColumn("B", row => `b${row}`, { visible: showMiddle }),
+        valueColumn("C", row => `c${row}`),
+      ], { paging: true, selectionMode: "multiple" });
+    });
+    try {
+      const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+      table.focusCell(1, 1);
+      expect(table.focusedCell.get).toEqual({ row: 1, column: 1 });
+      expect(table.focusedItem.get).toBe(1);
+      expect(table.selectedIndices.get).toEqual([]);
+      let focused = root.querySelector<HTMLElement>(".ui-table-cell-focused")!;
+      expect(focused.textContent).toBe("b1");
+      expect(document.getElementById(grid.getAttribute("aria-activedescendant")!)).toBe(focused);
+
+      grid.focus();
+      grid.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "ArrowRight",
+      }));
+      expect(table.focusedCell.get).toEqual({ row: 1, column: 2 });
+      expect(table.selectedIndices.get).toEqual([]);
+      table.focusBelowCell();
+      expect(table.focusedCell.get).toEqual({ row: 2, column: 2 });
+      table.focusRightCell();
+      expect(table.focusedCell.get).toEqual({ row: 2, column: 2 });
+
+      table.focusCell(1, 1);
+      expect(table.moveColumn(1, 0)).toBe(true);
+      expect(table.focusedCell.get).toEqual({ row: 1, column: 0 });
+      focused = root.querySelector<HTMLElement>(".ui-table-cell-focused")!;
+      expect(focused.textContent).toBe("b1");
+
+      showMiddle.set(false);
+      expect(table.focusedCell.get).toEqual({ row: 1, column: -1 });
+      expect(table.focusedIndex.get).toBe(1);
+      expect(root.querySelector(".ui-table-cell-focused")).toBeNull();
+      expect(document.getElementById(grid.getAttribute("aria-activedescendant")!)?.classList)
+        .toContain("ui-table-row-focused");
+
+      root.querySelectorAll<HTMLElement>(".ui-table-row")[2]!
+        .querySelector<HTMLElement>('[role="gridcell"]')!.click();
+      expect(table.focusedCell.get).toEqual({ row: 2, column: 0 });
+      expect(table.selectedIndices.get).toEqual([2]);
+      expect(document.activeElement).toBe(grid);
+
+      for (const [row, column] of [[-1, 0], [0, -1], [0.5, 0], [0, NaN], [0, 99]] as const) {
+        table.focusCell(row, column);
+        expect(table.focusedCell.get).toBeNull();
+      }
+    } finally { app.dispose(); root.remove(); }
+  });
+
   it("anchors Shift from focus, respects single selection and clears focus when data becomes empty", () => {
     const rows = listProperty([0, 1, 2]);
     const root = document.createElement("div"); document.body.appendChild(root);

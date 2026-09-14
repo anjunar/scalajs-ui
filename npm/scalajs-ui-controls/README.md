@@ -275,7 +275,7 @@ table.refresh(); // Re-evaluates visible snapshots and cell bodies; no remote re
 ```
 
 `tableView()` returns `TableViewHandle<T>` with `refresh()` and read-only `isDisposed`,
-plus the single-selection API below.
+plus the selection and logical row/cell-focus APIs below.
 After unmount, refresh is a no-op. Refresh recreates visible cell content and can reset local
 editor state, so use observed values for live edits. Calling code may ignore the new return
 value. An explicitly void-returning expression arrow should use a block:
@@ -307,7 +307,7 @@ may scan the entire index space, so prefer a known index for large remote source
 After unmount, selection operations are no-ops. Reactive `text` bindings follow normal
 component lifecycle; dispose subscriptions that you create manually with `observe`.
 Derived properties may notify even when only the other selection field changes.
-Cell selection and a separate focus model are not available yet; multi-selection is below.
+Cell selection is not available yet; logical row/cell focus is described below.
 Selection identity does not guarantee DOM/editor identity across data reordering.
 
 ### Multiple selection
@@ -350,8 +350,35 @@ two lists**. Selection never fetches missing values. `selectAll` explicitly sele
 currently known index space and uses memory proportional to its size; it is not a
 server-side all-results token and does not expand automatically when the source grows.
 Accepted reloads clear the selection; structural deltas preserve surviving occurrences.
-Keyboard range navigation, a replaceable selection model, cell selection and full grid
-accessibility remain separate work.
+Replaceable selection models, cell selection and full grid accessibility remain separate work.
+
+### Logical row and cell focus
+
+Focus is independent of selection. `focusedIndex` and `focusedItem` describe the logical row;
+`focusedCell` adds an absolute row and the current visible-leaf column index. Row-only focus uses
+`column: -1`. A stable runtime column reference keeps cell focus on the same leaf when columns are
+reordered; hiding or removing that leaf degrades the coordinate to row-only focus.
+
+```ts
+table.focusCell(4, 1);
+text(table.focusedCell.map(position =>
+  position === null ? "none" : `${position.row}:${position.column}`));
+table.focusRightCell();
+table.focusBelowCell();
+```
+
+`focusIndex`, `focusCell`, `focusNext`/`focusPrevious`, and the four cell-direction methods mutate
+only logical focus. They do not select, scroll, take DOM focus, or fetch remote gaps. Invalid
+coordinates clear focus. Up/Down keyboard navigation retains an active leaf; Left/Right enters or
+moves cell focus and scrolls that leaf into view. Movement stops at table edges. Clicking a normal
+cell selects its row and focuses that cell, while inputs, buttons, links, and other interactive
+descendants retain their own mouse and keyboard behavior.
+
+When the grid owns DOM focus, `aria-activedescendant` points to the mounted focused cell (or row for
+row-only focus). Offscreen coordinates never leave a dangling ARIA reference. Cell focus survives
+row rebasing and column reordering, follows `rowKey` on accepted replacements, and remains a valid
+coordinate for known unloaded remote rows. A replaceable focus model and cell selection remain
+separate work.
 
 ### Custom rows
 
@@ -508,7 +535,7 @@ SSR renders a stable paged or crawl slice. After successful hydration, `tableVie
 - `tab`, `tabs`, `carousel`
 - `column`, `columnGroup`, `valueColumn`, `ColumnGroupOptions`, `ValueColumnOptions`, `tableView`, `dataGrid`, `virtualList`
 - `remoteSource`, `RemoteSource`, `RemotePage`, `SortSpec`
-- `TabsOptions`, `CarouselOptions`, `TableViewOptions<T>`, `TableViewHandle<T>`, `TableRowContext<T>`, `DataGridOptions`, `VirtualListOptions`
+- `TabsOptions`, `CarouselOptions`, `TableViewOptions<T>`, `TableViewHandle<T>`, `TablePosition`, `TableRowContext<T>`, `DataGridOptions`, `VirtualListOptions`
 
 ## Related modules
 

@@ -60,14 +60,29 @@ final class TableViewHandleBridge(private val table: TableView[js.Any]) extends 
       table.getVisibleLeafColumn(index.toInt),
       additive.getOrElse(false)
     )
-  def clearSort(): Boolean            = table.clearSort()
-  private val model                   = table.selectionModel
-  val focusedIndex                    = new ReadOnlyPropertyHandle(table.focusedIndexProperty)
-  val focusedItem                     = new ReadOnlyPropertyHandle(table.focusedItemProperty)
+  def clearSort(): Boolean = table.clearSort()
+  private val model        = table.selectionModel
+  val focusedIndex         = new ReadOnlyPropertyHandle(table.focusedIndexProperty)
+  val focusedItem          = new ReadOnlyPropertyHandle(table.focusedItemProperty)
+  val focusedCell          = new ReadOnlyPropertyHandle(
+    table.focusedCellProperty.map(position =>
+      Option(position).fold[js.Object | Null](null)(current =>
+        js.Dynamic.literal(row = current.row, column = current.column)
+      )
+    )
+  )
   def focusIndex(index: Double): Unit =
     table.focusModel.focus(if (validIndex(index)) index.toInt else -1)
-  def focusNext(): Unit     = table.focusModel.focusNext()
-  def focusPrevious(): Unit = table.focusModel.focusPrevious()
+  def focusCell(rowIndex: Double, columnIndex: Double): Unit =
+    if (validIndex(rowIndex) && validIndex(columnIndex))
+      table.focusModel.focus(rowIndex.toInt, table.getVisibleLeafColumn(columnIndex.toInt))
+    else table.focusModel.focus(-1)
+  def focusNext(): Unit      = table.focusModel.focusNext()
+  def focusPrevious(): Unit  = table.focusModel.focusPrevious()
+  def focusLeftCell(): Unit  = table.focusModel.focusLeftCell()
+  def focusRightCell(): Unit = table.focusModel.focusRightCell()
+  def focusAboveCell(): Unit = table.focusModel.focusAboveCell()
+  def focusBelowCell(): Unit = table.focusModel.focusBelowCell()
   val columnWidths = new ReadOnlyPropertyHandle(table.renderedWidthsProperty.map(_.toJSArray))
   def autoFitColumn(index: Double): Boolean =
     validIndex(index) && table.autoFitColumn(table.getVisibleLeafColumn(index.toInt))

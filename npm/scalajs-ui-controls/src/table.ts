@@ -93,6 +93,12 @@ export interface TableRowContext<T> {
 }
 
 export type TableSelectionMode = "single" | "multiple";
+
+/** Absolute row plus current visible-leaf column index. A row-only focus uses column -1. */
+export interface TablePosition {
+  readonly row: number;
+  readonly column: number;
+}
 /** One term in an explicit remote sort order, resolved against the current visible columns. */
 export interface TableSort {
   readonly columnIndex: number;
@@ -141,7 +147,7 @@ export interface TableViewOptions<T = unknown> {
   readonly placeholder?: () => void;
 }
 
-/** Runtime-owned row selection, row focus, navigation and refresh. Cell coordinates remain pending. */
+/** Runtime-owned row selection, row/cell focus, navigation and refresh. */
 export interface TableViewHandle<T = unknown> {
   /** Number of visible leaf columns; groups never count as data columns. */
   readonly visibleColumnCount: ReadOnlyProperty<number>;
@@ -171,15 +177,24 @@ export interface TableViewHandle<T = unknown> {
   toggleSort(visibleColumnIndex: number, additive?: boolean): boolean;
   /** Clears all remote sort terms through the same command path. */
   clearSort(): boolean;
-  /** Logical row focus. A known unloaded position has a null focusedItem. */
+  /** Logical row/cell focus. A known unloaded position has a null focusedItem. */
   readonly focusedIndex: ReadOnlyProperty<number>;
   readonly focusedItem: ReadOnlyProperty<T | null>;
+  /** Logical coordinate. Row-only focus has column -1; reordering republishes the derived index. */
+  readonly focusedCell: ReadOnlyProperty<TablePosition | null>;
   /** Changes only logical focus: no selection, scrolling, DOM focus or remote fetch.
    * Invalid indices clear focus; all focus operations are no-ops after disposal.
    */
   focusIndex(index: number): void;
+  /** Focuses an absolute row/current visible-leaf coordinate. Invalid coordinates clear focus. */
+  focusCell(rowIndex: number, visibleColumnIndex: number): void;
   focusNext(): void;
   focusPrevious(): void;
+  /** Cell focus moves without changing row selection. Horizontal movement stops at table edges. */
+  focusLeftCell(): void;
+  focusRightCell(): void;
+  focusAboveCell(): void;
+  focusBelowCell(): void;
   /** Rendered widths in visible-column order; independent read-only snapshots. */
   readonly columnWidths: ReadOnlyProperty<readonly number[]>;
   /** Resizes a visible column by a pixel delta; true if any movement was possible. */

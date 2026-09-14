@@ -110,7 +110,7 @@ export function controlsTablePage(): void {
       onClick(() => selectionMode.set(selectionMode.get === "multiple" ? "single" : "multiple"));
     });
     div(() => text(translated("Ctrl/Cmd-click toggles rows; Shift-click selects a range.")));
-    div(() => text(translated("Focus the table: arrows, Home/End and PageUp/PageDown navigate rows. Shift extends selection; Ctrl/Cmd moves focus only; Space selects.")));
+    div(() => text(translated("Focus the table: Up/Down, Home/End and PageUp/PageDown navigate rows; Left/Right enters and moves cell focus. Shift extends row selection; Ctrl/Cmd moves focus only; Space selects.")));
     div(() => text(translated("Drag a column edge to resize. Focus its grip and use arrow keys for keyboard resizing.")));
     div(() => text(translated("Double-click a column edge to fit its content, or press Enter on the focused grip.")));
     div(() => text(translated("Drag a column header to move it. Or focus the header and press Alt+Shift+Left/Right.")));
@@ -182,6 +182,11 @@ export function controlsTablePage(): void {
       div(() => {
         div(() => text(translated("Focused row")));
         div(() => text(table.focusedIndex.map(index => index < 0 ? "—" : String(index + 1))));
+      });
+      div(() => {
+        div(() => text(translated("Focused cell")));
+        div(() => text(table.focusedCell.map(position =>
+          position === null || position.column < 0 ? "—" : `${position.row + 1}:${position.column + 1}`)));
       });
       when(
         table.selectedItem.map((book) => book === null),
