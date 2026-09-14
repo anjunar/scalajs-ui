@@ -97,6 +97,12 @@ final class TableViewHandleBridge(private val table: TableView[js.Any]) extends 
     case TableSelectionMode.Single   => "single"
     case TableSelectionMode.Multiple => "multiple"
   })
+  val cellSelectionEnabled = new ReadOnlyPropertyHandle(model.cellSelectionEnabledProperty)
+  val selectedCells        = new ReadOnlyPropertyHandle(
+    model.selectedCellsProperty.map(
+      _.map(position => js.Dynamic.literal(row = position.row, column = position.column)).toJSArray
+    )
+  )
   val selectedIndices = new ReadOnlyPropertyHandle(model.selectedIndicesProperty.map(_.toJSArray))
   val selectedItems   = new ReadOnlyPropertyHandle(model.selectedItemsProperty.map(_.toJSArray))
   private def validIndex(index: Double): Boolean =
@@ -110,10 +116,41 @@ final class TableViewHandleBridge(private val table: TableView[js.Any]) extends 
   def clearSelection(): Unit               = table.clearSelection()
   def setSelectionMode(mode: String): Unit =
     if (!table.isDisposed) model.selectionMode = TableViewHandleBridge.parseSelectionMode(mode)
+  def setCellSelectionEnabled(enabled: Boolean): Unit =
+    if (!table.isDisposed) model.cellSelectionEnabled = enabled
   def clearAndSelect(index: Double): Unit =
     if (validIndex(index)) model.clearAndSelect(index.toInt) else model.clearSelection()
   def clearIndex(index: Double): Unit    = if (validIndex(index)) model.clearSelection(index.toInt)
   def isSelected(index: Double): Boolean = validIndex(index) && model.isSelected(index.toInt)
+  private def columnAt(index: Double)    =
+    if (validIndex(index)) Option(table.getVisibleLeafColumn(index.toInt)) else None
+  def selectCell(rowIndex: Double, columnIndex: Double): Unit =
+    columnAt(columnIndex) match {
+      case Some(column) if validIndex(rowIndex) => model.select(rowIndex.toInt, column)
+      case _                                    => model.clearSelection()
+    }
+  def clearAndSelectCell(rowIndex: Double, columnIndex: Double): Unit =
+    columnAt(columnIndex) match {
+      case Some(column) if validIndex(rowIndex) => model.clearAndSelect(rowIndex.toInt, column)
+      case _                                    => model.clearSelection()
+    }
+  def clearCell(rowIndex: Double, columnIndex: Double): Unit =
+    columnAt(columnIndex).foreach(column =>
+      if (validIndex(rowIndex)) model.clearSelection(rowIndex.toInt, column)
+    )
+  def isCellSelected(rowIndex: Double, columnIndex: Double): Boolean =
+    validIndex(rowIndex) && columnAt(columnIndex).exists(model.isSelected(rowIndex.toInt, _))
+  def selectCellRange(
+      startRow: Double,
+      startColumn: Double,
+      endRow: Double,
+      endColumn: Double
+  ): Unit =
+    for {
+      first <- columnAt(startColumn)
+      last  <- columnAt(endColumn)
+      if validIndex(startRow) && validIndex(endRow)
+    } model.selectRange(startRow.toInt, first, endRow.toInt, last)
   def selectIndices(indices: js.Array[Double]): Unit =
     if (!table.isDisposed)
       model.selectIndices(indices.iterator.filter(validIndex).map(_.toInt).toSeq*)

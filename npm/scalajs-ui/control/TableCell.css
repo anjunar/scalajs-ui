@@ -25,6 +25,13 @@
 
 .ui-table-cell.ui-table-cell-selected {
   color: inherit;
+  background-color: var(--aj-accent-muted);
+  box-shadow: inset 0 0 0 1px var(--aj-accent-ring);
+}
+
+.ui-table-view-cell-selection .ui-table-row.ui-table-row-selected {
+  background-color: transparent;
+  box-shadow: none;
 }
 
 .ui-table-cell.ui-table-cell-loading-placeholder {

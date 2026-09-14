@@ -124,6 +124,10 @@ export interface TableViewOptions<T = unknown> {
   readonly columnResizePolicy?: Reactive<ColumnResizePolicy>;
   /** Defaults to single selection. Changes to single retain the lead selection. */
   readonly selectionMode?: Reactive<TableSelectionMode>;
+  /** Select individual cells instead of whole rows. Existing row selections are projected onto
+   * the focused or first visible column. Default false.
+   */
+  readonly cellSelectionEnabled?: Reactive<boolean>;
   /** Replaces row content. Styles/events apply to the row; call row.renderCells() for standard columns. */
   readonly row?: (row: TableRowContext<T>) => void;
   readonly rowHeight?: number;
@@ -147,7 +151,7 @@ export interface TableViewOptions<T = unknown> {
   readonly placeholder?: () => void;
 }
 
-/** Runtime-owned row selection, row/cell focus, navigation and refresh. */
+/** Runtime-owned row/cell selection, row/cell focus, navigation and refresh. */
 export interface TableViewHandle<T = unknown> {
   /** Number of visible leaf columns; groups never count as data columns. */
   readonly visibleColumnCount: ReadOnlyProperty<number>;
@@ -210,6 +214,9 @@ export interface TableViewHandle<T = unknown> {
    */
   moveColumn(fromVisibleIndex: number, toVisibleIndex: number): boolean;
   readonly selectionMode: ReadOnlyProperty<TableSelectionMode>;
+  readonly cellSelectionEnabled: ReadOnlyProperty<boolean>;
+  /** Sorted absolute row/current visible-leaf coordinates. Row selection uses column -1. */
+  readonly selectedCells: ReadOnlyProperty<readonly TablePosition[]>;
   /** Sorted unique absolute positions. Item snapshots omit unloaded positions (no remote fetch). */
   readonly selectedIndices: ReadOnlyProperty<readonly number[]>;
   readonly selectedItems: ReadOnlyProperty<readonly T[]>;
@@ -222,9 +229,22 @@ export interface TableViewHandle<T = unknown> {
   selectItem(item: T): void;
   clearSelection(): void;
   setSelectionMode(mode: TableSelectionMode): void;
+  setCellSelectionEnabled(enabled: boolean): void;
   clearAndSelect(index: number): void;
   clearIndex(index: number): void;
   isSelected(index: number): boolean;
+  /** Cell operations address current visible-leaf indices. Invalid select coordinates clear. */
+  selectCell(rowIndex: number, visibleColumnIndex: number): void;
+  clearAndSelectCell(rowIndex: number, visibleColumnIndex: number): void;
+  clearCell(rowIndex: number, visibleColumnIndex: number): void;
+  isCellSelected(rowIndex: number, visibleColumnIndex: number): boolean;
+  /** Adds an inclusive rectangle, accepting either direction on both axes. */
+  selectCellRange(
+    startRow: number,
+    startVisibleColumnIndex: number,
+    endRow: number,
+    endVisibleColumnIndex: number
+  ): void;
   /** Adds valid indices, ignoring invalid/duplicate arguments. Last valid index becomes lead. */
   selectIndices(indices: readonly number[]): void;
   /** Inclusive start, exclusive end, forward or backward. Adds to existing selection. */
@@ -286,6 +306,7 @@ export function tableView<T, Q = unknown>(
       columnMenuText: options.columnMenuText,
       columnResizePolicy: options.columnResizePolicy,
       selectionMode: options.selectionMode,
+      cellSelectionEnabled: options.cellSelectionEnabled,
       rowKey: options.rowKey,
       onScrollTo: options.onScrollTo,
       onScrollToColumn: options.onScrollToColumn,

@@ -37,6 +37,30 @@ class TableSelectionSpec extends AnyFlatSpec with Matchers {
     finally Runtime.unmount(root)
   }
 
+  private def mountedWithColumns[S](source: ListDataSource[S])(
+      run: (TableView[S], Vector[TableColumn[S, String]]) => Unit
+  ): Unit = {
+    var table: TableView[S]                     = null
+    var columns: Vector[TableColumn[S, String]] = Vector.empty
+    val root                                    = Runtime.mount(
+      new AbstractComponent {
+        override val tagName                       = "main"
+        override def compose(cursor: Cursor): Unit = DslLayer.render(this, cursor) {
+          table = tableView(source) {
+            columns = Vector(
+              column[S, String]("A") { cell(value => text(value.toString) {}) },
+              column[S, String]("B") { cell(value => text(value.toString) {}) },
+              column[S, String]("C") { cell(value => text(value.toString) {}) }
+            )
+          }
+        }
+      },
+      new SsrCursor()
+    )
+    try run(table, columns)
+    finally Runtime.unmount(root)
+  }
+
   "TableView selection" should "follow the selected occurrence through insertions and removals" in {
     val same   = Person("same")
     val values = ListProperty(js.Array(same, same, Person("last")))
@@ -474,6 +498,80 @@ class TableSelectionSpec extends AnyFlatSpec with Matchers {
       table.selectedItemProperty.get.name shouldBe "new three"
       table.focusModel.focusedIndex shouldBe 0
       table.focusModel.focusedItem.name shouldBe "new three"
+    }
+  }
+
+  it should "project row selection into cells and publish inclusive rectangular ranges" in {
+    mountedWithColumns(ListProperty(js.Array("a", "b", "c", "d"))) { (table, columns) =>
+      val model = table.selectionModel
+      model.selectionMode = TableSelectionMode.Multiple
+      model.selectIndices(1, 3)
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(1 -> -1, 3 -> -1)
+
+      model.cellSelectionEnabled = true
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(1 -> 0, 3 -> 0)
+
+      model.clearSelection()
+      model.selectRange(1, columns(2), 3, columns(0))
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        (for { row <- 1 to 3; column <- 0 to 2 } yield row -> column).toVector
+      table.selectedIndicesProperty.get shouldBe Vector(1, 2, 3)
+      table.selectedIndexProperty.get shouldBe 3
+
+      table.focusModel.focus(0, columns(1))
+      model.select(0)
+      table.selectedCellsProperty.get.size shouldBe 10
+      model.clearAndSelect(3, columns(0))
+      model.selectionMode = TableSelectionMode.Single
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(3 -> 0)
+      model.cellSelectionEnabled = false
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(3 -> -1)
+    }
+  }
+
+  it should "rebase cell rectangles and retain column identity through reorder and visibility" in {
+    val values = ListProperty(js.Array("a", "b", "c"))
+    mountedWithColumns(values) { (table, columns) =>
+      val model = table.selectionModel
+      model.selectionMode = TableSelectionMode.Multiple
+      model.cellSelectionEnabled = true
+      model.selectRange(0, columns(0), 1, columns(1))
+      values.insert(0, "before")
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(1 -> 0, 1 -> 1, 2 -> 0, 2 -> 1)
+
+      table.columns.setAll(Vector(columns(2), columns(0), columns(1)))
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(1 -> 1, 1 -> 2, 2 -> 1, 2 -> 2)
+
+      columns(1).visible = false
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(1 -> 1, 2 -> 1)
+      model.isSelected(1, columns(0)) shouldBe true
+      model.isSelected(1, columns(1)) shouldBe false
+    }
+  }
+
+  it should "apply pointer-style toggle and Shift extension as one cell snapshot" in {
+    mountedWithColumns(ListProperty(js.Array((0 until 5)*))) { (table, columns) =>
+      val model = table.selectionModel
+      model.selectionMode = TableSelectionMode.Multiple
+      model.cellSelectionEnabled = true
+      model.clickCell(1, columns(1), toggle = false, extend = false)
+      model.clickCell(3, columns(2), toggle = false, extend = true)
+      table.selectedCellsProperty.get.size shouldBe 6
+      model.clickCell(0, columns(0), toggle = true, extend = false)
+      table.selectedCellsProperty.get.map(position =>
+        position.row -> position.column
+      ) should contain(0 -> 0)
+      model.clickCell(0, columns(0), toggle = true, extend = false)
+      table.selectedCellsProperty.get.map(position =>
+        position.row -> position.column
+      ) should not contain (0 -> 0)
     }
   }
 }

@@ -61,6 +61,7 @@ function inputValue(event: UiEvent): string {
 export function controlsTablePage(): void {
   const showAuthors = property(true);
   const selectionMode = property<TableSelectionMode>("multiple");
+  const cellSelectionEnabled = property(false);
   const resizePolicy = property<ColumnResizePolicy>("flex-last-column");
   const notes = new Map<string, Property<string>>();
   const noteFor = (book: Book): Property<string> => {
@@ -109,7 +110,11 @@ export function controlsTablePage(): void {
     button(translated("Toggle single / multiple selection"), {}, () => {
       onClick(() => selectionMode.set(selectionMode.get === "multiple" ? "single" : "multiple"));
     });
+    button(translated("Toggle row / cell selection"), {}, () => {
+      onClick(() => cellSelectionEnabled.set(!cellSelectionEnabled.get));
+    });
     div(() => text(translated("Ctrl/Cmd-click toggles rows; Shift-click selects a range.")));
+    div(() => text(translated("In cell mode, Shift-click and Shift+Arrow select an inclusive rectangle.")));
     div(() => text(translated("Focus the table: Up/Down, Home/End and PageUp/PageDown navigate rows; Left/Right enters and moves cell focus. Shift extends row selection; Ctrl/Cmd moves focus only; Space selects.")));
     div(() => text(translated("Drag a column edge to resize. Focus its grip and use arrow keys for keyboard resizing.")));
     div(() => text(translated("Double-click a column edge to fit its content, or press Enter on the focused grip.")));
@@ -155,6 +160,7 @@ export function controlsTablePage(): void {
           columnMenuText: translated("Columns"),
           columnResizePolicy: resizePolicy,
           selectionMode,
+          cellSelectionEnabled,
           row: (row) => {
             classes("book-row");
             const book = row.item.get;
@@ -178,6 +184,15 @@ export function controlsTablePage(): void {
       div(() => {
         div(() => text(translated("Selected rows")));
         div(() => text(table.selectedIndices.map((indices) => String(indices.length))));
+      });
+      div(() => {
+        div(() => text(translated("Selection target")));
+        div(() => text(table.cellSelectionEnabled.map(enabled => enabled ? "cells" : "rows")));
+      });
+      div(() => {
+        div(() => text(translated("Selected cells")));
+        div(() => text(table.selectedCells.map((positions) =>
+          String(positions.filter(position => position.column >= 0).length))));
       });
       div(() => {
         div(() => text(translated("Focused row")));

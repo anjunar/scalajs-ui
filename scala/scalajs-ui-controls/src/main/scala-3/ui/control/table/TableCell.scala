@@ -16,6 +16,8 @@ class TableCell[S, T] extends AbstractComponent {
   val emptyProperty: Property[Boolean]              = Property(true)
   private val focusedState: Property[Boolean]       = Property(false)
   val focusedProperty: ReadOnlyProperty[Boolean]    = focusedState
+  private val selectedState: Property[Boolean]      = Property(false)
+  val selectedProperty: ReadOnlyProperty[Boolean]   = selectedState
   private val indexState: Property[Int]             = Property(-1)
   val indexProperty: ReadOnlyProperty[Int]          = indexState
   private var boundRow: TableRow[S] | Null          = null
@@ -55,6 +57,18 @@ class TableCell[S, T] extends AbstractComponent {
           )
         )
         classIf("ui-table-cell-focused", focusedProperty)
+        addDisposable(
+          table.selectedCellsProperty.observe(_ =>
+            selectedState.set(
+              table.selectionModel.cellSelectionEnabled &&
+                table.selectionModel.isSelected(indexProperty.get, column)
+            )
+          )
+        )
+        classIf("ui-table-cell-selected", selectedProperty)
+        addDisposable(
+          selectedProperty.observe(selected => setAttribute("aria-selected", selected.toString))
+        )
         onClick { event =>
           event.raw match {
             case mouse: org.scalajs.dom.MouseEvent if !emptyProperty.get =>
@@ -64,11 +78,19 @@ class TableCell[S, T] extends AbstractComponent {
                 .asInstanceOf[org.scalajs.dom.Element]
               if (TableRowKeyboard.isRowBackground(mouse, element) && table.canMoveColumns) {
                 mouse.stopPropagation()
-                table.selectionModel.click(
-                  indexProperty.get,
-                  mouse.ctrlKey || mouse.metaKey,
-                  mouse.shiftKey
-                )
+                if (table.selectionModel.cellSelectionEnabled)
+                  table.selectionModel.clickCell(
+                    indexProperty.get,
+                    column,
+                    mouse.ctrlKey || mouse.metaKey,
+                    mouse.shiftKey
+                  )
+                else
+                  table.selectionModel.click(
+                    indexProperty.get,
+                    mouse.ctrlKey || mouse.metaKey,
+                    mouse.shiftKey
+                  )
                 table.focusCellFromPointer(indexProperty.get, column)
               }
             case _ => ()

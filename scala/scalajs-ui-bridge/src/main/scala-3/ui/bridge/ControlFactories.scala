@@ -283,6 +283,14 @@ private[bridge] object TableViewFactory extends ComponentFactory {
           table.selectionModel.selectionMode = TableViewHandleBridge.parseSelectionMode(mode)
         })
       }
+      options.get("cellSelectionEnabled").foreach { value =>
+        val table = summon[TableView[js.Any]]
+        table.addDisposable(
+          ReactiveBridge
+            .asProperty[Boolean](value)
+            .observe(table.selectionModel.cellSelectionEnabled_=)
+        )
+      }
       options
         .get("showHeader")
         .foreach(value => TableView.showHeader = ControlFactories.bool(value))
