@@ -82,6 +82,8 @@ final class TableView[S] private (
   val selectedIndicesProperty: ReadOnlyProperty[Vector[Int]] =
     selectionModel.selectedIndicesProperty
   val selectedItemsProperty: ReadOnlyProperty[Vector[S]] = selectionModel.selectedItemsProperty
+  val selectedCellsProperty: ReadOnlyProperty[Vector[TablePosition[S]]] =
+    selectionModel.selectedCellsProperty
   val rowDoubleClickHandlerProperty: Property[Option[S => Unit]]            = Property(None)
   val onScrollToProperty: Property[Option[Int => Unit]]                     = Property(None)
   val onScrollToColumnProperty: Property[Option[TableColumn[S, ?] => Unit]] = Property(None)
@@ -660,6 +662,7 @@ final class TableView[S] private (
     val wanted = TableColumnTree.visibleLeaves(columns.toVector)
     if (visibleColumns.toVector != wanted) visibleColumns.setAll(wanted)
     focusModel.reconcileColumns()
+    selectionModel.reconcileColumns()
     bumpColumnState()
     placeholderVisibleProperty.set(renderableCount == 0 || visibleColumns.isEmpty)
     recomputeVisible()
@@ -704,6 +707,7 @@ final class TableView[S] private (
 
     DslLayer.render(this, cursor) {
       addClass("ui-table-view")
+      classIf("ui-table-view-cell-selection", selectionModel.cellSelectionEnabledProperty)
       setAttribute("role", "grid")
       setAttribute("tabindex", "0")
       addDisposable(focusedIndexProperty.observe(_ => updateActiveRow()))
@@ -1251,6 +1255,11 @@ object TableView {
     table.selectionModel.selectionMode
   def selectionMode_=(mode: TableSelectionMode)(using table: TableView[?]): Unit =
     table.selectionModel.selectionMode = mode
+
+  def cellSelectionEnabled(using table: TableView[?]): Boolean =
+    table.selectionModel.cellSelectionEnabled
+  def cellSelectionEnabled_=(enabled: Boolean)(using table: TableView[?]): Unit =
+    table.selectionModel.cellSelectionEnabled = enabled
 
   def rowFactory[S](using table: TableView[S]): Option[TableView[S] => TableRow[S]] =
     table.rowFactoryProperty.get

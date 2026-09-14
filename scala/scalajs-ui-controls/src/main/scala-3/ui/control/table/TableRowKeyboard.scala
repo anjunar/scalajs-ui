@@ -16,13 +16,25 @@ private[table] object TableRowKeyboard {
     if (key.defaultPrevented || key.isComposing || key.altKey || !table.canMoveColumns) return
     val count = math.max(0, table.items.totalLength)
     if (count == 0 || table.visibleLeafColumns.get.isEmpty) return
-    val focus    = table.focusModel
-    val previous = focus.focusedIndex
-    val shortcut = key.ctrlKey || key.metaKey
+    val focus          = table.focusModel
+    val previous       = focus.focusedIndex
+    val previousColumn = Option(focus.focusedColumn)
+    val shortcut       = key.ctrlKey || key.metaKey
     if (key.key == "ArrowLeft" || key.key == "ArrowRight") {
       key.preventDefault(); key.stopPropagation()
       if (key.key == "ArrowLeft") focus.focusLeftCell() else focus.focusRightCell()
-      Option(focus.focusedColumn).foreach(table.scrollToColumn)
+      Option(focus.focusedColumn).foreach { column =>
+        table.scrollToColumn(column)
+        if (table.selectionModel.cellSelectionEnabled && (!shortcut || key.shiftKey))
+          table.selectionModel.clickCell(
+            focus.focusedIndex,
+            column,
+            shortcut,
+            key.shiftKey,
+            previous,
+            previousColumn.orNull
+          )
+      }
       return
     }
     val next = key.key match {
@@ -42,12 +54,35 @@ private[table] object TableRowKeyboard {
           case Some(column) => focus.focus(index, column)
           case None         => focus.focus(index)
         }
-        if (!shortcut || key.shiftKey)
-          table.selectionModel.click(index, shortcut, key.shiftKey, previous)
+        if (!shortcut || key.shiftKey) {
+          if (table.selectionModel.cellSelectionEnabled)
+            Option(focus.focusedColumn).foreach(column =>
+              table.selectionModel.clickCell(
+                index,
+                column,
+                shortcut,
+                key.shiftKey,
+                previous,
+                previousColumn.orNull
+              )
+            )
+          else table.selectionModel.click(index, shortcut, key.shiftKey, previous)
+        }
         table.scrollTo(index)
       case None if key.key == " " && previous >= 0 =>
         key.preventDefault(); key.stopPropagation()
-        table.selectionModel.click(previous, shortcut, key.shiftKey, previous)
+        if (table.selectionModel.cellSelectionEnabled)
+          Option(focus.focusedColumn).foreach(column =>
+            table.selectionModel.clickCell(
+              previous,
+              column,
+              shortcut,
+              key.shiftKey,
+              previous,
+              column
+            )
+          )
+        else table.selectionModel.click(previous, shortcut, key.shiftKey, previous)
       case None if shortcut && key.key.toLowerCase == "a" =>
         key.preventDefault(); key.stopPropagation()
         table.selectionModel.selectAll()

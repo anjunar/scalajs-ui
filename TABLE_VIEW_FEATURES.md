@@ -168,7 +168,7 @@ Referenzen: [TableColumn](https://openui.io/javadoc/26/javafx.controls/javafx/sc
 | D02 | Eigene Zellinhalte, einschließlich Eingabefeldern | Vorhanden | `cell(row)` beibehalten; Lebensdauer und Fokus bei Änderungen absichern. M1. |
 | D03 | Typisierter, beobachtbarer Zellwert `S → T` | Vorhanden | Scala-Factory und Zellwert-Lookups sowie TypeScript-`valueColumn` mit beobachteten Werten/Snapshots; `getCellData` und `getCellObservableValue` erschließen dieselben sichtbaren Blattkoordinaten im TypeScript-Handle. M1. |
 | D04 | Austauschbare `cellFactory`, Default-Zelle | Vorhanden | Integrierte `TableCell[S,T]`, Default-Text und eigener `renderContent`; TypeScript bietet den typisierten Content-Callback in `valueColumn`. M1. |
-| D05 | Zellkontext und Zustände | Teilweise | Item/empty, Tabelle, Zeile, Spalte, Index und interner focused-Zustand sind angebunden. Zell-selected, öffentliche Kontextprojektion und editing fehlen noch. M2/M4. |
+| D05 | Zellkontext und Zustände | Teilweise | Item/empty, Tabelle, Zeile, Spalte, Index sowie öffentliche focused-/selected-Properties sind angebunden. Öffentliche Kontextprojektion und editing fehlen noch. M2/M4. |
 | D06 | `rowFactory` und Zeilenkontext | Vorhanden | Scala-RowFactory und TypeScript-`row`-Renderer mit item/index/empty/selected, eigenen Inhalten und optionalen Standardzellen. Stil, native Tooltips und Events über Komponentenmittel; fertige Menü-/Tooltip-Presenter bleiben M6. |
 | D07 | `refresh()` für nicht beobachtete Änderungen | Vorhanden | Scala-Methode und TypeScript-Handle, einschließlich bisheriger Zeilenrenderer; nach Unmount wirkungslos. M1. |
 | D08 | Platzhalter bei leerer Tabelle/ohne sichtbare Spalten | Vorhanden | Eigener Platzhalter erscheint auch ohne sichtbare Spalten; zu diesem Zeitpunkt werden keine Datenzeilen gerendert. Gruppenmodell später mitprüfen. M1/M5. |
@@ -181,10 +181,10 @@ Referenzen: [TableViewSelectionModel](https://openui.io/javadoc/26/javafx.contro
 | --- | --- | --- | --- |
 | S01 | Einzelauswahl, selectedIndex/selectedItem | Teilweise | Zentrales `TableSelectionModel`, kohärenter lesbarer Zustand und Scala-/TypeScript-Operationen vorhanden. Austauschbarkeit des Modells bleibt offen. M2. |
 | S02 | Mehrfachauswahl und beobachtbare Ergebnislisten | Vorhanden | Single/Multiple, selectedIndices/selectedItems, clear/selectAll/selectIndices/selectRange sowie erste/letzte/nächste/vorige Auswahl. Remote-Index-/Item-Semantik ausdrücklich dokumentiert. M2. |
-| S03 | Zellselektion und Bereiche | Offen | `TablePosition` und Fokus-Richtungsoperationen sind vorhanden; selectedCells, cellSelectionEnabled, Auswahloperationen und Rechteckauswahl fehlen. M2. |
+| S03 | Zellselektion und Bereiche | Vorhanden | `selectedCells`, `cellSelectionEnabled`, Scala-/TypeScript-Zelloperationen, inklusive Rechtecke sowie Ctrl/Cmd-/Shift-Maus- und Tastaturbedienung verwenden stabile `TablePosition`-Koordinaten. M2. |
 | S04 | Eigenständiges FocusModel | Teilweise | Unabhängiges TableFocusModel für Zeilen und stabile Blattspalten mit `TablePosition`, Richtungsoperationen und Daten-/Spaltenabgleich vorhanden. Modellaustausch fehlt. M2. |
-| S05 | Maus-/Tastaturbedienung mit Modifikatoren | Teilweise | Zeilen: Klick, Auf/Ab, Home/End, PageUp/PageDown, Ctrl/Cmd-Fokus, Shift-Ankerbereiche, Space und SelectAll; Zellen: Klick sowie Links/Rechts und spaltentreues Auf/Ab. Zellselektion und umfassende Accessibility-Abnahme fehlen. M2. |
-| S06 | Konsistenz bei Daten-/Spaltenänderungen | Teilweise | Einzel-/Mehrfachauswahl, Shift-Anker sowie Zeilen-/Zellfokus folgen Strukturänderungen; Reset, stabile optionale Keys, Spalten-Reordering/-Visibility, Duplikate, ungeladene Positionen und akzeptierter Querywechsel sind geregelt. Modellaustausch und Zellselektion bleiben offen. M0/M2/M3. |
+| S05 | Maus-/Tastaturbedienung mit Modifikatoren | Teilweise | Zeilen und Zellen: Klick, Pfeile, Home/End, PageUp/PageDown, Ctrl/Cmd-Fokus bzw. Toggle, Shift-Ankerbereiche/Rechtecke, Space und SelectAll. Umfassende Accessibility-Abnahme fehlt. M2. |
+| S06 | Konsistenz bei Daten-/Spaltenänderungen | Teilweise | Einzel-/Mehrfach- und Zell-/Rechteckauswahl, Shift-Anker sowie Zeilen-/Zellfokus folgen Strukturänderungen; Reset, stabile optionale Keys, Spalten-Reordering/-Visibility, Duplikate, ungeladene Positionen und akzeptierter Querywechsel sind geregelt. Modellaustausch bleibt offen. M0/M2/M3. |
 
 ### 3.3 Spalten und Header
 
@@ -363,7 +363,13 @@ TypeScript spiegelt das Modell mit `TablePosition`, `focusedCell`, `focusCell` u
 
 Gemountete fokussierte Zellen erhalten eine tabellenlokale Laufzeit-ID und werden direkt von `aria-activedescendant` referenziert. Bei zeilenbezogenem Fokus bleibt die Zeilen-ID maßgeblich, bei nicht gemounteten Koordinaten wird das Attribut entfernt. `.ui-table-cell-focused` liefert die sichtbare Kontur, ohne gleichzeitig die ganze Zeile zu umranden. Das ist eine testbare ARIA-Grundstruktur, keine abgeschlossene Screenreader-Abnahme.
 
-`TablePosition` ist damit umgesetzt. Zellselektion baut später auf derselben stabilen Koordinate auf; dafür sind ausgewählte Positionen, Zell-/Zeilenmodus, Rechteckbereiche und deren Shift-Anker noch zu ergänzen. Eine separate interne Identität ist nicht nötig: Zeile und Spaltenobjekt sind bereits die beiden maßgeblichen Runtime-Identitäten.
+`TablePosition` ist damit umgesetzt. Eine separate interne Identität ist nicht nötig: Zeile und Spaltenobjekt sind bereits die beiden maßgeblichen Runtime-Identitäten.
+
+**Umgesetzt im fünfzehnten Ausbau – Zell- und Rechteckauswahl:** `TableSelectionModel` verwaltet Zeilen- und Zellmodus in demselben atomaren Snapshot. `cellSelectionEnabledProperty`, `selectedCellsProperty` und die bestehenden Index-/Item-Properties bleiben dadurch jederzeit konsistent. Im Zeilenmodus enthalten ausgewählte Positionen `column = -1`; beim Umschalten werden Zeilen auf die fokussierte beziehungsweise erste sichtbare Blattspalte projiziert und Zellen beim Rückweg zu eindeutigen Zeilen zusammengeführt.
+
+Scala bietet überladene Zellvarianten von `select`, `clearAndSelect`, `clearSelection` und `isSelected` sowie den an beiden Enden inklusiven rechteckigen `selectRange`. TypeScript spiegelt dies mit `cellSelectionEnabled`, `selectedCells`, `setCellSelectionEnabled`, `selectCell`, `clearAndSelectCell`, `clearCell`, `isCellSelected` und `selectCellRange`. Eindimensionale Zeilenbereiche behalten ihr exklusives Ende. `selectAll` wählt im Mehrfach-Zellmodus den bekannten Zeilenraum mal sichtbare Blattspalten, ohne Remote-Lücken zu laden.
+
+Ein Zellklick wählt im Zellmodus die Zelle; Shift-Klick und Shift+Pfeil erweitern ab einem stabilen Zeilen-/Spaltenanker zu einem Rechteck, Ctrl/Cmd schaltet beziehungsweise bewegt nur den Fokus. Ausgewählte Zellen besitzen `selectedProperty`, `.ui-table-cell-selected` und `aria-selected`. Zeilenänderungen rebasieren jede Zellkoordinate; Reordering behält Spaltenobjekte und veröffentlicht neue sichtbare Indizes, verborgene oder entfernte Blätter löschen nur ihre betroffenen Zellen.
 
 Ein Modell besitzt den Zustand und veröffentlicht abgeleitete Properties. Die bisherigen ausgewählten Index-/Item-Zugänge werden über klar definierte kompatible Zugriffe angebunden. Keine zyklische Kette aus gegenseitig schreibenden Observern: Properties propagieren hier synchron.
 
@@ -523,9 +529,14 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 - [x] M1: Minimales TypeScript-Handle für Refresh und Dispose-Status.
 - [x] M1: `rowFactory` mit eigener Zeilenkomposition, lesbarem Kontext und TypeScript-Row-Renderer.
 - [x] M1: Spaltenbaum und Blattspaltenmodell sowie TypeScript-Zellwert-Lookups ergänzen.
-- [ ] Verbleibendes M2: Zell-/Rechteckauswahl und austauschbare Selection-/FocusModels; anschließend M4 und die offenen M5/M6-Punkte.
+- [x] M2: Zell-/Rechteckauswahl, ausgewählte Positionen, Zell-/Zeilenmodus sowie Ctrl/Cmd-/Shift-Bedienung in Scala und TypeScript.
+- [ ] Verbleibendes M2: austauschbare Selection-/FocusModels; anschließend M4 und die offenen M5/M6-Punkte.
 
 ## 6. Verifikation
+
+Abnahme des fünfzehnten Ausbaus am 14.09.2026: vollständiges Scala-Gate mit **433 Tests**, Bridge-Full-Link und npm-Gates für Controls (79 Integrationstests + 3 Paket-Consumer), Core (114 + 8), CSS/Design sowie Demo (Typecheck, Client-/SSR-Builds, Eine-Runtime-Nachweis und 31 Routen) grün. Drei neue Scala-Fälle prüfen Modusprojektion, inklusive Rechtecke, Zeilen-Rebasing, stabile Spaltenidentität bei Reordering/Visibility und Mausanker; der neue Bridge-Fall deckt öffentliche Zelloperationen, unabhängige Snapshots, Pointer-/Tastaturrechtecke und reaktive Modi ab. Der Paket-Consumer kompiliert die vollständige TypeScript-API strikt.
+
+Mit dem Computer-Use-Skill wurde im echten Chromium Zellmodus aktiviert, eine einzelne Zelle gewählt und per Shift+Ab/Rechts zu einem 2×2-Rechteck erweitert. Anzeige, ausgewählte/fokussierte Koordinaten, vier ausschließlich als Zellen gemeldete `aria-selected`-Elemente und die sichtbare Kontur stimmten überein. Das Ausblenden der Autorenspalte entfernte nur deren zwei Zellen und behielt die beiden Jahreszellen; die Browserkonsole enthielt keine Fehler. Native OS-IME- und vollständige Screenreader-Abnahme bleiben offen.
 
 Abnahme des vierzehnten Ausbaus am 14.09.2026: vollständiges Scala-Gate mit **430 Tests**, Bridge-Full-Link und npm-Gates für Controls (78 Integrationstests + 3 Paket-Consumer), Core (114 + 8), CSS/Design sowie Demo (Typecheck, Client-/SSR-Builds, Eine-Runtime-Nachweis und 31 Routen) grün. Zwei neue Scala-Fälle prüfen kohärente Zellpositionen, unabhängige Auswahl, Richtungsgrenzen, Zeilen-Rebasing, Spalten-Reordering/-Visibility und ungültige Fremdspalten. Der neue Bridge-Fall prüft dieselben Operationen über das TypeScript-Handle sowie Zellklick, aktive IDs und Disposal. Mit dem Computer-Use-Skill wurde im echten Chromium eine Zelle angeklickt und per Rechts/Ab bewegt; Anzeige, Zeilenauswahl, DOM-Fokus, genau eine fokussierte Zelle, `aria-activedescendant` auf deren `gridcell` und die 2-px-Kontur stimmten überein. Das Verbergen der fokussierten Autorenspalte erhielt den Zeilenfokus und entfernte die Zellkoordinate; keine Browserfehler. Native OS-IME- und Screenreader-Abnahme bleiben offen.
 

@@ -46,7 +46,7 @@ import {
 import { div, text } from "@anjunar/scalajs-ui-core";
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
 import { carousel, columnGroup, dataGrid, remoteSource, tab, tableView, tabs, valueColumn, virtualList } from "../src/index.js";
-import type { ColumnResizePolicy, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
+import type { ColumnResizePolicy, TablePosition, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
 
 const linkedArtifact = resolve(process.cwd(), "../scalajs-ui-bridge/dist/fullopt/main.js");
 
@@ -840,6 +840,81 @@ describe("table-view", () => {
         table.focusCell(row, column);
         expect(table.focusedCell.get).toBeNull();
       }
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("selects cells, inclusive rectangles and stable columns through API, pointer and keyboard", () => {
+    const showMiddle = property(true);
+    const cellMode = property(true);
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty([0, 1, 2, 3]), [
+        valueColumn("A", row => `a${row}`),
+        valueColumn("B", row => `b${row}`, { visible: showMiddle }),
+        valueColumn("C", row => `c${row}`),
+      ], { paging: true, selectionMode: "multiple", cellSelectionEnabled: cellMode });
+    });
+    const positions = (): TablePosition[] => table.selectedCells.get.map(value => ({ ...value }));
+    const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+    const cells = (): HTMLElement[][] => Array.from(root.querySelectorAll<HTMLElement>(".ui-table-row"))
+      .map(row => Array.from(row.querySelectorAll<HTMLElement>(".ui-table-cell")));
+    const key = (value: string, options: KeyboardEventInit = {}): void => {
+      grid.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: value, ...options,
+      }));
+    };
+    try {
+      expect(table.cellSelectionEnabled.get).toBe(true);
+      table.selectCellRange(1, 2, 3, 0);
+      expect(positions()).toEqual(Array.from({ length: 9 }, (_, index) => ({
+        row: 1 + Math.floor(index / 3), column: index % 3,
+      })));
+      expect(table.selectedIndices.get).toEqual([1, 2, 3]);
+      expect(table.isCellSelected(2, 1)).toBe(true);
+      table.clearCell(2, 1);
+      expect(table.isCellSelected(2, 1)).toBe(false);
+      table.clearAndSelectCell(0, 0);
+      expect(positions()).toEqual([{ row: 0, column: 0 }]);
+      table.selectCell(1, 1);
+      expect(positions()).toEqual([{ row: 0, column: 0 }, { row: 1, column: 1 }]);
+
+      table.clearSelection();
+      cells()[1]![1]!.click();
+      cells()[3]![2]!.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+      expect(positions()).toEqual([
+        { row: 1, column: 1 }, { row: 1, column: 2 },
+        { row: 2, column: 1 }, { row: 2, column: 2 },
+        { row: 3, column: 1 }, { row: 3, column: 2 },
+      ]);
+      expect(root.querySelectorAll(".ui-table-cell-selected")).toHaveLength(6);
+
+      table.clearSelection(); table.focusCell(1, 1); grid.focus();
+      key("ArrowRight");
+      key("ArrowDown", { shiftKey: true });
+      key("ArrowLeft", { shiftKey: true });
+      expect(positions()).toEqual([
+        { row: 1, column: 1 }, { row: 1, column: 2 },
+        { row: 2, column: 1 }, { row: 2, column: 2 },
+      ]);
+      key("ArrowLeft", { ctrlKey: true });
+      expect(positions()).toHaveLength(4);
+
+      expect(table.moveColumn(2, 0)).toBe(true);
+      expect(positions()).toEqual([
+        { row: 1, column: 0 }, { row: 1, column: 2 },
+        { row: 2, column: 0 }, { row: 2, column: 2 },
+      ]);
+      showMiddle.set(false);
+      expect(positions()).toEqual([{ row: 1, column: 0 }, { row: 2, column: 0 }]);
+
+      cellMode.set(false);
+      expect(positions()).toEqual([{ row: 1, column: -1 }, { row: 2, column: -1 }]);
+      table.setCellSelectionEnabled(true);
+      expect(table.cellSelectionEnabled.get).toBe(true);
+      expect(positions()).toEqual([{ row: 1, column: 1 }, { row: 2, column: 1 }]);
+      table.selectCell(-1, 0);
+      expect(positions()).toEqual([]);
     } finally { app.dispose(); root.remove(); }
   });
 

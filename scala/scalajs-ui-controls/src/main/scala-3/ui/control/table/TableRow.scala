@@ -91,7 +91,10 @@ class TableRow[S] private[control] (
         val table = requireTableView()
         addDisposable(
           table.selectedIndicesProperty.observe(_ =>
-            selectedState.set(table.selectionModel.isSelected(indexProperty.get))
+            selectedState.set(
+              !table.selectionModel.cellSelectionEnabled &&
+                table.selectionModel.isSelected(indexProperty.get)
+            )
           )
         )
         classIf("ui-table-row-selected", selectedProperty)
