@@ -1,6 +1,6 @@
 # TableView: Feature-Stand und Implementierungsplan
 
-Stand: 10.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, RowFactory, Mehrfachauswahl, Zeilen-/Spaltennavigation, Spalten-Resizing, Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung sowie Remote-Mehrspaltensortierung · Referenz: JavaFX 26.
+Stand: 13.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, stabile Zeilenschlüssel, RowFactory, Mehrfachauswahl, Zeilen-/Spaltennavigation samt Ereignissen, Spalten-Resizing, Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung sowie Remote-Mehrspaltensortierung · Referenz: JavaFX 26.
 
 Dieses Dokument beschreibt, welche Funktionen unsere TableView bereits unterstützt und wie wir die fehlenden Fähigkeiten der JavaFX-TableView ergänzen. Es ist ein Implementierungsplan; als **geplant** bezeichnete Modelle, Methoden und Dateien existieren noch nicht.
 
@@ -9,6 +9,8 @@ Dieses Dokument beschreibt, welche Funktionen unsere TableView bereits unterstü
 Ziel ist funktionale Parität für Datenbindung, Zellen und Zeilen, Auswahl, Fokus, Sortierung, Editing und Spaltenbedienung. Die Scala-DSL und die TypeScript-Fassade sollen dieselben Fähigkeiten derselben Scala.js-Runtime anbieten. JVM-Binärkompatibilität, JavaBeans-Reflection und eine Kopie des JavaFX-Scenegraphs sind kein Ziel.
 
 **Vereinbarte Abgrenzung:** Sortierung und Filterung laufen ausschließlich über die RemoteDataList (im Repository `RemoteListProperty`/`RemoteListDataSource`). Lokale Sortier-/Filteransichten, Comparatoren und Mutation-Policies sind aus dem Zielumfang entfernt. Die Tabelle liefert Sortierschlüssel und Richtungen; Filter gehören zur Remote-Abfrage der Anwendung. Bereits unterstützte lokale Listen, deren Strukturänderungen und eingebettete Editoren bleiben unverändert unterstützt.
+
+**Vereinbarte Abgrenzung:** Das bei `tableView(source)` übergebene Quellenobjekt bleibt für die Lebensdauer der Tabelle fest. Ein Austausch des gesamten lokalen/Remote-Quellenobjekts über `itemsProperty` ist nicht erforderlich. Änderungen, Resets, Reloads und Remote-Abfragewechsel innerhalb dieser Quelle bleiben vollständig im Umfang; die Tabelle übernimmt oder entsorgt eine vom Aufrufer gelieferte Quelle nicht.
 
 Die öffentliche [TableView-API von JavaFX 26](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/TableView.html) bildet den Referenzumfang. Zell- und Spaltenverträge werden zusätzlich gegen deren eigene APIs geprüft. Geerbte Darstellungsfunktionen werden auf DOM, Komponenten-Slots und Web-CSS abgebildet.
 
@@ -26,7 +28,7 @@ Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Er
 - TypeScript: `valueColumn(text, accessor, options)` für beobachtete oder konstante Werte und typisierte Renderer. Der nachfolgende Ausbau ergänzt das minimale Refresh-Handle; Spalten-Handles und Zellwert-Lookups bleiben offen.
 - Ein Remote-Header mit `sortable=false` löst auch bei vorhandenem `sortKey` keine Sortierung mehr aus.
 
-**Grenze dieses Pakets:** keine Identitätserhaltung über Insert-/Sortierpermutationen, kein `rowKey`, Quellentausch, Spaltenbaum, Selection-/FocusModel oder tabellenverwaltetes Editing. M0 und M1 sind damit noch nicht vollständig abgeschlossen. Beim tatsächlichen Austritt aus dem virtuellen Fenster wird eine Zelle weiterhin entsorgt. Fokus/Cursor sind automatisiert in jsdom geprüft; die reale Browser-/IME-/Screenreader-Abnahme steht noch aus.
+**Damals geltende Grenze dieses Pakets:** keine Identitätserhaltung über Insert-/Sortierpermutationen, kein `rowKey`, Spaltenbaum, Selection-/FocusModel oder tabellenverwaltetes Editing. Spätere Ausbauten ergänzen die inzwischen vorhandenen Teile. Beim tatsächlichen Austritt aus dem virtuellen Fenster wird eine Zelle weiterhin entsorgt. Fokus/Cursor sind automatisiert in jsdom geprüft; die reale Browser-/IME-/Screenreader-Abnahme steht noch aus.
 
 ### Implementiert: Spaltensichtbarkeit und erstes TypeScript-Handle
 
@@ -44,7 +46,7 @@ Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Er
 ### Implementiert: konsistente Einzelauswahl und absolute Remote-Ereignisse
 
 - Lokale Insert-/Remove-/Patch-Ereignisse verschieben die Auswahl mit dem ausgewählten Vorkommen, auch bei Duplikaten. Entfernen oder Ersetzen dieses Vorkommens löscht die Auswahl. `UpdateAt` behält dagegen die Position und übernimmt den ausdrücklich aktualisierten Datensatz.
-- Ein lokaler Reset erhält die Auswahl nur, wenn genau dieselbe Objektinstanz eindeutig wiedergefunden wird. Gleiche Werte in neuen Objekten oder mehrfach vorkommende identische Instanzen sind ohne Vorkommensabbildung nicht eindeutig und löschen die Auswahl. Kein `rowKey` und keine allgemeine Permutations-API.
+- Ein lokaler Reset erhält ohne den später ergänzten `rowKey` die Auswahl nur, wenn genau dieselbe Objektinstanz eindeutig wiedergefunden wird. Gleiche Werte in neuen Objekten oder mehrfach vorkommende identische Instanzen sind ohne Vorkommensabbildung nicht eindeutig und löschen die Auswahl. Keine allgemeine Permutations-API.
 - Index und Item bilden einen gemeinsamen Zustand. Ungültige Indizes werden zu `-1`/`null`; ein gültiger ungeladener Remote-Index bleibt ausgewählt mit Item `null`. Nachladen dieses Bereichs löst das Item auf, ohne die Auswahl zu verschieben.
 - `RemoteListDataSource.observeIndexedChanges` unterscheidet `RangeLoaded`, `Structural` mit absoluten Indizes und `Reset`. Die gemeinsame Virtualisierung verarbeitet diese abgeschlossenen Änderungen; Zwischenstände von Cache und Paging-Metadaten lösen keine verfrühte Item-Aktualisierung aus. Erfolgreiche Antworten werden vor `loading=false` installiert.
 - Erfolgreich übernommene Remote-Replacements (Reload/Sortierung) und Clear löschen die Auswahl. Während einer laufenden oder fehlgeschlagenen Ersatzabfrage bleiben bisherige Daten und Auswahl erhalten. Veraltete Antworten veröffentlichen keine neuen Indexereignisse.
@@ -52,7 +54,15 @@ Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Er
 
 **Migration Scala:** `selectedIndexProperty` und `selectedItemProperty` sind jetzt `ReadOnlyProperty`. Direkte Schreibzugriffe durch `select(index)`, `select(item)` bzw. `clearSelection()` ersetzen. Beobachter sehen stets ein zusammengehöriges Paar; abgeleitete Properties können auch bei unverändertem Einzelwert benachrichtigen. Item-Auswahl sucht das erste gleiche geladene Item, lädt nichts nach und kann den gesamten Indexraum durchsuchen. Für große Remote-Quellen deshalb einen bekannten absoluten Index verwenden.
 
-**Grenze dieses Pakets:** Noch kein austauschbares SelectionModel, keine Mehrfach-/Zellselektion und kein FocusModel. Das nachfolgende Mehrfachauswahl-Paket ergänzt ein zentrales Zeilenauswahlmodell. Erhaltene Auswahl bedeutet nicht erhaltene DOM-/Editorinstanzen über Datenverschiebungen. Quellentausch und identitätsbasierte Wiederherstellung über Remote-Abfragen bleiben offen.
+**Damals geltende Grenze dieses Pakets:** Noch kein austauschbares SelectionModel, keine Mehrfach-/Zellselektion und kein FocusModel. Nachfolgende Pakete ergänzen Mehrfachauswahl, Zeilenfokus und `rowKey`. Erhaltene Auswahl bedeutet nicht erhaltene DOM-/Editorinstanzen über Datenverschiebungen.
+
+### Implementiert: stabile Zeilenidentität bei Ergebniswechseln
+
+- Scala `rowKey = row => ...` und TypeScript `TableViewOptions.rowKey` definieren optional einen stabilen, innerhalb eines Ergebnisses eindeutigen Entitätsschlüssel.
+- Lokale Resets und akzeptierte Remote-Replacements lösen Auswahl, führenden Eintrag, Shift-Anker und logischen Fokus anhand dieses Schlüssels auf die neue absolute Position auf. Die veröffentlichten Items stammen aus dem neuen Ergebnis.
+- Die Auflösung durchsucht den bekannten Indexraum ausschließlich über bereits geladene Werte. Sie löst keinen Remote-Fetch aus. Ungeladene, doppelte oder durch einen fehlerhaften Key-Accessor nicht auswertbare Identitäten werden gelöscht, statt auf Verdacht einem Vorkommen zugeordnet zu werden.
+- Ohne `rowKey` bleibt der bisherige Vertrag erhalten: lokale Resets dürfen eine eindeutige Objektinstanz bewahren; akzeptierte Remote-Replacements löschen Auswahl und Fokus. Fehlerhafte oder veraltete Remote-Antworten verändern den Zustand weiterhin nicht.
+- Das Quellenobjekt selbst ist vereinbarungsgemäß nicht austauschbar. Der Key-Vertrag gilt für Resets, Reloads und Abfragewechsel innerhalb der beim Mount übergebenen Quelle.
 
 ### Implementiert: Zeilen-Mehrfachauswahl und Mausmodifikatoren
 
@@ -67,7 +77,7 @@ Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Er
 
 **Randfälle/Migration:** Wechsel auf Single behält nur den führenden Eintrag. Ein ungültiges `select(index)`/`selectIndex` löscht weiterhin wie bisher die Auswahl (UI-Kompatibilitätsregel); `selectIndices` ignoriert ungültige/duplizierte Indizes, Bereiche werden auf den gültigen Indexraum begrenzt. Ungültige JavaScript-Bereichsgrenzen wie Brüche/NaN werden ignoriert. `selectAll` ist im Single-Modus wirkungslos. Nach Unmount sind Mutationen wirkungslos. Alle abgeleiteten Properties können auch bei unverändertem Einzelwert benachrichtigen; Beobachter lesen stets einen kohärenten Modellzustand.
 
-**Weiter offen:** Austausch eigener SelectionModels, Zell-/Rechteckauswahl, Zellfokus/FocusModel-Austausch, Scroll-Events und vollständiger zugänglicher Grid-Vertrag. Maus-Mehrfachauswahl ist nicht gleichbedeutend mit abgeschlossener Accessibility-Abnahme. Referenz für Ergebnislisten und Bereichsoperationen: [MultipleSelectionModel, JavaFX 26](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/MultipleSelectionModel.html).
+**Weiter offen:** Austausch eigener SelectionModels, Zell-/Rechteckauswahl, Zellfokus/FocusModel-Austausch und vollständiger zugänglicher Grid-Vertrag. Maus-Mehrfachauswahl ist nicht gleichbedeutend mit abgeschlossener Accessibility-Abnahme. Referenz für Ergebnislisten und Bereichsoperationen: [MultipleSelectionModel, JavaFX 26](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/MultipleSelectionModel.html).
 
 ### Implementiert: programmatische Zeilennavigation
 
@@ -77,7 +87,7 @@ Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Er
 - SSR verändert seinen deterministischen Ausschnitt nicht. Browser-Aufrufe während Komposition/Hydration warten auf abgeschlossene Hydration und einen messbaren Viewport mit sichtbaren Spalten. Die letzte gültige Anforderung gewinnt, wird vor Ausführung gegen den aktuellen Umfang geprüft und überschreibt die anfängliche Cookie-/URL-Scrollwiederherstellung. Unmount verhindert spätere Ausführung.
 - Die Demo bietet Sprünge zur 500. Zeile, zur ersten und zur führenden ausgewählten Zeile. Ein Sprung wählt nicht automatisch das Ziel aus.
 
-**Abgrenzung:** Kein `onScrollTo`-Event und kein Ladeabschluss-Promise. V03 bleibt deshalb teilweise offen. Der Sichtbarkeitsvertrag orientiert sich an [JavaFX `scrollTo`](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/TableView.html#scrollTo(int)); SSR, Paging und Remote-Lücken sind UI-spezifische Ergänzungen. Ein ausstehender Index ist eine Position der dann aktuellen Ansicht, kein stabiler Datensatz-Key.
+`onScrollTo` meldet eine gültige Zeilenanforderung genau einmal, nachdem sie einen messbaren Browser-Viewport erreicht und angewendet wurde. Ungültige, überschriebene, SSR- oder nach Disposal ausstehende Anforderungen erzeugen kein Ereignis. Das Ereignis ist eine Anwendungsbenachrichtigung und kein Ladeabschluss-Promise. Der Sichtbarkeitsvertrag orientiert sich an [JavaFX `scrollTo`](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/TableView.html#scrollTo(int)); SSR, Paging und Remote-Lücken sind UI-spezifische Ergänzungen. Ein ausstehender Index ist eine Position der dann aktuellen Ansicht, kein stabiler Datensatz-Key.
 
 ### Implementiert: horizontale Spaltennavigation (elfter Ausbau)
 
@@ -86,7 +96,7 @@ Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Er
 - SSR ist ein No-op. Bei Hydration/verdecktem Layout wartet der letzte gültige Auftrag auf einen messbaren Viewport. Er speichert eine Spaltenreferenz und folgt ihr bei Reordering; vor Ausführung werden Sichtbarkeit und Zugehörigkeit erneut geprüft. Ungültige Aufrufe überschreiben keinen gültigen Auftrag, Disposal löscht ihn. Zeilen- und Spaltenaufträge sind unabhängig.
 - Die TypeScript-Demo bietet Schalter für erste/letzte sichtbare Spalte. Für sichtbares horizontales Scrollen freie Breiten wählen und Spalten über die Tabellenbreite hinaus verbreitern. Die Navigation erzwingt keinen Policy-Wechsel.
 
-**Weiter offen:** `onScrollToColumn`-Events, Gruppen und RTL-Navigation. V04 bleibt wegen der Events teilweise offen.
+`onScrollToColumn` meldet entsprechend die tatsächlich angewendete Spaltenanforderung. TypeScript erhält den sichtbaren Spaltenindex zum Ausführungszeitpunkt; Scala die stabile Spaltenreferenz. Überschriebene, inzwischen versteckte/entfernte, ungültige, SSR- oder entsorgte Anforderungen bleiben stumm. Gruppen und RTL-Navigation bleiben offen.
 
 **Abnahme am 09.09.2026:** Vollständiges Scala-Gate (`Test/testOnly *`), Bridge-Full-Link und Scala-Demo-Fast-Link grün. npm-Gates Controls (60 Integrationstests + 3 Paket-Consumer), Core (114 + 8) und Demo (Client/SSR, Eine-Runtime-Nachweis, 31 Routen) grün. Ein neuer Scala-SSR-Test und sieben neue Integrationstestfälle prüfen Navigation, aktuelle Breiten/Reihenfolge, versteckte Spalten, Editor-/Auswahlerhalt, leere/headerlose Tabellen, native Begrenzung, kein Remote-Nachladen, unabhängige Zeilennavigation, Hydration, verdecktes Layout und Disposal. Im echten Browser: 1.000 px breite Tabelle in 846 px Viewport, Sprünge zwischen horizontal 0 und 154 px, identische Header-/Zellpositionen und bei Zeile 500 unverändert vertikal 19.783 px; keine Browserfehler.
 
@@ -136,11 +146,11 @@ Für eigene Inhalte `renderCells` ersetzen oder ergänzen. TypeScript-Beispiel u
 ### Technische Voraussetzungen und Bearbeitungsstand
 
 1. **Zeilenlebensdauer – Scrollfenster behoben:** Der frühere `visibleRowsProperty.setAll(...)`-Reset wurde durch differenzielle Insert-/Remove-/Update-Ereignisse ersetzt. [Foreach.scala](scala/scalajs-ui-core/src/main/scala-3/ui/core/statement/Foreach.scala) behält dadurch überlappende Slots. Datensatzverschiebungen und Sortierpermutationen bleiben gesondert zu lösen.
-2. **Einzelauswahl – korrigiert:** Strukturänderungen erhalten das ausgewählte Vorkommen; Reset erhält nur eindeutig wiedergefundene Instanzen. Index und Item werden gemeinsam normalisiert. Stabile Keys, allgemeine Permutationsabbildung und Modell-/Quellentausch bleiben offen.
+2. **Einzelauswahl – korrigiert:** Strukturänderungen erhalten das ausgewählte Vorkommen; Reset erhält ohne `rowKey` nur eindeutig wiedergefundene Instanzen. Index und Item werden gemeinsam normalisiert. Stabile Keys sind vorhanden; allgemeine Permutationsabbildung und Modellaustausch bleiben offen.
 3. **Spaltenlebensdauer – behoben:** Alle Listenänderungen durchlaufen Attach/Detach; entfernte Spalten verlieren die Tabellenlistener. Mehrfachzuordnungen werden vor der Mutation abgewiesen.
 4. **Sortierberechtigung – behoben:** Darstellung und `toggleRemoteSort()` verwenden jetzt beide `isRemoteSortable()`.
 5. **Remote-Koordinaten – expliziter Vertrag:** `itemAt(index)` und `observeIndexedChanges` verwenden absolute Positionen. Das ältere `observeChanges` bleibt ein dichter Cache-Ereignisstrom und darf nicht für Tabellenpositionen verwendet werden. Eigene Remote-Quellen müssen den neuen Vertrag implementieren; der Default invalidiert konservativ die Auswahl (siehe 4.3).
-6. **Datenquelle ist lesend:** `ListDataSource` verspricht weder Mutation noch Sortierung; die Basisklasse hält die Quelle derzeit als `val`. Quellentausch und Schreibzugriffe benötigen explizite Verträge.
+6. **Datenquelle ist lesend:** `ListDataSource` verspricht weder Mutation noch Sortierung; die Basisklasse hält die Quelle vereinbarungsgemäß für die Komponentenlebensdauer fest. Schreibzugriffe benötigen explizite Verträge.
 
 Die offenen Befunde stammen aus der Quellprüfung. Tests des gelieferten Grundlagenpakets stehen in Abschnitt 6; sie ersetzen nicht die vollständige Interaktionsabnahme aller geplanten Modelle.
 
@@ -154,7 +164,7 @@ Referenzen: [TableColumn](https://openui.io/javadoc/26/javafx.controls/javafx/sc
 
 | ID | Funktion | Stand | Umsetzung |
 | --- | --- | --- | --- |
-| D01 | Beobachtbare Items und Austausch der Quelle | Teilweise | Listenänderungen funktionieren. `itemsProperty`/Quellentausch mit sauberem Umhängen aller Observer ergänzen. M0/M1. |
+| D01 | Beobachtbare Items | Vorhanden | Lokale Änderungen sowie Remote-Ranges/Resets werden beobachtet. Das Quellenobjekt bleibt vereinbarungsgemäß für die Tabellenlebensdauer fest. M0/M1. |
 | D02 | Eigene Zellinhalte, einschließlich Eingabefeldern | Vorhanden | `cell(row)` beibehalten; Lebensdauer und Fokus bei Änderungen absichern. M1. |
 | D03 | Typisierter, beobachtbarer Zellwert `S → T` | Vorhanden | Scala-Factory und Zellwert-Lookups sowie TypeScript-`valueColumn` mit beobachteten Werten/Snapshots. Lookup-Handles für TypeScript fehlen noch. M1. |
 | D04 | Austauschbare `cellFactory`, Default-Zelle | Vorhanden | Integrierte `TableCell[S,T]`, Default-Text und eigener `renderContent`; TypeScript bietet den typisierten Content-Callback in `valueColumn`. M1. |
@@ -174,7 +184,7 @@ Referenzen: [TableViewSelectionModel](https://openui.io/javadoc/26/javafx.contro
 | S03 | Zellselektion und Bereiche | Offen | `TablePosition`, selectedCells, cellSelectionEnabled, Richtungsoperationen und Rechteckauswahl. M2. |
 | S04 | Eigenständiges FocusModel | Teilweise | Unabhängiges TableFocusModel für Zeilen mit fokussiertem Index/Item, Next/Previous und Datenabgleich vorhanden. Zellpositionen und Modellaustausch fehlen. M2. |
 | S05 | Maus-/Tastaturbedienung mit Modifikatoren | Teilweise | Zeilen: Klick, Pfeile, Home/End, PageUp/PageDown, Ctrl/Cmd-Fokus, Shift-Ankerbereiche, Space und SelectAll vorhanden. Zellnavigation und umfassende Accessibility-Abnahme fehlen. M2. |
-| S06 | Konsistenz bei Daten-/Spaltenänderungen | Teilweise | Einzel-/Mehrfachauswahl und Shift-Anker folgen Strukturänderungen; Reset, Duplikate, ungeladene Positionen und akzeptierter Querywechsel geregelt. Keys, Quellen-/Modellwechsel und Zellselektion bleiben offen. M0/M2/M3. |
+| S06 | Konsistenz bei Daten-/Spaltenänderungen | Teilweise | Einzel-/Mehrfachauswahl, Shift-Anker und Fokus folgen Strukturänderungen; Reset, stabile optionale Keys, Duplikate, ungeladene Positionen und akzeptierter Querywechsel sind geregelt. Modellaustausch und Zellselektion bleiben offen. M0/M2/M3. |
 
 ### 3.3 Spalten und Header
 
@@ -202,7 +212,7 @@ Sortierung und Filterung werden ausschließlich an die Remote-Datenquelle delegi
 | O01 | Remote-Sortierung über Header | Vorhanden | Flagprüfung und gemeinsamer Remote-Befehl mit Paging-/Scroll-Reset für Maus, Tastatur und API. M3. |
 | O03 | Mehrspaltensortierung, sortOrder/sortType | Teilweise | Shift-Bedienung, Prioritäten, Richtungszyklus, lesbares sorting und atomarer setSortOrder-Befehl mit expliziten Richtungen vorhanden. Eigenständige beschreibbare sortOrder/sortType-Properties bleiben offen. M3. |
 | O04 | `sort()`, sortPolicy, onSort | Teilweise | sort() zum erneuten Laden sowie setSortOrder/toggleSort/clearSort nutzen denselben Remote-Befehl wie Header. Austauschbare Policy, Events und transaktionaler Fehler-/Rollback-Vertrag bleiben offen. M3. |
-| O05 | Zusammenarbeit mit Remote-Sortier-/Filterabfragen | Teilweise | Remote-Query und akzeptierte Ergebnisgeneration bilden den Vertrag; stabile Identitäten und Zustandsregeln für Abfragewechsel vervollständigen. M3. |
+| O05 | Zusammenarbeit mit Remote-Sortier-/Filterabfragen | Vorhanden | Remote-Query und akzeptierte Ergebnisgeneration bilden den Vertrag; `rowKey` kann geladene Auswahl/Fokus über Abfragewechsel erhalten, ohne Key wird zurückgesetzt. Fehler und veraltete Antworten überschreiben den Zustand nicht. M3. |
 
 ### 3.5 Editing
 
@@ -222,8 +232,8 @@ Referenzen: [Cell-Editierablauf](https://openui.io/javadoc/26/javafx.controls/ja
 | --- | --- | --- | --- |
 | V01 | Virtuelle Zeilen mit fester Höhe | Vorhanden | Überlappende absolute Slots mit derselben Item-Instanz bleiben erhalten. Datensatzbewegungen sind nicht Bestandteil dieses Vertrags. M1. |
 | V02 | Variable Zeilenhöhen/fixedCellSize-Semantik | Teilweise | Heutiger Alias setzt nur rowHeight. Gemessene Zeilen ergänzen; positive feste Höhe von variabler Höhe unterscheiden. M6. |
-| V03 | `scrollTo(index/item)`, `onScrollTo` | Teilweise | Zeilennavigation in Scala und TypeScript, bekannte ungeladene Remote-Positionen, Paging, Header und Hydration vorhanden. `onScrollTo` bleibt offen. M2. |
-| V04 | Horizontales Scrollen und Spaltennavigation | Teilweise | Header-Synchronisation, Policy-abhängiges overflow und `scrollToColumn`/`scrollToColumnIndex` in Scala bzw. Index-API in TypeScript vorhanden. `onScrollToColumn` und RTL fehlen. M2/M5. |
+| V03 | `scrollTo(index/item)`, `onScrollTo` | Vorhanden | Zeilennavigation und Ausführungsbenachrichtigung in Scala/TypeScript, bekannte ungeladene Remote-Positionen, Paging, Header und Hydration vorhanden. M2. |
+| V04 | Horizontales Scrollen und Spaltennavigation | Teilweise | Header-Synchronisation, Policy-abhängiges overflow, Navigation und Ausführungsbenachrichtigung in Scala/TypeScript vorhanden. RTL fehlt. M2/M5. |
 | V05 | Zeilen-/Zellzustände und CSS-Anpassung | Teilweise | selected/odd/even/loading und Zeilen-focused vorhanden; Zellzustände, editing/disabled und Spaltenstil ergänzen. M2/M4/M6. |
 | V06 | Zugänglicher Tabellen-/Grid-Vertrag | Teilweise | Rollen, Indizes/Zähler, aria-selected, Zeilenfokus sowie primäres aria-sort, Richtungs-/Prioritätsbeschreibung und aria-busy vorhanden. Zellnavigation und umfassende Screenreader-Abnahme fehlen. M2/M5/M6. |
 | V07 | Angepasste Darstellung, Menüs, Tooltips, RTL | Teilweise | Eigene Zellkomposition vorhanden. Zeilen-/Header-Slots, spiegelbare Navigation und Overlay-Integration vervollständigen. M5/M6. |
@@ -245,7 +255,7 @@ Die folgenden Bausteine beschreiben die Zielarchitektur. `TableSelectionModel`, 
 | `TableHeader[S]` / `TableBehavior[S]` | Headerdarstellung und Übersetzung von Pointer-/Keyboard-Eingaben in Modelloperationen. |
 | Weiterentwickelte `TableRow` / `TableCell` | Bindbare Darstellung mit klarer Lebensdauer; keine eigene konkurrierende Auswahl-/Sortierlogik. |
 
-Diese tabellenspezifischen Bausteine gehören nach `ui.control.table`. Quellentausch, allgemeine Datenansichten oder generische Geometrie gehören bei tatsächlichem gemeinsamen Bedarf in `scalajs-ui-core` bzw. `ui.control.virtualized`.
+Diese tabellenspezifischen Bausteine gehören nach `ui.control.table`. Allgemeine Datenansichten oder generische Geometrie gehören bei tatsächlichem gemeinsamen Bedarf in `scalajs-ui-core` bzw. `ui.control.virtualized`.
 
 [build.sbt](build.sbt) legt seit dem zehnten Ausbau fest: Controls hängen produktiv an Core und Viewport; Forms hängen an Controls und Viewport. Das Spaltenmenü verwendet auf ausdrücklichen Wunsch den bestehenden Viewport-/Overlay-Pfad, statt eine zweite Popup-Implementierung einzuführen. Ein aktiviertes Menü benötigt einen umgebenden Viewport; Tabellen ohne Menü weiterhin nicht. **Controls dürfen nicht für Zell-Editoren von Forms abhängig werden**, da sonst ein Zyklus entsteht. Die Editorverträge bleiben in Controls; Standardeditoren auf Basis der vorhandenen Input-/ComboBox-Controls und ihrer Bindings gehören nach Forms oder in ein Integrationsmodul.
 
@@ -307,11 +317,11 @@ Für sichtbare Zeilen eine differenzielle Aktualisierung implementieren: unverä
 
 Eingebettete Editoren erhalten ihre bisherige Semantik. Tabellenverwaltete Editoren erhalten später die ausdrücklich definierte Regel für tatsächlichen Zeilenaustritt aus dem virtuellen Fenster. Eine Wiederverwendung von Zeilen für andere Items ist erst zulässig, wenn alle zustandsabhängigen Bindungen, Klassen und Listener korrekt neu gebunden werden können.
 
-### 4.3 Datenidentität, Koordinaten und Quellentausch
+### 4.3 Datenidentität und Koordinaten
 
 Intern **Zeilenidentität** und **Index im aktuellen Abfrageergebnis** auseinanderhalten. Öffentliche Tabellenpositionen bezeichnen bei Remote-Daten absolute Positionen im aktuellen Abfrageergebnis, nicht Indizes im lückenhaften Cache. Schreibzugriffe benötigen Datensatzidentität und Abfragegeneration; lokale Sortier-/Filtertransformationen werden nicht eingeführt.
 
-Ein optionaler `rowKey: S => K` erlaubt stabile Entitätsidentität. Für lokale Listen ohne Key müssen Vorkommen auch bei gleichen Werten unterscheidbar sein; `equals` allein reicht nicht. Für Remote-Daten eine Abfragegeneration und ungeladene Positionen separat modellieren. `selectedItems` darf keine erfundenen Objekte für ungeladene Positionen liefern.
+Ein optionaler `rowKey: S => Any` erlaubt stabile Entitätsidentität. Für lokale Listen ohne Key werden Vorkommen auch bei gleichen Werten durch Objektidentität unterschieden; `equals` allein reicht nicht. Für Remote-Daten bleiben Abfragegeneration und ungeladene Positionen separat. `selectedItems` erfindet keine Objekte für ungeladene Positionen.
 
 Der implementierte Vertrag in [RemoteListChange.scala](scala/scalajs-ui-core/src/main/scala-3/ui/core/remote/RemoteListChange.scala) trennt diese Vorgänge:
 
@@ -325,11 +335,11 @@ Der implementierte Vertrag in [RemoteListChange.scala](scala/scalajs-ui-core/src
 
 Das bestehende `observeChanges` bleibt aus Kompatibilitätsgründen dicht und ist kein Indexvertrag für die Ansicht. `RemoteListProperty.update(idx)` und `remove(idx)` nehmen weiterhin **dichte Cache-Indizes**, veröffentlichen aber absolute Strukturereignisse; sie sind keine Serverpersistenz-API. Eigene `RemoteListDataSource`-Implementierungen sollen `observeIndexedChanges` und bei mehrteiligen Updates `isUpdatingItems` implementieren. Der Default übersetzt alte Änderungen konservativ in `Reset`, ohne dichte Indizes als absolute Positionen auszugeben; er kann die Veröffentlichung konsistenter Quelldaten nicht selbst herstellen.
 
-Bei Quellentausch eigene Listener/Requests entkoppeln, Modelle normalisieren und neue Quelle anbinden. Eine vom Aufrufer gelieferte Quelle wird nicht einfach mit der Tabelle entsorgt. Bei Sortieren/Reload sind alte Positionen ungültig; bekannte Keys können als noch nicht aufgelöste Auswahl erhalten werden, sofern die Datenquelle deren Wiederauflösung ermöglicht. Ohne solche Identität Auswahl nachvollziehbar zurücksetzen.
+Das Quellenobjekt wird nicht ausgetauscht und bleibt Eigentum des Aufrufers. Bei Sortieren/Reload sind alte Positionen ungültig. Mit `rowKey` werden geladene Entitäten im akzeptierten neuen Ergebnis eindeutig wiederaufgelöst; dabei werden keine Remote-Lücken geladen. Doppelte, ungeladene oder fehlerhaft berechnete Keys verfallen. Ohne Key werden Auswahl und Fokus bei einem akzeptierten Remote-Replacement nachvollziehbar zurückgesetzt.
 
 ### 4.4 Auswahl, Fokus und Bedienung
 
-**Umgesetzt im zwölften Ausbau – Zeilenfokus und Tastatur:** `TableFocusModel` veröffentlicht Index und geladenes Item aus einem kohärenten Snapshot, unabhängig vom SelectionModel. Scala `table.focusModel.focus(index)`/`focusNext()`/`focusPrevious()` und TypeScript `focusIndex`/`focusNext`/`focusPrevious` ändern nur logischen Fokus: kein Scrollen, DOM-Fokus oder Fetch. Startwert/ungültige Position ist -1/null; bekannte Remote-Lücken behalten den Index mit null-Item. Einfügen/Entfernen/Patches verschieben Vorkommen, Entfernen des Ziels löscht Fokus, Updates aktualisieren das Item; Reset erhält nur eindeutige Referenzidentität. Akzeptierter Remote-Querywechsel löscht Fokus. Disposal friert den letzten Modellstand ein.
+**Umgesetzt im zwölften Ausbau – Zeilenfokus und Tastatur:** `TableFocusModel` veröffentlicht Index und geladenes Item aus einem kohärenten Snapshot, unabhängig vom SelectionModel. Scala `table.focusModel.focus(index)`/`focusNext()`/`focusPrevious()` und TypeScript `focusIndex`/`focusNext`/`focusPrevious` ändern nur logischen Fokus: kein Scrollen, DOM-Fokus oder Fetch. Startwert/ungültige Position ist -1/null; bekannte Remote-Lücken behalten den Index mit null-Item. Einfügen/Entfernen/Patches verschieben Vorkommen, Entfernen des Ziels löscht Fokus, Updates aktualisieren das Item; Reset erhält ohne den später ergänzten `rowKey` nur eindeutige Referenzidentität. Akzeptierte Remote-Querywechsel können mit `rowKey` geladene Entitäten wiederauflösen und löschen den Fokus sonst. Disposal friert den letzten Modellstand ein.
 
 Der Grid-Tabstopp stellt beim Eintritt bestehenden logischen Fokus bzw. Auswahl/erste Zeile her. Pfeile auf/ab, Home/End und PageUp/PageDown fokussieren, wählen und verwenden die bestehende Zeilennavigation inklusive Paging/Remote-Laden. Ctrl/Cmd bewegt nur Fokus; Shift erweitert den Ankerbereich, Ctrl/Cmd+Shift addiert ihn. Space wählt, Ctrl/Cmd+Space toggelt, Ctrl/Cmd+A wählt im Mehrfachmodus alle. Page-Schritte nutzen die gemessene Viewporthöhe mit einer Zeile Überlappung, mindestens eine Zeile. Native Tab-Navigation bleibt erhalten; Alt, bereits konsumierte Events und Composition werden ignoriert. Nur Events direkt am Grid werden behandelt. Zeilenhintergrund-Klicks nehmen DOM-Fokus; eingebettete interaktive/fokussierbare Controls bleiben Eigentümer ihrer Maus-/Tastaturbedienung.
 
@@ -461,7 +471,7 @@ ARIA umfasst Grid/Row/ColumnHeader/GridCell, sichtbare Spaltenindizes, absolute 
 
 ### 4.9 Scala- und TypeScript-Vertrag gemeinsam liefern
 
-Die öffentliche Tabellenfassade liegt in `npm/scalajs-ui-controls`; `tableView(...)` liefert ein `TableViewHandle<T>` für `refresh()`, `isDisposed`, lesbare Einzel-/Mehrfachauswahl, kontrollierte Auswahloperationen und `scrollToIndex`/`scrollToItem`. Scroll-Events, Spaltennavigation, `sort`, `edit` und umfassende Modell-Handles bleiben offen.
+Die öffentliche Tabellenfassade liegt in `npm/scalajs-ui-controls`; `tableView(...)` liefert ein `TableViewHandle<T>` für `refresh()`, `isDisposed`, lesbare Einzel-/Mehrfachauswahl, kontrollierte Auswahloperationen, Zeilen-/Spaltennavigation und Sortierung. Navigationsereignisse werden als deklarative Optionen registriert. `edit` und umfassende Modell-Handles bleiben offen.
 
 Mit M0 den vorhandenen minimalen Handle-Vertrag um typsichere Modellzustände und kontrollierte Operationen erweitern. Die Rückgabe wird bereits nach abgeschlossenem Mount über einen internen Factory-Callback aus der Bridge an die TypeScript-Fassade übergeben. Spalten benötigen zusätzlich stabile Handles oder IDs für ihre Operationen.
 
@@ -473,7 +483,7 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 
 | Meilenstein | Umfang und Abhängigkeit | Abnahme | Größe |
 | --- | --- | --- | --- |
-| M0 – Verträge und Korrektheit | Identität/Koordinaten, Remote-Events, Quellentausch, Handle-Vertrag und Defaults; sortable-Prüfung spezifizieren. | Verbindliche Regeln für Insert/Remove/Sort/Reload, Quelleigentum und Edit-Schreibziel; kleine gezielte Fehlerkorrekturen mit Regressionstest. | M |
+| M0 – Verträge und Korrektheit | Identität/Koordinaten, Remote-Events, stabile Keys, Handle-Vertrag und Defaults; sortable-Prüfung spezifizieren. | Verbindliche Regeln für Insert/Remove/Sort/Reload, Quelleigentum und Edit-Schreibziel; kleine gezielte Fehlerkorrekturen mit Regressionstest. | M |
 | M1 – Zeilen, Zellen, Spaltenbasis | Nach M0: differenzielles Zeilenfenster, Zellbindung, typed value/factory, rowFactory, Spalten-Ownership, Baum-/Blattmodell, refresh. | Bestehender Editor behält Fokus/Cursor bei unverändert sichtbarer Zeile; Property-Änderung aktualisiert Zelle; entfernte Bindungen sind gelöst. | L |
 | M2 – Auswahl, Fokus, Scroll-API | Nach M1: Selection-/FocusModel, Zeilen-/Zellbereiche, Keyboard, ARIA-Grundstruktur, Sichtbarkeitsanforderungen. | Auswahl/Fokus über Scrollfenster und Listenänderungen konsistent; Tastatur bedient Grid ohne Eingabefelder zu stören. | L |
 | M3 – Remote-Sortiermodell | Nach M1 und den Identitätsregeln aus M2: Mehrspalten, Remote-Policy/Events, Abfragegenerationen. | Gleiches Sortiermodell für API und Header; korrekte Datensatzidentität beim Writeback; keine lokale Sortierung oder Filterung. | L |
@@ -485,10 +495,11 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 ### Konkreter Startumfang und Fortschritt
 
 - [x] M0: Dokumentations-/Testvertrag für Einzelauswahl nach Vorkommen, absolute Remote-Koordinaten und akzeptierte Reloads.
-- [ ] M0: Quellentausch, stabile Keys und Identitätsregeln für Remote-Abfragewechsel.
+- [x] M0: Stabile Keys und Identitätsregeln für Remote-Abfragewechsel; Austausch des Quellenobjekts vereinbarungsgemäß aus dem Umfang entfernt.
 - [x] M0/M2: Typisiertes TypeScript-Handle für konsistente Einzelauswahl und kontrollierte Mutationen.
 - [x] M2: Zentrales Zeilen-Auswahlmodell, Mehrfachauswahl/Ergebnislisten, Bereichsoperationen und Ctrl/Cmd-/Shift-Mausbedienung in Scala und TypeScript.
 - [x] M2: Programmatische Zeilennavigation per Index/Item, einschließlich Paging, Remote-Lücken und Hydration.
+- [x] M2: `onScrollTo` und `onScrollToColumn` als einmalige Benachrichtigung der tatsächlich angewendeten Browsernavigation.
 - [x] M5 vorgezogen: begrenztes Breitenmodell, sieben Resize-Strategien, Pointer-/Tastatur-Resizing und Scala-/TypeScript-API.
 - [x] M1: Erhalt überlappender Zeilenfenster; gebundenes Eingabefeld einschließlich Fokus/Textauswahl in den Bridge-Integrationstests absichern.
 - [ ] M1: Reale Browserabnahme für Eingabefelder/IME, nicht nur jsdom.
@@ -501,6 +512,8 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 - [ ] Anschließend M2 und M3; auf dieser Basis M4 und M5 vervollständigen.
 
 ## 6. Verifikation
+
+Abnahme des aktuellen Identitäts-/Navigationsevents-Ausbaus am 13.09.2026: vollständiges Scala-Gate mit **425 Tests**, Bridge-Full-Link und npm-Gates für Controls (76 Integrationstests + 3 Paket-Consumer), Core (114 + 8) und Demo (Typecheck, Client-/SSR-Builds, Eine-Runtime-Nachweis und 31 Routen) grün. Drei neue Scala-Fälle prüfen Key-Reordering, Mehrdeutigkeit/Accessorfehler und akzeptierte Remote-Replacements; der SSR-Test prüft stumme Navigationsereignisse. Zwei neue Bridge-Fälle prüfen denselben Key-Vertrag über die echte TypeScript-Fassade sowie einmalige Zeilen-/Spaltenereignisse, ungültige Ziele und Disposal. Das Demo-Gate wurde nach einem parallelen Dev-Server-Fehler isoliert wiederholt und war vollständig grün. Eine zusätzliche reale Browser-/Screenreader-Abnahme ist damit nicht behauptet.
 
 Der siebte Ausbau ergänzt zwölf Scala-Tests für Breitenberechnung und Tabellenintegration sowie fünf TypeScript-Integrationstests für API/Policies, Pointer-/Tastaturbedienung, Editor-Identität/Fokus, Gesture-Lifecycle, Hydration und die Trennung von Resize und Sortierung. TableView-/ComboBox-SSR-Assertions prüfen jetzt die getrennten horizontalen und vertikalen Scrollachsen. Der Paket-Consumer prüft die exportierten Breiten-/Resize-Methoden gegen die echte Bridge.
 
@@ -533,7 +546,7 @@ Bestehende Ausgangspunkte: [TableViewSpec.scala](scala/scalajs-ui-controls/src/t
 Pro Feature gezielte Vertrags- und Integrationstests:
 
 - Zellbindung: beobachtete Änderungen, Snapshot plus refresh, Wechsel/Entfernung von Zeilen und Spalten, null-Wert versus ungeladene/empty Zelle, keine alten Listener.
-- Auswahl/Fokus: Einfügen vor ausgewählter Zeile, Entfernen, Duplikate, Sortierpermutation, Modell-/Quellentausch, Zellbereiche und ungeladene Remote-Positionen.
+- Auswahl/Fokus: Einfügen vor ausgewählter Zeile, Entfernen, Duplikate, Sortierpermutation, Modellwechsel, Zellbereiche und ungeladene Remote-Positionen.
 - Editing: vorhandene eingebettete Felder, F2/Enter/Escape/Tab, IME, Fokus im Popup, einmaliger Commit, Cancel, Parserfehler, Datenänderung während Editieren und veraltete Async-Antwort.
 - Spalten: Grenzen und Policy-Ergebnisse als Modelltests; Pointer-Resize, Drag-Reorder, Gruppenheader und horizontale Erreichbarkeit in einem echten Browser.
 - SSR/Hydration: identisches Anfangsmarkup, keine frühzeitigen Mess-/Fokusaktionen, unveränderte Paging-Links und Crawl-Wiederherstellung.

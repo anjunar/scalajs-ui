@@ -124,29 +124,69 @@ final class TableSelectionModel[S] private[table] (table: TableView[S]) {
       case ListDataSource.Patch(from, removed, inserted, _) =>
         i => splice(i, from, removed.length, inserted.length)
       case ListDataSource.Clear(_, _) => _ => -1
-      case ListDataSource.Reset(_)    =>
-        // One source scan, not one scan per selection. Equality is insufficient for entity identity.
-        val positions = new java.util.IdentityHashMap[AnyRef, java.lang.Integer]()
-        (previous.entries.flatMap(_.item) ++ previous.anchorItem).foreach { item =>
-          positions.put(item.asInstanceOf[AnyRef], -1)
-        }
-        if (!positions.isEmpty) (0 until count).foreach { index =>
-          table.items.itemAt(index).foreach { item =>
-            val key = item.asInstanceOf[AnyRef]
-            if (positions.containsKey(key)) {
-              val found = positions.get(key).intValue
-              positions.put(key, if (found == -1) index else -2)
-            }
-          }
-        }
-        def locate(item: Option[S]): Int = item.fold(-1)(value =>
-          Option(positions.get(value.asInstanceOf[AnyRef])).fold(-1)(_.intValue)
-        )
-        val mapping = previous.entries.map(entry => entry.index -> locate(entry.item)).toMap
-        i => if (i == previous.anchor) locate(previous.anchorItem) else mapping.getOrElse(i, -1)
-      case _ => identity
+      case ListDataSource.Reset(_)    => resetMapping(previous, allowReferenceFallback = true)
+      case _                          => identity
     }
     publish(previous.indices.map(remap), remap(previous.lead), remap(previous.anchor))
+  }
+
+  /** Accepted remote replacements invalidate positions. A configured row key may resolve the same
+    * loaded entities at their new positions; without one, remote resets clear the model.
+    */
+  private[table] def reconcileReset(allowReferenceFallback: Boolean): Unit = {
+    if (table.isDisposed) return
+    val previous = state.get
+    val remap    = resetMapping(previous, allowReferenceFallback)
+    publish(previous.indices.map(remap), remap(previous.lead), remap(previous.anchor))
+  }
+
+  private def resetMapping(
+      previous: Snapshot,
+      allowReferenceFallback: Boolean
+  ): Int => Int = table.rowKeyProperty.get match {
+    case Some(rowKey) =>
+      val entryKeys = previous.entries
+        .map(entry => entry.index -> entry.item.flatMap(TableRowIdentity.keyOf(_, rowKey)))
+        .toMap
+      val duplicateKeys = entryKeys.values.flatten
+        .groupBy(identity)
+        .collect {
+          case (key, occurrences) if occurrences.size > 1 => key
+        }
+        .toSet
+      val anchorKey = previous.anchorItem.flatMap(TableRowIdentity.keyOf(_, rowKey))
+      val locations = TableRowIdentity.locate(
+        table.items,
+        rowKey,
+        (entryKeys.values.flatten ++ anchorKey).toSet
+      )
+      def locate(key: Option[TableRowIdentity.Key]): Int =
+        key.filterNot(duplicateKeys).flatMap(locations.get).getOrElse(-1)
+      index =>
+        if (index == previous.anchor) locate(anchorKey)
+        else locate(entryKeys.getOrElse(index, None))
+    case None if allowReferenceFallback =>
+      // One source scan, not one scan per selection. Equality is insufficient for entity identity.
+      val positions = new java.util.IdentityHashMap[AnyRef, java.lang.Integer]()
+      (previous.entries.flatMap(_.item) ++ previous.anchorItem).foreach { item =>
+        positions.put(item.asInstanceOf[AnyRef], -1)
+      }
+      if (!positions.isEmpty) (0 until count).foreach { index =>
+        table.items.itemAt(index).foreach { item =>
+          val key = item.asInstanceOf[AnyRef]
+          if (positions.containsKey(key)) {
+            val found = positions.get(key).intValue
+            positions.put(key, if (found == -1) index else -2)
+          }
+        }
+      }
+      def locate(item: Option[S]): Int = item.fold(-1)(value =>
+        Option(positions.get(value.asInstanceOf[AnyRef])).fold(-1)(_.intValue)
+      )
+      val mapping = previous.entries.map(entry => entry.index -> locate(entry.item)).toMap
+      index =>
+        if (index == previous.anchor) locate(previous.anchorItem) else mapping.getOrElse(index, -1)
+    case None => _ => -1
   }
 
   private def sameItem(a: Option[S], b: Option[S]): Boolean = (a, b) match {

@@ -338,6 +338,23 @@ tableView(books, [valueColumn("Title", (book) => book.title)], {
 });
 ```
 
+For remote reloads or local list resets that replace object instances, provide a stable and unique
+`rowKey` when selection and logical focus should follow the same entities:
+
+```ts
+tableView(books, [valueColumn("Title", book => book.title)], {
+  rowKey: book => book.id,
+});
+```
+
+Key restoration examines values already loaded in the new result. It does not fetch sparse remote
+positions, and duplicate or failing keys are cleared rather than matched ambiguously. Without a
+`rowKey`, accepted remote replacements continue to clear selection and focus.
+
+`onScrollTo` and `onScrollToColumn` observe successful programmatic navigation after its request
+reaches a measurable browser viewport. They do not run for invalid, hidden, SSR, superseded, or
+disposed requests. Column indices use the visible order at execution time.
+
 `TableRowContext<T>` exposes read-only `item`, absolute `index`, `empty`, and `selected`
 properties. Remote placeholders also receive the callback, with `empty = true` and
 `item = null`; they remain non-interactive and unselected until replaced by loaded rows.
@@ -426,7 +443,8 @@ Navigation is browser-only: SSR keeps its deterministic slice. Requests made dur
 composition/hydration or while the viewport has no height/visible columns wait until it can be
 measured. The latest valid request wins, is revalidated against the current extent, and
 supersedes the initial cookie/URL scroll restoration. Disposal cancels pending navigation.
-There is no load-completion promise or `onScrollTo` event yet.
+There is no load-completion promise. `onScrollTo` runs once after a valid request is actually
+applied; invalid, superseded, SSR and disposed requests remain silent.
 
 `table.scrollToColumnIndex(index)` reveals a column in the current **visible** order with minimal
 horizontal movement. Oversized columns align at their start. Hidden columns contribute neither
@@ -440,7 +458,8 @@ viewport width and remembers the column instance, not an index that could change
 The target is revalidated before scrolling; hidden/removed targets and disposed tables are ignored.
 The header offset is synchronized immediately, including browser clamping. Row and column requests
 are independent. Scala additionally accepts a column reference via `scrollToColumn(column)`;
-`onScrollToColumn` events and RTL navigation remain pending.
+`onScrollToColumn` reports the applied column (as its current visible index in TypeScript).
+RTL navigation remains pending.
 
 Paged or scrolling content headers can declare their reserved height with `headerRows`. For
 `dataGrid`, one row is one card height and the header always spans the full responsive grid width;

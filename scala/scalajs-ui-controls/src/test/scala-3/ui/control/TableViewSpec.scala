@@ -23,9 +23,14 @@ import scala.scalajs.js
 class TableViewSpec extends AnyFlatSpec with Matchers {
 
   "Column navigation" should "keep SSR deterministic for reference and index requests" in {
-    val html = renderTable(Seq("Ada")) {
+    var rowEvents    = 0
+    var columnEvents = 0
+    val html         = renderTable(Seq("Ada")) {
       val table  = summon[TableView[String]]
       val target = column[String, String]("Other") { prefWidth = 1200.0 }
+      table.onScrollToProperty.set(Some(_ => rowEvents += 1))
+      table.onScrollToColumnProperty.set(Some(_ => columnEvents += 1))
+      table.scrollTo(0)
       table.scrollToColumn(target)
       table.scrollToColumnIndex(1)
       table.scrollToColumnIndex(-1)
@@ -39,6 +44,8 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
     html should include("Ada")
     html should include("Other")
     html should include regex "translateX\\(-0(?:\\.0)?px\\)"
+    rowEvents shouldBe 0
+    columnEvents shouldBe 0
   }
 
   "Table menu" should "remain opt-in and disappear with the header" in {

@@ -17,6 +17,7 @@ import scala.scalajs.js
 
 class TableSelectionSpec extends AnyFlatSpec with Matchers {
   private case class Person(name: String)
+  private case class KeyedPerson(id: Int, name: String)
   private case class Query(offset: Int, limit: Int)
 
   private def mounted[S](source: ListDataSource[S])(run: TableView[S] => Unit): Unit = {
@@ -89,6 +90,55 @@ class TableSelectionSpec extends AnyFlatSpec with Matchers {
       table.select(1)
       values.setAll(Seq(first, first))
       table.selectedIndexProperty.get shouldBe -1
+    }
+  }
+
+  it should "restore selection, lead, anchor and focus by a unique row key" in {
+    val values = ListProperty(
+      js.Array(KeyedPerson(1, "one"), KeyedPerson(2, "two"), KeyedPerson(3, "three"))
+    )
+    mounted(values) { table =>
+      table.rowKeyProperty.set(Some(_.id))
+      table.selectionModel.selectionMode = TableSelectionMode.Multiple
+      table.selectionModel.selectIndices(0, 2)
+      table.focusModel.focus(2)
+
+      values.setAll(
+        Seq(KeyedPerson(3, "new three"), KeyedPerson(1, "new one"), KeyedPerson(2, "new two"))
+      )
+
+      table.selectedIndicesProperty.get shouldBe Vector(0, 1)
+      table.selectedIndexProperty.get shouldBe 0
+      table.selectedItemsProperty.get.map(_.name) shouldBe Vector("new three", "new one")
+      table.focusedIndexProperty.get shouldBe 0
+      table.focusedItemProperty.get.name shouldBe "new three"
+
+      // The retained Shift anchor is entity 3 at its new position zero.
+      table.selectionModel.click(2, toggle = false, extend = true)
+      table.selectedIndicesProperty.get shouldBe Vector(0, 1, 2)
+    }
+  }
+
+  it should "reject ambiguous and failing row keys without guessing an occurrence" in {
+    val values = ListProperty(js.Array(KeyedPerson(1, "one"), KeyedPerson(2, "two")))
+    mounted(values) { table =>
+      table.rowKeyProperty.set(Some(_.id))
+      table.selectionModel.selectionMode = TableSelectionMode.Multiple
+      table.selectionModel.selectIndices(0, 1)
+      table.focusModel.focus(0)
+      values.setAll(Seq(KeyedPerson(1, "first"), KeyedPerson(1, "duplicate")))
+      table.selectionModel.isEmpty shouldBe true
+      table.focusModel.focusedIndex shouldBe -1
+
+      table.rowKeyProperty.set(
+        Some(person => if (person.id == 2) throw new Exception("bad key") else person.id)
+      )
+      values.setAll(Seq(KeyedPerson(1, "one"), KeyedPerson(2, "two")))
+      table.selectionModel.selectIndices(0, 1)
+      table.focusModel.focus(1)
+      values.notified()
+      table.selectedIndicesProperty.get shouldBe empty
+      table.focusModel.focusedIndex shouldBe -1
     }
   }
 
@@ -383,6 +433,47 @@ class TableSelectionSpec extends AnyFlatSpec with Matchers {
       table.select(1)
       remote.clear()
       table.selectedIndexProperty.get shouldBe -1
+    }
+  }
+
+  it should "restore loaded entities by row key after an accepted remote replacement" in {
+    val requests = mutable.ArrayBuffer.empty[Promise[RemotePage[KeyedPerson, Query]]]
+    val remote   = RemoteListProperty[KeyedPerson, Query](
+      loader = RemoteLoader { _ =>
+        val result = Promise[RemotePage[KeyedPerson, Query]]()
+        requests += result
+        result.future
+      },
+      initialQuery = Query(0, 3),
+      underlying = js.Array(
+        KeyedPerson(1, "old one"),
+        KeyedPerson(2, "old two"),
+        KeyedPerson(3, "old three")
+      ),
+      executionContext = ExecutionContext.parasitic
+    )
+    remote.totalCountProperty.set(Some(3))
+    mounted(remote) { table =>
+      table.rowKeyProperty.set(Some(_.id))
+      table.selectionModel.selectionMode = TableSelectionMode.Multiple
+      table.selectionModel.selectIndices(0, 2)
+      table.focusModel.focus(2)
+      remote.reload()
+      requests.last.success(
+        RemotePage(
+          items = Seq(
+            KeyedPerson(3, "new three"),
+            KeyedPerson(2, "new two"),
+            KeyedPerson(1, "new one")
+          ),
+          totalCount = Some(3)
+        )
+      )
+      table.selectedIndicesProperty.get shouldBe Vector(0, 2)
+      table.selectedIndexProperty.get shouldBe 0
+      table.selectedItemProperty.get.name shouldBe "new three"
+      table.focusModel.focusedIndex shouldBe 0
+      table.focusModel.focusedItem.name shouldBe "new three"
     }
   }
 }
