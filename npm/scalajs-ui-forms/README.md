@@ -12,6 +12,8 @@ This package projects `ui.forms` into TypeScript. It does not port validation or
 npm install @anjunar/scalajs-ui-core @anjunar/scalajs-ui-forms @anjunar/scalajs-ui-controls @anjunar/scalajs-ui-viewport @anjunar/scalajs-ui-bridge @anjunar/scalajs-ui
 ```
 
+Import `@anjunar/scalajs-ui-bridge/forms` instead of the bare package to skip installing router/controls/viewport/editor -- see that package's README.
+
 ## Quick start
 
 ```ts

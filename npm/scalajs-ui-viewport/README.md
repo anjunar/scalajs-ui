@@ -12,6 +12,8 @@ The package supplies typed wrappers over `ui.viewport`. Positioning, dragging, z
 npm install @anjunar/scalajs-ui-core @anjunar/scalajs-ui-viewport @anjunar/scalajs-ui-bridge @anjunar/scalajs-ui
 ```
 
+Using only `@anjunar/scalajs-ui-viewport` (no router/controls/forms/editor)? Import `@anjunar/scalajs-ui-bridge/viewport` instead of the bare package to skip installing the other features -- see that package's README.
+
 ## Quick start
 
 ```ts

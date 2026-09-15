@@ -12,6 +12,8 @@ This package wraps `ui.control` components. Virtualization, row measurement, sor
 npm install @anjunar/scalajs-ui-core @anjunar/scalajs-ui-controls @anjunar/scalajs-ui-bridge @anjunar/scalajs-ui
 ```
 
+Using only `@anjunar/scalajs-ui-controls` (no router/forms/editor)? Import `@anjunar/scalajs-ui-bridge/controls` instead of the bare package to skip installing the other features -- see that package's README.
+
 ## Quick start
 
 ```ts

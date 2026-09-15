@@ -16,6 +16,10 @@ class I18nFactoriesSpec extends AsyncFlatSpec with Matchers {
 
   override implicit def executionContext: ExecutionContext = ExecutionContext.global
 
+  // bridgeRuntime no longer forces registration itself (BridgeRuntime.scala) -- a real npm
+  // consumer's index.js composes installXRuntime() calls explicitly, so this suite does the same.
+  CoreRuntime.install()
+
   private val runtime = BridgeRuntime.bridgeRuntime
 
   private def render(

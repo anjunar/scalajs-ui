@@ -55,6 +55,8 @@ const server = await renderToString(() => router(routes, {
 await hydrate(document.getElementById("root")!, () => router(routes, {}, appShell));
 ```
 
+Using only `@anjunar/scalajs-ui-router` (no controls/forms/editor)? Import `@anjunar/scalajs-ui-bridge/router` instead of the bare package to skip installing the other features -- see that package's README.
+
 The server resolves the first request and returns the matched route status. `routerLink` remains an ordinary anchor without JavaScript; hydration enhances it with client-side navigation. A shell receives `outlet`, so it can place the root route inside its own Drawer or Viewport. Existing zero-argument shell callbacks remain supported and receive the routed page as their next sibling. Nested routes render only where a parent calls `routerOutlet()`.
 
 ## API overview

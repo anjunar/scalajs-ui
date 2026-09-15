@@ -1,4 +1,4 @@
-import org.scalajs.linker.interface.{ESVersion, ModuleKind}
+import org.scalajs.linker.interface.{ESVersion, ModuleKind, ModuleSplitStyle}
 import org.scalajs.sbtplugin.ScalaJSPlugin
 import sbt.url
 
@@ -240,7 +240,19 @@ lazy val uiBridge = Project(id = "scalajs-ui-bridge", base = file("scala/scalajs
     // the TypeScript facades retain embedded source maps, while this generated
     // bridge bundle deliberately has no unusable external source map.
     Compile / fastLinkJS / scalaJSLinkerConfig ~= (_.withSourceMap(false)),
-    Compile / fullLinkJS / scalaJSLinkerConfig ~= (_.withSourceMap(false))
+    Compile / fullLinkJS / scalaJSLinkerConfig ~= (_.withSourceMap(false)),
+    // One file per `ui`/`ember` class instead of one monolithic main.js, so the npm package can
+    // expose one entry point per feature (npm/scalajs-ui-bridge/{core,router,controls,...}.js)
+    // that imports only the chunks its own BridgeRuntime.scala object actually reaches. `ember`
+    // is included because scalajs-ui-editor's ember dependency alone measured ~31% of the
+    // unminified bundle (BridgeRuntime.scala) -- without it here, editor-avoiding consumers would
+    // still get it bundled into the shared/coarse chunk. Everything outside `ui`/`ember` (Scala/
+    // Java stdlib, scalajs-dom, scala-java-time) stays coarse-grained: splitting it per-class too
+    // would multiply link time for code every consumer needs identically anyway.
+    Compile / fastLinkJS / scalaJSLinkerConfig ~=
+      (_.withModuleSplitStyle(ModuleSplitStyle.SmallModulesFor(List("ui", "ember")))),
+    Compile / fullLinkJS / scalaJSLinkerConfig ~=
+      (_.withModuleSplitStyle(ModuleSplitStyle.SmallModulesFor(List("ui", "ember"))))
   )
 
 lazy val uiControls = Project(id = "scalajs-ui-controls", base = file("scala/scalajs-ui-controls"))

@@ -9,10 +9,40 @@
       "types": "./types/index.d.ts",
       "default": "./index.js"
     },
+    "./core": {
+      "types": "./types/core.d.ts",
+      "default": "./core.js"
+    },
+    "./router": {
+      "types": "./types/router.d.ts",
+      "default": "./router.js"
+    },
+    "./controls": {
+      "types": "./types/controls.d.ts",
+      "default": "./controls.js"
+    },
+    "./viewport": {
+      "types": "./types/viewport.d.ts",
+      "default": "./viewport.js"
+    },
+    "./forms": {
+      "types": "./types/forms.d.ts",
+      "default": "./forms.js"
+    },
+    "./editor": {
+      "types": "./types/editor.d.ts",
+      "default": "./editor.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "index.js",
+    "core.js",
+    "router.js",
+    "controls.js",
+    "viewport.js",
+    "forms.js",
+    "editor.js",
     "dist",
     "types",
     "README.md"
