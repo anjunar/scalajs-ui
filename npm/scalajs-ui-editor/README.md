@@ -12,6 +12,8 @@ The TypeScript package exposes the editor's options and plugin names. The Scala 
 npm install @anjunar/scalajs-ui-core @anjunar/scalajs-ui-forms @anjunar/scalajs-ui-viewport @anjunar/scalajs-ui-editor @anjunar/scalajs-ui-bridge @anjunar/scalajs-ui
 ```
 
+Import `@anjunar/scalajs-ui-bridge/editor` instead of the bare package if you don't also need router/controls -- it pulls in the `scalajs-ember` dependency (about a third of the full bridge bundle) without the rest. See that package's README.
+
 ## Quick start
 
 ```ts
