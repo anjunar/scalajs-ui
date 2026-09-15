@@ -1,7 +1,7 @@
 {
   "name": "@anjunar/scalajs-ui-editor",
-  "version": "1.0.1",
-  "description": "The TypeScript editor API of Scala JS UI 1.0: a Lexical-backed rich-text control, bound by name like input, projected onto the ui.editor components that run in the Scala.js runtime published as @anjunar/scalajs-ui-bridge.",
+  "version": "1.0.2",
+  "description": "Native Ember rich-text control with a grouped ribbon, direct Viewport dialogs and Markdown form binding in the shared Scala.js UI runtime.",
   "type": "module",
   "types": "./dist/index.d.ts",
   "main": "./dist/index.js",
@@ -27,11 +27,11 @@
     "verify": "npm run typecheck && npm run test && npm run test:consumer"
   },
   "peerDependencies": {
-    "@anjunar/scalajs-ui-core": "^1.0.1",
-    "@anjunar/scalajs-ui-forms": "^1.0.1",
-    "@anjunar/scalajs-ui-viewport": "^1.0.1",
-    "@anjunar/scalajs-ui": "^1.0.1",
-    "@anjunar/scalajs-ui-bridge": "^1.0.1"
+    "@anjunar/scalajs-ui-core": "^1.0.2",
+    "@anjunar/scalajs-ui-forms": "^1.0.2",
+    "@anjunar/scalajs-ui-viewport": "^1.0.2",
+    "@anjunar/scalajs-ui": "^1.0.2",
+    "@anjunar/scalajs-ui-bridge": "^1.0.2"
   },
   "devDependencies": {
     "@anjunar/scalajs-ui-core": "*",

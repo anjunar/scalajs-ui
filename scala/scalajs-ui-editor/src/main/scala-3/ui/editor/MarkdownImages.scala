@@ -1,10 +1,9 @@
 package ui.editor
 
-import lexical.media.ImageReference
 import scala.util.matching.Regex
 import scala.collection.mutable
 
-/** The same image grammar is used by Lexical, SSR and document validation. */
+/** The same image grammar is used by Ember, SSR and document validation. */
 private[editor] object MarkdownImages {
   val pattern: String =
     """!\[((?:\\.|[^\]\\])*)\]\((<[^>\r\n]+>|(?:\\.|[^\s()\\]|\((?:\\.|[^()\\])*\))+)(?:\s+"((?:\\.|[^"\\])*)")?\)(?:\{width=([^}\r\n]*)\})?"""
@@ -56,7 +55,7 @@ private[editor] object MarkdownImages {
     .replaceAllIn(value, matched => Regex.quoteReplacement(matched.group(1)))
 
   /** Protect fenced/indented code and inline code before examining image syntax. */
-  private def mapProse(source: String)(convert: String => String): String = {
+  private[editor] def mapProse(source: String)(convert: String => String): String = {
     var fence: Option[(Char, Int)] = None
     source
       .split("\n", -1)
@@ -95,7 +94,7 @@ private[editor] object MarkdownImages {
       .mkString("\n")
   }
 
-  private def images(source: String)(replace: Regex.Match => String): String =
+  private[editor] def images(source: String)(replace: Regex.Match => String): String =
     mapProse(expandReferences(Option(source).getOrElse(""))) { prose =>
       regex.replaceAllIn(
         prose,
@@ -106,7 +105,7 @@ private[editor] object MarkdownImages {
       )
     }
 
-  /** Resolve reference definitions before handing Markdown to Lexical's inline transformers.
+  /** Resolve reference definitions before handing Markdown to the native Markdown codec.
     * Definitions shared by ordinary links are expanded there as well, so removing a consumed
     * definition never breaks another use. Code and escaped examples remain untouched.
     */

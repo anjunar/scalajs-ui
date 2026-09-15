@@ -92,7 +92,7 @@ object EditorPage {
   private def initialDocument(): String =
     """## A structured editor
       |
-      |This **Markdown** document is shared by forms, SSR and Lexical.
+      |This **Markdown** document is shared by forms, SSR and Ember.
       |
       |- Semantic HTML without JavaScript
       |- A textarea for `?article.editor=editable` on a request-aware SSR host

@@ -61,15 +61,15 @@ final class EditorSpec extends AnyFlatSpec with Matchers {
       control.valueProperty.get shouldBe document
       val html = cursor.collectHtml()
       html should include("name=\"article\"")
-      html should include("<h2 class=\"lexical-heading-h2\"")
+      html should include("<h2 class=\"editor-heading-h2\"")
       html should include("<strong>Heading</strong>")
       html should include("Heading")
-      html should include("<ol class=\"lexical-list-ol\"")
+      html should include("<ol class=\"editor-list-ol\"")
       html should include("href=\"https://example.test\"")
       html should include("alt=\"Preview\"")
       html should include("<table>")
       html should include("val answer = 42")
-      html should include("lexical-horizontal-rule")
+      html should include("editor-horizontal-rule")
       html should include("&lt;script&gt;alert('escaped')&lt;/script&gt;")
       html should not include "<script>"
     } finally Runtime.unmount(root)
@@ -90,7 +90,7 @@ final class EditorSpec extends AnyFlatSpec with Matchers {
     }
 
     readonly should include("href=\"?article.editor=editable\"")
-    readonly should include("<h1 class=\"lexical-heading-h1\"")
+    readonly should include("<h1 class=\"editor-heading-h1\"")
     readonly should not include "<textarea"
 
     val editableHtml = Runtime.renderToString { cursor =>
@@ -211,7 +211,7 @@ final class EditorSpec extends AnyFlatSpec with Matchers {
 
     val hostStart    = html.indexOf("class=\"scalajs-ui-editor-host")
     val hostEnd      = html.indexOf('>', hostStart)
-    val surfaceStart = html.indexOf("class=\"scalajs-ui-editor__surface lexical")
+    val surfaceStart = html.indexOf("class=\"scalajs-ui-editor__surface ember")
     val surfaceEnd   = html.indexOf('>', surfaceStart)
 
     html.substring(hostStart, hostEnd) should not include ("contenteditable")
@@ -372,41 +372,6 @@ final class EditorSpec extends AnyFlatSpec with Matchers {
     control.valueProperty.get shouldBe document
     html should include("scalajs-ui-editor__toolbar")
     html should include("Plugin content")
-  }
-
-  "Editor dialog bridge" should "mount Lexical dialog content through the Scala JS UI 1.0 Viewport" in {
-    val cursor                    = new SsrCursor()
-    var mountedViewport: Viewport = null
-    val root                      = Runtime.mount(
-      new EditorRoot {
-        override protected def content(using AbstractComponent, Cursor): Unit =
-          mountedViewport = viewport {}
-      },
-      cursor
-    )
-    val service = new DefaultDialogService(mountedViewport)
-
-    try {
-      service.show(
-        "Edit image",
-        () => null.asInstanceOf[HTMLElement],
-        _ => ()
-      )
-
-      mountedViewport.windows.length shouldBe 1
-      mountedViewport.windows.head.title.get shouldBe "Edit image"
-      val html = cursor.collectHtml()
-      html should include("class=\"ui-window\"")
-      html should include("class=\"scalajs-ui-editor-dialog\"")
-      html should include("Cancel")
-      html should include("Confirm")
-
-      service.close()
-      mountedViewport.windows.head.visible.get shouldBe false
-    } finally {
-      Runtime.unmount(root)
-      mountedViewport.windows shouldBe empty
-    }
   }
 
   "Editor forms integration" should "register and unregister like every other control" in {

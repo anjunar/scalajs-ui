@@ -27,7 +27,7 @@ val siteConfigUrlOverride = settingKey[Option[String]](
 // 3. Slash-Syntax ist Pflicht, 0.13-Syntax ist entfernt. War hier schon so.
 // ---------------------------------------------------------------------------
 
-version              := "1.0.1"
+version              := "1.0.2"
 organization         := "com.anjunar"
 organizationName     := "Anjunar"
 organizationHomepage := Some(url("https://github.com/anjunar"))
@@ -90,8 +90,8 @@ publishTo := {
 // dann `Files.move`. Ergebnis war reproduzierbar
 //
 //   java.nio.file.AccessDeniedException:
-//     ...\scalajs-ui-core_sjs1_3-1.0.1.jar.151b4332.tmp
-//       -> ...\scalajs-ui-core_sjs1_3-1.0.1.jar
+//     ...\scalajs-ui-core_sjs1_3-1.0.2.jar.151b4332.tmp
+//       -> ...\scalajs-ui-core_sjs1_3-1.0.2.jar
 //
 // bei *jedem* Lauf nach dem ersten im selben Server -- auch ohne Quelltext-
 // aenderung, weil packageBin jedes Mal laeuft. Nur ein Serverneustart half.
@@ -269,11 +269,16 @@ lazy val uiForms = Project(id = "scalajs-ui-forms", base = file("scala/scalajs-u
 
 lazy val uiEditor = Project(id = "scalajs-ui-editor", base = file("scala/scalajs-ui-editor"))
   .enablePlugins(ScalaJSPlugin)
-  .dependsOn(uiForms)
+  .dependsOn(uiForms, uiViewport)
   .settings(
     name                                 := "scalajs-ui-editor",
     moduleName                           := "scalajs-ui-editor",
-    libraryDependencies += "com.anjunar" %% "scalajs-lexical" % "1.4.0"
+    libraryDependencies ++= Seq(
+      "com.anjunar" %% "scalajs-ember-browser-support" % "0.1.0-SNAPSHOT",
+      "com.anjunar" %% "scalajs-ember-standard" % "0.1.0-SNAPSHOT",
+      "com.anjunar" %% "scalajs-ember-toolbar" % "0.1.0-SNAPSHOT",
+      "com.anjunar" %% "scalajs-ember-forms" % "0.1.0-SNAPSHOT"
+    )
   )
   .settings(commonLibrarySettings)
   .settings(commonJsSettings)

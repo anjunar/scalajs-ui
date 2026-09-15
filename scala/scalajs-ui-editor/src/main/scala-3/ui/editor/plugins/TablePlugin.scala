@@ -1,18 +1,10 @@
 package ui.editor.plugins
 
 import ui.editor.Editor
-import lexical.{LexicalTable, RemoveTableModule, TableModule, ToolbarElement}
-
-import scala.scalajs.js
 
 final class TablePlugin extends EditorPlugin {
-  override val name: String                         = "table"
-  override val toolbarElements: Seq[ToolbarElement] =
-    Seq(new TableModule(), new RemoveTableModule())
-  override val nodes: Seq[js.Any] =
-    Seq(LexicalTable.TableNode, LexicalTable.TableRowNode, LexicalTable.TableCellNode)
+  val name = "table"
 }
-
 object TablePlugin {
   def tablePlugin(body: TablePlugin ?=> Unit = {})(using editor: Editor): TablePlugin = {
     val plugin = new TablePlugin()
