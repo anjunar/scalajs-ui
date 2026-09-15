@@ -1,26 +1,9 @@
 /**
- * A Lexical-backed rich-text field, bound by name like `input`. Mirrors
- * `ui.editor.Editor`. Its value is always Markdown. SSR renders that value as
- * semantic readonly HTML or, when editable, as a textarea. In the browser
- * either fallback is progressively enhanced to Lexical; the mounted Lexical
- * surface itself becomes editable or readonly and imports/exports the same
- * Markdown string.
- *
- * `ui.editor.plugins.basePlugin()`/`headingPlugin()`/... are Scala
- * functions, not values, so they cannot be passed across the bridge as
- * options the way `converter`/`itemRenderer` are elsewhere in this family --
- * `plugins` is a name list instead, and `EditorFactories.installPlugin` (in
- * `scalajs-ui-bridge`) calls the matching zero-argument plugin function for each
- * one. The image plugin uses the application's MediaUploader for file input,
- * paste and drop. Existing references remain readable without an uploader.
- *
- * `link` and `image` open their dialogs as `@anjunar/scalajs-ui-viewport` windows
- * (`DefaultDialogService`), so an editor using either plugin needs a
- * `viewport(...)` ancestor -- the same requirement `comboBox`'s dropdown has.
- *
- * Not projected: per-plugin configuration (`ImagePlugin.dialogTitle`,
- * `defaultWidthPx`, ...), a custom `dialogService`, and per-plugin toolbar
- * bodies -- each has an obvious trigger to add later.
+ * Native Ember rich-text field in the shared Scala JS UI runtime. Markdown remains
+ * the form value. Link and image forms mount directly in a Viewport ancestor.
+ * The ribbon provides grouped commands with keyboard navigation; menu/floating
+ * use a compact toolbar. The Markdown view preserves documents with features
+ * outside the native model (tables, raw HTML, extra text marks).
  */
 import { component, type Property } from "@anjunar/scalajs-ui-core";
 import { defined } from "./internal.js";
@@ -59,14 +42,9 @@ export interface MediaUploadStatus {
   readonly error: string | null;
 }
 
-/**
- * One of the eight `ui.editor.plugins` bundled with the Scala component.
- * `base` (bold/italic/underline/strikethrough/code, always safe to include)
- * is not on by default -- an editor with no `plugins` still edits rich text
- * (`LexicalRichText` is always registered), it just renders no toolbar. The
- * Markdown import/export nodes are registered independently of this list, so
- * a value remains readable and round-trippable when a toolbar capability is
- * omitted.
+/** Toolbar capabilities. Empty/omitted uses the standard set.
+ * base: bold, italic, inline code; table: opens the Markdown source view.
+ * Omitted capabilities do not restrict the document schema.
  */
 export type EditorPluginName =
   | "base"
@@ -102,7 +80,7 @@ export interface EditorOptions {
   readonly readonlyLabel?: string;
   /** Defaults to `"ribbon"`, `ui.editor.Editor`'s own default. */
   readonly toolbarMode?: EditorToolbarMode;
-  /** Defaults to no plugins -- no toolbar; Markdown node support remains available. */
+  /** Defaults to the standard toolbar. The table capability opens Markdown source. */
   readonly plugins?: readonly EditorPluginName[];
   /** Skips registration with the enclosing form context -- an editor with no model binding. */
   readonly standalone?: boolean;

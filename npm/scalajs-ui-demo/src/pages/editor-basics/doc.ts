@@ -11,7 +11,7 @@ export function editorBasicsDoc(): void {
   docPage(
     {
       title: "Editor",
-      summary: "editor(), plugins: a model-bound Lexical editor whose public Markdown value remains observable and replaceable.",
+      summary: "editor(), plugins: a model-bound Ember editor whose public Markdown value remains observable and replaceable.",
     },
     () => {
       example({ code: snippet }, () => {
@@ -22,7 +22,7 @@ export function editorBasicsDoc(): void {
         text(translated(
           "plugins is a name list, not an options object: basePlugin()/headingPlugin()/... are " +
             "Scala functions, not values, so scalajs-ui-bridge calls the matching one for each name. An " +
-            "editor with no plugins still edits rich text -- it just renders no toolbar. The link " +
+            "editor with no plugin configuration includes the standard toolbar. The link " +
             "and image plugins open their dialogs as @anjunar/scalajs-ui-viewport windows, so an editor " +
             "using either one needs a viewport ancestor -- entry-client.ts/entry-server.ts already " +
             "wrap the whole app in one."

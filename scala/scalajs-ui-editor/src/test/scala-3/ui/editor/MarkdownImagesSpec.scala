@@ -1,6 +1,6 @@
 package ui.editor
 
-import lexical.media.{ImageReference, InternalImageUrl}
+import ui.editor.{ImageReference, InternalImageUrl}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

@@ -1,0 +1,129 @@
+/* Native Ember editor. The ribbon and document share the application's theme. */
+.scalajs-ui-editor__toolbar:has(.ember-toolbar) {
+  display: block;
+  padding: 0;
+  border-bottom: 1px solid var(--aj-line, #d7dce3);
+  background: var(--aj-surface, #f8fafc);
+}
+.scalajs-ui-editor .ember-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px;
+  position: relative;
+}
+.scalajs-ui-editor .ember-ribbon-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 2px 10px 0 4px;
+  border-right: 1px solid var(--aj-line, #d7dce3);
+}
+.scalajs-ui-editor .ember-ribbon-group:last-of-type { border-right: 0; }
+.scalajs-ui-editor .ember-ribbon-group__controls {
+  display: grid;
+  grid-template-rows: repeat(2, 34px);
+  grid-auto-flow: column;
+  align-items: stretch;
+  gap: 3px;
+}
+.scalajs-ui-editor .ember-ribbon-group__caption {
+  color: var(--aj-ink-muted, #526071);
+  text-align: center;
+  font: 500 11px/1.4 system-ui, sans-serif;
+}
+.scalajs-ui-editor .ember-toolbar button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 34px;
+  margin: 0;
+  padding: 4px 9px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--aj-ink, #172536);
+  cursor: pointer;
+  font: 500 12px/1.2 system-ui, sans-serif;
+  white-space: nowrap;
+}
+.scalajs-ui-editor .ember-toolbar button:hover:not(:disabled) {
+  background: var(--aj-accent-muted, #e6effc);
+  border-color: var(--aj-line, #c5d3e3);
+}
+.scalajs-ui-editor .ember-toolbar button[aria-pressed="true"],
+.scalajs-ui-editor .ember-toolbar button[aria-pressed="mixed"] {
+  color: var(--aj-accent-strong, #174c94);
+  background: var(--aj-accent-muted, #e6effc);
+  border-color: var(--aj-accent, #3977c5);
+}
+.scalajs-ui-editor .ember-toolbar button:focus-visible {
+  outline: 2px solid var(--aj-accent, #3977c5);
+  outline-offset: 1px;
+}
+.scalajs-ui-editor .ember-toolbar button:disabled { opacity: .38; cursor: default; }
+.scalajs-ui-editor [data-command="bold"] { font-weight: 800 !important; }
+.scalajs-ui-editor [data-command="italic"] { font-style: italic !important; }
+.scalajs-ui-editor [data-command="inline-code"] { font-family: monospace !important; }
+.scalajs-ui-editor .ember-toolbar-status:empty { display: none; }
+.scalajs-ui-editor .ember-toolbar-status:not(:empty) {
+  flex-basis: 100%;
+  padding: 6px 8px;
+  color: var(--aj-ink-muted, #526071);
+  font-size: 12px;
+}
+.scalajs-ui-editor__compact .ember-toolbar { gap: 2px; }
+.scalajs-ui-editor__surface { line-height: 1.65; overflow-wrap: anywhere; }
+.scalajs-ui-editor__surface p { margin: 0 0 .8em; }
+.scalajs-ui-editor__surface :is(h1,h2,h3,h4,h5,h6) { margin: 1em 0 .5em; line-height: 1.25; }
+.scalajs-ui-editor__surface h1 { font-size: 2em; }
+.scalajs-ui-editor__surface h2 { font-size: 1.5em; }
+.scalajs-ui-editor__surface h3 { font-size: 1.25em; }
+.scalajs-ui-editor__surface blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid var(--aj-accent, #3977c5); }
+.scalajs-ui-editor__surface :is(ul,ol) { padding-left: 1.8em; }
+.scalajs-ui-editor__surface ul { list-style: disc; }
+.scalajs-ui-editor__surface ol { list-style: decimal; }
+.scalajs-ui-editor__surface strong { font-weight: 700; }
+.scalajs-ui-editor__surface em { font-style: italic; }
+.scalajs-ui-editor__surface pre { overflow: auto; padding: 1em; background: var(--aj-surface, #f1f4f8); border-radius: 6px; }
+.scalajs-ui-editor__surface code { font-family: "Cascadia Code", monospace; }
+.scalajs-ui-editor__surface a { color: var(--aj-accent-strong, #174c94); text-decoration: underline; }
+.scalajs-ui-editor__surface img { max-width: 100%; height: auto; }
+.scalajs-ui-editor-dialog {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  gap: 12px;
+  padding: 20px;
+}
+.scalajs-ui-editor-dialog label { display: grid; gap: 6px; width: 100%; }
+.scalajs-ui-editor-dialog input { box-sizing: border-box; width: 100%; padding: 9px 11px; border: 1px solid var(--aj-line, #c5d3e3); border-radius: 5px; color: inherit; background: var(--aj-surface, #fff); }
+.scalajs-ui-editor-dialog [role="alert"] { width: 100%; margin: 0; }
+.scalajs-ui-editor-dialog button,
+.scalajs-ui-editor__markdown-actions button {
+  min-height: 34px;
+  padding: 7px 14px;
+  border: 1px solid var(--aj-line, #c5d3e3);
+  border-radius: 5px;
+  background: var(--aj-surface, #f8fafc);
+  color: var(--aj-ink, #172536);
+  cursor: pointer;
+  font: inherit;
+}
+.scalajs-ui-editor-dialog button[type="submit"] {
+  border-color: var(--aj-accent, #3977c5);
+  background: var(--aj-accent-muted, #e6effc);
+  color: var(--aj-accent-strong, #174c94);
+  font-weight: 600;
+}
+.scalajs-ui-editor__markdown-actions { gap: 8px; align-items: center; }
+@media (max-width: 600px) {
+  .scalajs-ui-editor .ember-toolbar--ribbon { flex-wrap: nowrap; overflow-x: auto; padding: 8px 5px; }
+  .scalajs-ui-editor .ember-ribbon-group { flex: 0 0 auto; padding-right: 6px; }
+  .scalajs-ui-editor .ember-toolbar button { min-height: 40px; min-width: 40px; }
+  .scalajs-ui-editor .ember-ribbon-group__controls { grid-template-rows: repeat(2, 40px); }
+}

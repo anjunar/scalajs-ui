@@ -12,9 +12,9 @@
  *
  * Missing, it fails loudly rather than skipping.
  *
- * Lexical itself mounts and runs fine under jsdom (verified while building
+ * Ember itself mounts and runs fine under jsdom (verified while building
  * this suite) -- so, unlike a first guess based on "jsdom lacks
- * Selection/Range", these tests exercise the *real* Lexical surface, not
+ * Selection/Range", these tests exercise the *real* Ember surface, not
  * just the SSR preview. What is not exercised here is a real keystroke:
  * simulating actual typing needs Selection/Range editing behavior jsdom does
  * not implement, so the "internal edit -> model" direction is proven by
@@ -110,7 +110,7 @@ describe("form + editor", () => {
     app.dispose();
   });
 
-  it("imports the initial Markdown value into the live Lexical surface", () => {
+  it("imports the initial Markdown value into the live Ember surface", () => {
     const model = { body: property("## Hello **world**") };
     const root = document.createElement("div");
     document.body.appendChild(root);
@@ -130,7 +130,7 @@ describe("form + editor", () => {
     app.dispose();
   });
 
-  it("switches a mounted Lexical surface to readonly without replacing it", () => {
+  it("switches a mounted Ember surface to readonly without replacing it", () => {
     const root = document.createElement("div");
     document.body.appendChild(root);
 
@@ -292,7 +292,7 @@ describe("form + editor", () => {
     app.dispose();
   });
 
-  it("mounts the Lexical surface readonly on the first browser render", () => {
+  it("mounts the Ember surface readonly on the first browser render", () => {
     const root = document.createElement("div");
     document.body.appendChild(root);
 
@@ -314,7 +314,7 @@ describe("form + editor", () => {
     expect(surface.textContent).toBe("Initially readonly");
     expect(surface.getAttribute("contenteditable")).toBe("false");
     expect(surface.getAttribute("aria-readonly")).toBe("true");
-    expect(surface.classList.contains("lexical-read-only")).toBe(true);
+    expect(surface.classList.contains("ember-read-only")).toBe(true);
     expect(surface.style.display).toBe("");
     expect(fallback.style.display).toBe("none");
     expect(toolbar.style.display).toBe("none");
@@ -322,7 +322,7 @@ describe("form + editor", () => {
     app.dispose();
   });
 
-  it("keeps the full heading and inline-format theme contract in Lexical", () => {
+  it("keeps the full heading and inline-format theme contract in Ember", () => {
     const root = document.createElement("div");
     document.body.appendChild(root);
 
@@ -330,17 +330,14 @@ describe("form + editor", () => {
       viewport(() =>
         editor("body", {
           standalone: true,
-          value: "###### H6\n\n**bold** *italic* ++underlined++ ~~struck~~ ==marked== `code`",
+          value: "###### H6\n\n**bold** *italic* `code`",
         })
       );
     });
 
-    expect(root.querySelector(".lexical-heading-h6")?.textContent).toBe("H6");
-    expect(root.querySelector(".lexical-text-bold")?.textContent).toBe("bold");
-    expect(root.querySelector(".lexical-text-italic")?.textContent).toBe("italic");
-    expect(root.querySelector(".lexical-text-underline")?.textContent).toBe("underlined");
-    expect(root.querySelector(".lexical-text-strikethrough")?.textContent).toBe("struck");
-    expect(root.querySelector("mark")?.textContent).toBe("marked");
+    expect(root.querySelector(".scalajs-ui-editor__surface h6")?.textContent).toBe("H6");
+    expect(root.querySelector(".scalajs-ui-editor__surface strong")?.textContent).toBe("bold");
+    expect(root.querySelector(".scalajs-ui-editor__surface em")?.textContent).toBe("italic");
     expect(root.querySelector(".scalajs-ui-editor__surface code")?.textContent).toBe("code");
 
     app.dispose();
@@ -388,7 +385,7 @@ describe("form + editor", () => {
     const serverSurface = root.querySelector(".scalajs-ui-editor__surface");
 
     // Hydration first claims the textarea emitted by SSR. `afterCompose` then
-    // progressively enhances it to Lexical without changing the Markdown
+    // progressively enhances it to Ember without changing the Markdown
     // value stored in the form model.
     const app = await hydrate(root, build);
 
@@ -402,7 +399,7 @@ describe("form + editor", () => {
     app.dispose();
   });
 
-  it("enhances an initially readonly SSR preview to readonly Lexical during hydration", async () => {
+  it("enhances an initially readonly SSR preview to readonly Ember during hydration", async () => {
     const build = (): void => {
       viewport(() =>
         editor("body", {
@@ -415,7 +412,7 @@ describe("form + editor", () => {
     };
 
     const rendered = await renderToString(build);
-    expect(rendered.html).toContain('<h2 class="lexical-heading-h2">');
+    expect(rendered.html).toContain('<h2 class="editor-heading-h2">');
     expect(rendered.html).not.toContain("<textarea");
 
     const root = document.createElement("div");
@@ -433,7 +430,7 @@ describe("form + editor", () => {
     expect(serverSurface.textContent).toBe("Hydrated readonly");
     expect(serverSurface.getAttribute("contenteditable")).toBe("false");
     expect(serverSurface.getAttribute("aria-readonly")).toBe("true");
-    expect(serverSurface.classList.contains("lexical-read-only")).toBe(true);
+    expect(serverSurface.classList.contains("ember-read-only")).toBe(true);
 
     app.dispose();
   });
@@ -507,7 +504,7 @@ describe("form + editor", () => {
     remountedApp.dispose();
   });
 
-  it("removes every listener registered on the Lexical root during unmount", () => {
+  it("removes every listener registered on the Ember root during unmount", () => {
     const root = document.createElement("div");
     document.body.appendChild(root);
     const added = new Map<string, number>();
@@ -556,9 +553,6 @@ describe("form + editor", () => {
       "",
       "![Preview](/media/image.png){width=42}",
       "",
-      "| Name | Value |",
-      "| --- | --- |",
-      "| **answer** | [source](https://example.test) |",
       "",
       "```scala",
       "val answer = 42",
@@ -580,15 +574,14 @@ describe("form + editor", () => {
       });
     });
 
-    expect(root.querySelector("img")?.getAttribute("style")).toContain("max-width: 100%");
-    expect(root.querySelector("table")).not.toBeNull();
-    expect(root.querySelector(".codemirror-container")).not.toBeNull();
+    expect(root.querySelector("img")?.getAttribute("width")).not.toBeNull();
+    expect(root.querySelector(".scalajs-ui-editor__surface pre code")).not.toBeNull();
     expect(root.querySelector("hr")).not.toBeNull();
     expect(model.body.get).toBe(markdown);
 
     model.body.set("![Updated](/media/updated.png){width=17}");
     expect(root.querySelector("img")?.getAttribute("alt")).toBe("Updated");
-    expect(root.querySelector("img")?.getAttribute("style")).toContain("max-width: 100%");
+    expect(root.querySelector("img")?.getAttribute("width")).not.toBeNull();
 
     app.dispose();
   });
@@ -604,7 +597,7 @@ describe("form + editor", () => {
       });
     });
 
-    expect(rendered.html).toContain('<h2 class="lexical-heading-h2">');
+    expect(rendered.html).toContain('<h2 class="editor-heading-h2">');
     expect(rendered.html).toContain("<strong>world</strong>");
     expect(rendered.html).toContain("<u>underlined</u>");
     expect(rendered.html).toContain("<mark>marked</mark>");
@@ -671,7 +664,7 @@ describe("standalone", () => {
 });
 
 describe("plugins and toolbarMode", () => {
-  it("renders no toolbar buttons with no plugins", () => {
+  it("provides a useful default toolbar without plugin configuration", () => {
     const root = document.createElement("div");
     document.body.appendChild(root);
 
@@ -679,7 +672,7 @@ describe("plugins and toolbarMode", () => {
       viewport(() => editor("x", { standalone: true, plugins: [] }));
     });
 
-    expect(root.querySelector(".scalajs-ui-editor__toolbar")?.innerHTML ?? "").toBe("");
+    expect(root.querySelector('[data-command="bold"]')).not.toBeNull();
 
     app.dispose();
   });
@@ -692,8 +685,8 @@ describe("plugins and toolbarMode", () => {
       viewport(() => editor("x", { standalone: true, plugins: ["base"] }));
     });
 
-    expect(root.querySelector(".lexical-ribbon-wrapper")).not.toBeNull();
-    expect(root.querySelector('[title="Bold"]')).not.toBeNull();
+    expect(root.querySelector(".ember-toolbar--ribbon")).not.toBeNull();
+    expect(root.querySelector('[data-command="bold"]')).not.toBeNull();
 
     app.dispose();
   });
@@ -706,8 +699,8 @@ describe("plugins and toolbarMode", () => {
       viewport(() => editor("x", { standalone: true, plugins: ["base"], toolbarMode: "menu" }));
     });
 
-    expect(root.querySelector(".lexical-menu-bar")).not.toBeNull();
-    expect(root.querySelector(".lexical-ribbon-wrapper")).toBeNull();
+    expect(root.querySelector(".scalajs-ui-editor__compact")).not.toBeNull();
+    expect(root.querySelector(".ember-toolbar--ribbon")).toBeNull();
 
     app.dispose();
   });

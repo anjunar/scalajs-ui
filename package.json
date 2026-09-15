@@ -1,6 +1,6 @@
 {
   "name": "scalajs-ui",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "workspaces": [
     "npm/*"
@@ -26,7 +26,6 @@
   },
   "dependencies": {
     "@anjunar/scalajs-ui": "*",
-    "@anjunar/scalajs-lexical": "^1.0.10",
     "express": "^5.2.1"
   },
   "devDependencies": {

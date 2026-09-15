@@ -1,17 +1,10 @@
 package ui.editor.plugins
 
 import ui.editor.Editor
-import lexical.ToolbarElement
-import lexical.codemirror.{CodeMirrorModule, CodeMirrorNode}
-
-import scala.scalajs.js
 
 final class CodePlugin extends EditorPlugin {
-  override val name: String                         = "code"
-  override val toolbarElements: Seq[ToolbarElement] = Seq(new CodeMirrorModule())
-  override val nodes: Seq[js.Any]                   = Seq(js.constructorOf[CodeMirrorNode])
+  val name = "code"
 }
-
 object CodePlugin {
   def codePlugin(body: CodePlugin ?=> Unit = {})(using editor: Editor): CodePlugin = {
     val plugin = new CodePlugin()

@@ -1,6 +1,5 @@
 package ui.editor
 
-import lexical.media.{ImageReference, InternalImageUrl}
 import org.scalajs.dom
 import scala.concurrent.Future
 

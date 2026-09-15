@@ -29,7 +29,7 @@ import ui.editor.{MediaUploader, MediaUrlPolicy, MediaReference, UploadedMediaRe
   * to `FormFactories.DynamicFormular`: an `editor` registered under a `form`/`subForm` binds
   * through the exact same generic `(_, s: CoreProperty[Any], t: CoreProperty[Any])` branch of
   * `DynamicFormular.bindNow` that `input` uses. Markdown is the stable value contract on both sides
-  * of the bridge; Lexical EditorState JSON remains an implementation detail.
+  * of the bridge; Ember sessions remain owned by the Scala component.
   *
   * The one thing this factory does that no other does: `ui.editor.plugins.basePlugin()`/
   * `headingPlugin()`/... are Scala functions, not values, so a JS `plugins` list is turned into

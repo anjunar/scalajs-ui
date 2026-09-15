@@ -1,0 +1,20 @@
+{
+  "src/client.mjs": {
+    "file": "assets/client-Cfq4aEMN.js",
+    "name": "client",
+    "src": "src/client.mjs",
+    "isEntry": true,
+    "dynamicImports": [
+      "src/hydrate.mjs"
+    ],
+    "css": [
+      "assets/client-CfCazEmF.css"
+    ]
+  },
+  "src/hydrate.mjs": {
+    "file": "assets/hydrate-CADhNsvH.js",
+    "name": "hydrate",
+    "src": "src/hydrate.mjs",
+    "isDynamicEntry": true
+  }
+}

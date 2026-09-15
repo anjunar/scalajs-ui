@@ -2,7 +2,7 @@ package ui.editor
 
 import ui.core.component.AbstractComponent
 import ui.core.context.UrlScope
-import ui.core.di.Context
+
 import ui.core.dsl.AttributeDsl.{setAttribute as setDslAttribute}
 import ui.core.dsl.ClassDsl.{addClass, classes}
 import ui.core.dsl.DslLayer
@@ -18,7 +18,7 @@ import ui.core.statement.DynamicComponentRenderer.dynamic
 import ui.editor.plugins.EditorPlugin
 import ui.forms.Form.FormContext
 import ui.forms.{Control, Editable, Placeholder}
-import lexical.DialogService
+
 import org.scalajs.dom.{HTMLDivElement, HTMLElement}
 
 import scala.collection.mutable
@@ -31,8 +31,8 @@ enum EditorToolbarMode:
   *
   * Markdown is the public value in every environment. On the server, readonly mode produces
   * semantic HTML and editable mode produces a textarea. In the browser both server representations
-  * are progressively enhanced to Lexical after compose; its own editable state then decides whether
-  * the mounted surface is interactive. Lexical imports and exports Markdown at the component
+  * are progressively enhanced to Ember after compose; its own editable state then decides whether
+  * the mounted surface is interactive. Ember imports and exports Markdown at the component
   * boundary.
   */
 final class Editor private[editor] (
@@ -48,23 +48,25 @@ final class Editor private[editor] (
   override val valueProperty: Property[String] = Property("")
 
   private val placeholderProperty                      = Property("")
+  private val presentationError                        = Property("")
+  private val sourceModeLabel                          = Property("Markdown")
+  private var sourceMode                               = false
   private val plugins                                  = mutable.ArrayBuffer.empty[EditorPlugin]
   var mediaUploader: Option[MediaUploader]             = None
   var mediaUrlPolicy: MediaUrlPolicy                   = MediaUrlPolicy.internal
   var onMediaStatus: MediaUploadStatus => Unit         = _ => ()
   val mediaStatusProperty: Property[MediaUploadStatus] = Property(MediaUploadStatus())
 
-  private var toolbarModeValue: EditorToolbarMode         = EditorToolbarMode.Ribbon
-  private var dialogServiceValue: Option[DialogService]   = None
-  private var editUrlValue: Option[String]                = None
-  private var editLabelValue                              = "Edit"
-  private var readonlyUrlValue: Option[String]            = None
-  private var readonlyLabelValue                          = "Readonly"
-  private var toolbarHost: Div                            = uninitialized
-  private var fallbackHost: Div                           = uninitialized
-  private var surfaceHost: Div                            = uninitialized
-  private var lexicalAdapter: LexicalEditorAdapter | Null = null
-  private var browserRendering                            = false
+  private var toolbarModeValue: EditorToolbarMode       = EditorToolbarMode.Ribbon
+  private var editUrlValue: Option[String]              = None
+  private var editLabelValue                            = "Edit"
+  private var readonlyUrlValue: Option[String]          = None
+  private var readonlyLabelValue                        = "Readonly"
+  private var toolbarHost: Div                          = uninitialized
+  private var fallbackHost: Div                         = uninitialized
+  private var surfaceHost: Div                          = uninitialized
+  private var nativeAdapter: NativeEditorAdapter | Null = null
+  private var browserRendering                          = false
   private var configuredEditable: Option[Either[Boolean, Property[Boolean]]] = None
 
   override def compose(cursor: Cursor): Unit = {
@@ -124,6 +126,19 @@ final class Editor private[editor] (
 
           div {
             classes = Seq("scalajs-ui-editor__markdown-actions")
+            ui.core.layout.Button.button(sourceModeLabel) {
+              ui.core.layout.Button.buttonType("button")
+              ui.core.dsl.EventDsl.onClick { _ =>
+                if (sourceMode) {
+                  sourceMode = false
+                  mountNative()
+                } else {
+                  sourceMode = true
+                  destroyEditor()
+                  syncPresentation(editableProperty.get)
+                }
+              }
+            }
             dynamic(editableProperty.map[AbstractComponent] { editable =>
               if (editable)
                 new MarkdownModeLink(
@@ -140,6 +155,11 @@ final class Editor private[editor] (
                   onActivate = () => editableProperty.set(true)
                 )
             })
+          }
+
+          div {
+            setDslAttribute("role", "status")
+            text(presentationError) {}
           }
 
           div {
@@ -163,8 +183,8 @@ final class Editor private[editor] (
             surfaceHost = div {
               classes = Seq(
                 "scalajs-ui-editor__surface",
-                "lexical-editor-container",
-                "lexical-editor-input"
+                "ember-editor-container",
+                "ember-editor-input"
               )
               setDslAttribute("role", "textbox")
               setDslAttribute("aria-multiline", "true")
@@ -203,7 +223,7 @@ final class Editor private[editor] (
         .collect { case input: org.scalajs.dom.HTMLTextAreaElement => input }
         .filter(input => input.value != input.textContent)
         .foreach(input => publishMarkdown(input.value))
-      mountLexical()
+      mountNative()
     }
 
   override protected def setPlaceholder(value: String): Unit =
@@ -216,11 +236,6 @@ final class Editor private[editor] (
 
   private[editor] def toolbarMode_=(mode: EditorToolbarMode): Unit =
     toolbarModeValue = Option(mode).getOrElse(EditorToolbarMode.Ribbon)
-
-  private[editor] def dialogService: Option[DialogService] = dialogServiceValue
-
-  private[editor] def dialogService_=(service: DialogService): Unit =
-    dialogServiceValue = Option(service)
 
   private[editor] def editUrl: Option[String] = editUrlValue
 
@@ -294,52 +309,63 @@ final class Editor private[editor] (
       addDisposable(() => controller.unregister(this))
     }
 
-  private def mountLexical(): Unit =
-    if (lexicalAdapter == null)
+  private def mountNative(): Unit =
+    if (nativeAdapter == null && !sourceMode)
       for {
         surface <- domElement[HTMLDivElement](surfaceHost)
         toolbar <- domElement[HTMLElement](toolbarHost)
       } {
-        val adapter = new LexicalEditorAdapter(
+        val adapter = new NativeEditorAdapter(
           name = name,
           owner = this,
           surface = surface,
           toolbar = toolbar,
           plugins = plugins.toSeq,
           toolbarMode = toolbarModeValue,
-          configuredDialogService = dialogServiceValue.orElse(
-            Editor.DialogServiceContext.inject(using this)
-          ),
           mediaUploader = mediaUploader,
           mediaUrlPolicy = mediaUrlPolicy,
           onMediaStatus = status => { mediaStatusProperty.set(status); onMediaStatus(status) },
           onMarkdownChanged = publishMarkdown,
-          onFocusChanged = updateFocus
+          onFocusChanged = updateFocus,
+          onSourceRequested =
+            () => { sourceMode = true; destroyEditor(); syncPresentation(editableProperty.get) }
         )
-        lexicalAdapter = adapter
-        adapter.mount(valueProperty.get, editableProperty.get)
+        try {
+          adapter.mount(valueProperty.get, editableProperty.get)
+          nativeAdapter = adapter
+          presentationError.set("")
+        } catch {
+          case scala.util.control.NonFatal(error) =>
+            adapter.close()
+            sourceMode = true
+            presentationError.set(
+              "Markdown-Ansicht: " + Option(error.getMessage)
+                .getOrElse("Darstellung nicht verfügbar.")
+            )
+        }
         syncPresentation(editableProperty.get)
         setAttribute("data-scalajs-ui-editor-loading", "false")
       }
 
   private def updateEditable(editable: Boolean): Unit = {
     if (
-      browserRendering && editable && lexicalAdapter == null && Option(surfaceHost).exists(
+      browserRendering && editable && nativeAdapter == null && Option(surfaceHost).exists(
         _.isBound
       )
     )
-      mountLexical()
+      mountNative()
 
-    Option(lexicalAdapter).foreach(_.setEditable(editable))
+    Option(nativeAdapter).foreach(_.setEditable(editable))
     syncPresentation(editable)
   }
 
   private def syncPresentation(editable: Boolean): Unit = {
-    // Once Lexical has been mounted in the browser, keep it as the live surface when the
-    // control becomes readonly. The adapter applies Lexical's readonly state and hides the
+    sourceModeLabel.set(if (sourceMode) "Visuell" else "Markdown")
+    // Once Ember has been mounted in the browser, keep it as the live surface when the
+    // control becomes readonly. The adapter applies Ember's readonly state and hides the
     // toolbar; falling back to MarkdownRenderer here would unnecessarily replace the DOM and
-    // lose the hydrated Lexical surface.
-    val enhanced = browserRendering && lexicalAdapter != null
+    // lose the hydrated Ember surface.
+    val enhanced = browserRendering && nativeAdapter != null
     Option(fallbackHost).foreach(_.setStyle("display", if (enhanced) "none" else ""))
     Option(surfaceHost).foreach { surface =>
       surface.setStyle("display", if (enhanced) "" else "none")
@@ -355,7 +381,20 @@ final class Editor private[editor] (
   }
 
   private def syncExternalValue(value: String): Unit =
-    Option(lexicalAdapter).foreach(_.syncMarkdown(value))
+    Option(nativeAdapter).foreach { adapter =>
+      try adapter.syncMarkdown(value)
+      catch {
+        case scala.util.control.NonFatal(error) =>
+          sourceMode = true
+          destroyEditor()
+          presentationError.set(
+            "Markdown-Ansicht: " + Option(error.getMessage).getOrElse(
+              "Darstellung nicht verfügbar."
+            )
+          )
+          syncPresentation(editableProperty.get)
+      }
+    }
 
   private def updateFocus(focused: Boolean): Unit = {
     focusedProperty.set(focused)
@@ -363,8 +402,8 @@ final class Editor private[editor] (
   }
 
   private def destroyEditor(): Unit = {
-    Option(lexicalAdapter).foreach(_.close())
-    lexicalAdapter = null
+    Option(nativeAdapter).foreach(_.close())
+    nativeAdapter = null
     focusedProperty.set(false)
   }
 
@@ -379,9 +418,6 @@ final class Editor private[editor] (
 }
 
 object Editor {
-  val DialogServiceContext: Context[DialogService] =
-    Context.create[DialogService]("scalajs-ui-editor-dialog-service")
-
   export Editable.{editable, editable_=, editableProperty}
   export Placeholder.{placeholder, placeholder_=}
 
@@ -420,11 +456,6 @@ object Editor {
 
   def floatingToolbar()(using editor: Editor): Unit = editor.toolbarMode =
     EditorToolbarMode.Floating
-
-  def dialogService(using editor: Editor): Option[DialogService] = editor.dialogService
-
-  def dialogService_=(service: DialogService)(using editor: Editor): Unit =
-    editor.dialogService = service
 
   def editUrl(using editor: Editor): Option[String] = editor.editUrl
 

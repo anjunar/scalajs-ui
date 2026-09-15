@@ -267,9 +267,9 @@ const catalogEntries: readonly DocEntry[] = [
   {
     path: "/editor/basics",
     title: "Editor",
-    summary: "A Lexical-backed rich-text field with Markdown output, a complete toolbar, and live value feedback.",
+    summary: "A Ember-based rich-text field with Markdown output, a complete toolbar, and live value feedback.",
     pkg: "editor",
-    keywords: ["editor", "lexical", "richtext", "plugins"],
+    keywords: ["editor", "ember", "richtext", "plugins"],
     doc: editorBasicsDoc,
     runsOnBridgeOnly: true,
   },

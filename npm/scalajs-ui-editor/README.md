@@ -1,6 +1,6 @@
 # @anjunar/scalajs-ui-editor
 
-A Lexical-backed rich-text field for Scala JS UI 1.0. Markdown is the public value; Lexical editor state remains inside the Scala.js runtime.
+A native Ember rich-text field for Scala JS UI. Markdown is the public value; the session, ribbon and Viewport forms use one Scala.js UI runtime.
 
 ## Overview
 
@@ -32,9 +32,9 @@ viewport(() => form(model, {}, () => {
 
 ## Markdown and plugins
 
-The value supports CommonMark-shaped headings, paragraphs, block quotes, lists, emphasis, strong, strike-through, highlight, inline code, links, fenced code, images, horizontal rules, and basic GFM pipe tables. Project extensions include underline (`++text++`) and image width (`![alt](url){width=320}`). Raw HTML is text and unsafe or unknown URL schemes are rejected consistently in SSR and the browser.
+The native view supports headings, paragraphs, quotes, lists, emphasis, strong, inline code, links, fenced code, images and horizontal rules. The UI Markdown dialect preserves image titles and `{width=320}`. Tables, raw HTML and extra marks (`++underline++`, `~~strike~~`, `==highlight==`) open in the Markdown source view, so unrelated edits cannot silently change their meaning.
 
-`plugins` selects toolbar and insertion commands: `base`, `heading`, `list`, `link`, `image`, `table`, `code`, and `horizontalRule`. Markdown import/export remains available even when a toolbar plugin is omitted.
+`plugins` selects toolbar and insertion commands: `base`, `heading`, `list`, `link`, `image`, `table`, `code`, and `horizontalRule`. Without plugin configuration the standard toolbar is shown. `table` opens the source view. Link and image dialogs call Viewport directly. Image resizing is available as a width field in the image dialog.
 
 ## Media uploads
 
@@ -83,16 +83,17 @@ Alt text, title and width describe a document occurrence, independently of the s
 ![Katze](/media/4711 "Im Garten"){width=320}
 ```
 
-Width is an optional positive integer in CSS pixels (1–2147483647). Explicit widths, including
+Width is an optional positive integer in CSS pixels (1–100000 in the native view; larger existing values stay in source view). Explicit widths, including
 680, survive export. Omission means natural width constrained by the container. Percentages,
 CSS expressions and other units are not supported. The renderer uses the chosen width with
 `max-width: 100%` and automatic height. Reference-style images are expanded to inline Markdown;
 standard code examples are preserved. The backend must support the same `{width=N}` extension.
 
-Clipboard HTML and Lexical JSON are validated too. Fresh embedded clipboard images go through
-the uploader; old embedded images in a loaded document are discarded. Upload errors do not create
-image nodes. Multi-file uploads insert in input order as one transaction after the whole batch
-succeeds. Cancel, document replacement, readonly mode and unmount invalidate pending insertions.
+Clipboard HTML and the native clipboard format are validated against the selected profile.
+Image files use the uploader; loaded data/blob image references are discarded. Embedded HTML
+image bytes are not a transport contract of the new editor. Upload errors do not create image
+nodes. Multi-file uploads retain input order. Document replacement, readonly mode and unmount
+abort pending insertions; composition temporarily defers insertion.
 The editor never deletes stored media on its own; orphan cleanup belongs to the backend.
 
 There is no built-in storage service. The demo therefore exposes the missing upload configuration
@@ -100,7 +101,7 @@ instead of simulating persistence. Without an uploader, existing image metadata 
 
 ## SSR and non-JavaScript behavior
 
-`editable: false` renders semantic readonly HTML. `editable: true` renders a Markdown textarea on the server. Pass a `Property<boolean>` to control the mode from outside the editor and keep both sides synchronized. `editUrl` and `readonlyUrl` provide ordinary mode-switch links; without overrides they use `<name>.editor=editable|readonly`. Hydration claims the fallback and enhances it to Lexical.
+`editable: false` renders semantic readonly HTML. `editable: true` renders a Markdown textarea on the server. Pass a `Property<boolean>` to control the mode from outside the editor and keep both sides synchronized. `editUrl` and `readonlyUrl` provide ordinary mode-switch links; without overrides they use `<name>.editor=editable|readonly`. Hydration claims the fallback and enhances supported documents to Ember.
 
 The textarea stays synchronized after rich-text changes. A future HTML-only upload handler can
 use an ordinary multipart POST with a separate file field and the same Markdown/reference
@@ -109,9 +110,7 @@ server validation in the consuming application. Document validation rejects inva
 and widths, including values assigned externally: applications must validate before saving.
 The backend must enforce the same rule for REST and no-JavaScript submissions.
 
-Custom Scala dialog services used for image editing must implement `DialogService.showAsync`;
-the default viewport service supports pending confirmation, cancellation and retry. Ordinary
-synchronous dialogs continue to use `show`.
+Link and image forms use `Viewport.WindowConf` directly. The Lexical dialog-service hooks were removed; a Viewport ancestor supplies the application window context.
 
 ## API overview
 
