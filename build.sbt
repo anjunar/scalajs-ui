@@ -286,10 +286,10 @@ lazy val uiEditor = Project(id = "scalajs-ui-editor", base = file("scala/scalajs
     name                                 := "scalajs-ui-editor",
     moduleName                           := "scalajs-ui-editor",
     libraryDependencies ++= Seq(
-      "com.anjunar" %% "scalajs-ember-browser-support" % "0.1.0-SNAPSHOT",
-      "com.anjunar" %% "scalajs-ember-standard" % "0.1.0-SNAPSHOT",
-      "com.anjunar" %% "scalajs-ember-toolbar" % "0.1.0-SNAPSHOT",
-      "com.anjunar" %% "scalajs-ember-forms" % "0.1.0-SNAPSHOT"
+      "com.anjunar" %% "scalajs-ember-browser-support" % "1.0.0",
+      "com.anjunar" %% "scalajs-ember-standard" % "1.0.0",
+      "com.anjunar" %% "scalajs-ember-toolbar" % "1.0.0",
+      "com.anjunar" %% "scalajs-ember-forms" % "1.0.0"
     )
   )
   .settings(commonLibrarySettings)
