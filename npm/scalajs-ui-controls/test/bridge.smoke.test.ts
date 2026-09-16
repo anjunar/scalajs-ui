@@ -226,6 +226,32 @@ describe("table-view", () => {
     } finally { app.dispose(); root.remove(); }
   });
 
+  it("applies headerClass/cellClass to the header and every data cell, reactively, without dropping the built-in classes", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const headerClass = property<readonly string[]>(["numeric-header"]);
+    const app = mount(root, () => {
+      tableView(listProperty(["Ada", "Cara"]), [
+        valueColumn("Name", row => row, { headerClass, cellClass: ["numeric-cell"] }),
+      ]);
+    });
+    try {
+      const header = root.querySelector<HTMLElement>(".ui-table-header-cell")!;
+      const cells = Array.from(root.querySelectorAll<HTMLElement>(".ui-table-cell"));
+      expect(header.classList).toContain("numeric-header");
+      expect(header.classList).toContain("ui-table-header-cell");
+      expect(cells).toHaveLength(2);
+      for (const cell of cells) {
+        expect(cell.classList).toContain("numeric-cell");
+        expect(cell.classList).toContain("ui-table-cell");
+      }
+
+      headerClass.set(["date-header"]);
+      expect(header.classList).toContain("date-header");
+      expect(header.classList).not.toContain("numeric-header");
+    } finally { app.dispose(); root.remove(); }
+  });
+
   it("opens the column menu in the nearest viewport and keeps visibility, widths and selection coherent", () => {
     const root = document.createElement("div"); document.body.appendChild(root);
     const visible = property(true);

@@ -292,6 +292,10 @@ object TableViewPage {
                     maxWidth = 300.0
                     sortable = true
                     sortKey = "year"
+                    // C10: reaches the separately created header/cells, in addition to their own
+                    // ui-table-header-cell/ui-table-cell classes.
+                    headerClasses = Seq("table-demo__numeric-header")
+                    cellClasses = Seq("table-demo__numeric-cell")
                     cell { book =>
                       text(book.year.toString) {}
                     }

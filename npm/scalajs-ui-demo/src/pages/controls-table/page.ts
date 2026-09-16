@@ -158,7 +158,12 @@ export function controlsTablePage(): void {
             column(translated("Author").get, (book) => text(book.author), { prefWidth: 220, minWidth: 100, maxWidth: 600, sortable: true, sortKey: "author", visible: showAuthors, onVisibilityChange: value => showAuthors.set(value) }),
           ]),
           columnGroup(translated("Details").get, [
-            column(translated("Year").get, (book) => text(String(book.year)), { prefWidth: 100, minWidth: 70, maxWidth: 300, sortable: true, sortKey: "year" }),
+            column(translated("Year").get, (book) => text(String(book.year)), {
+              prefWidth: 100, minWidth: 70, maxWidth: 300, sortable: true, sortKey: "year",
+              // C10: reaches the separately created header/cells, in addition to their own
+              // ui-table-header-cell/ui-table-cell classes.
+              headerClass: ["table-demo__numeric-header"], cellClass: ["table-demo__numeric-cell"],
+            }),
             column(translated("Note").get, (book) => {
               const note = noteFor(book);
               input(() => {

@@ -53,6 +53,7 @@ class TableCell[S, T] extends AbstractComponent {
       classIf("ui-table-cell-empty", emptyProperty)
       for (column <- Option(boundColumn); table <- Option(tableView)) {
         table.registerCell(this)
+        addDisposable(TableColumn.applyClasses(this, column.cellClassesProperty))
         addDisposable(
           table.focusedCellProperty.observe(position =>
             focusedState.set(

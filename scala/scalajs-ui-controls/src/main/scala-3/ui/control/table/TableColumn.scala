@@ -2,7 +2,7 @@ package ui.control.table
 
 import ui.core.component.{AbstractComponent, AbstractCustomComponent}
 import ui.core.render.Cursor
-import ui.core.state.{ListProperty, Property, ReadOnlyProperty}
+import ui.core.state.{Disposable, ListProperty, Property, ReadOnlyProperty}
 
 class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponent {
   import TableColumn.{CellFactory, CellRenderer, CellValueFactory}
@@ -18,6 +18,12 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
   val cellRenderer: Property[Option[CellRenderer[S]]]                    = Property(None)
   val sortableProperty: Property[Boolean]                                = Property(false)
   val sortKeyProperty: Property[Option[String]]                          = Property(None)
+  // C10: the header is a separately created component (TableView.HeaderSlot), so a column's own
+  // inherited AbstractComponent classes never reach it -- these are the explicit hook instead.
+  // cellClasses apply to every TableCell of this column, in addition to the framework's own
+  // ui-table-cell-* classes; they do not replace those.
+  val headerClassesProperty: Property[Seq[String]]                       = Property(Seq.empty)
+  val cellClassesProperty: Property[Seq[String]]                         = Property(Seq.empty)
   val cellValueFactoryProperty: Property[Option[CellValueFactory[S, T]]] = Property(None)
   val cellFactoryProperty: Property[Option[CellFactory[S, T]]]           = Property(None)
   val editCommitHandlerProperty: Property[Option[TableEditCommitEvent[S, T] => Unit]] =
@@ -139,6 +145,11 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
   def editable_=(value: Boolean): Unit       = editableProperty.set(value)
   def parentColumn: TableColumn[S, ?] | Null = parentColumnProperty.get
 
+  def headerClasses: Seq[String]                      = headerClassesProperty.get
+  def headerClasses_=(value: Seq[String]): Unit       = headerClassesProperty.set(value)
+  def cellClasses: Seq[String]                        = cellClassesProperty.get
+  def cellClasses_=(value: Seq[String]): Unit         = cellClassesProperty.set(value)
+
   def setCellRenderer(renderer: CellRenderer[S]): Unit =
     cellRenderer.set(Some(renderer))
 }
@@ -183,6 +194,22 @@ object TableColumn {
     column.reorderable = value
   def reorderable_=[S, T](value: ReadOnlyProperty[Boolean])(using column: TableColumn[S, T]): Unit =
     column.addDisposable(value.observe(column.reorderableProperty.set))
+
+  def headerClasses[S, T](using column: TableColumn[S, T]): Seq[String] = column.headerClasses
+  def headerClasses_=[S, T](value: Seq[String])(using column: TableColumn[S, T]): Unit =
+    column.headerClasses = value
+  def headerClasses_=[S, T](value: ReadOnlyProperty[Seq[String]])(using
+      column: TableColumn[S, T]
+  ): Unit =
+    column.addDisposable(value.observe(column.headerClassesProperty.set))
+
+  def cellClasses[S, T](using column: TableColumn[S, T]): Seq[String] = column.cellClasses
+  def cellClasses_=[S, T](value: Seq[String])(using column: TableColumn[S, T]): Unit =
+    column.cellClasses = value
+  def cellClasses_=[S, T](value: ReadOnlyProperty[Seq[String]])(using
+      column: TableColumn[S, T]
+  ): Unit =
+    column.addDisposable(value.observe(column.cellClassesProperty.set))
   def minWidth[S, T](using column: TableColumn[S, T]): Double                = column.minWidth
   def minWidth_=[S, T](value: Double)(using column: TableColumn[S, T]): Unit = column.minWidth =
     value
@@ -316,4 +343,22 @@ object TableColumn {
       value: S,
       index: Int
   )
+
+  /** Reactively mirrors `source` onto `component` via `addClass`/`removeClass`, which track their
+    * own list (`baseClasses`) separate from `classes = Seq(...)` (`userClasses`) -- so this can run
+    * alongside a component's own fixed classes without either side clobbering the other. Used to
+    * project `headerClassesProperty`/`cellClassesProperty` onto the separately created header and
+    * cell components (C10): neither inherits a column's own `AbstractComponent` classes.
+    */
+  private[table] def applyClasses(
+      component: AbstractComponent,
+      source: ReadOnlyProperty[Seq[String]]
+  ): Disposable = {
+    var current = Seq.empty[String]
+    source.observe { next =>
+      current.diff(next).foreach(component.removeClass)
+      next.diff(current).foreach(component.addClass)
+      current = next
+    }
+  }
 }
