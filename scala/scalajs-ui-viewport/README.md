@@ -9,7 +9,7 @@ The global UI layer for Scala JS UI 1.0: movable windows, anchor-following overl
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-viewport" % "1.0.2"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-viewport" % "1.0.3"
 ```
 
 ## Quick start
