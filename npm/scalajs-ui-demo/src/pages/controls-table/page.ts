@@ -1,10 +1,12 @@
 import { attr, button, classes, div, element, onClick, onInput, property, style, text, when } from "@anjunar/scalajs-ui-core";
 import { column, columnGroup, remoteSource, tableView } from "@anjunar/scalajs-ui-controls";
-import type { Property, UiEvent } from "@anjunar/scalajs-ui-core";
+import type { Property, ReadOnlyProperty, UiEvent } from "@anjunar/scalajs-ui-core";
 import type { ColumnResizePolicy, RemotePage, RemoteSource, SortSpec, TableDirection, TableSelectionMode, TableViewHandle } from "@anjunar/scalajs-ui-controls";
 import { translated } from "../../app/i18n.js";
 
 const input = element("input");
+const ul = element("ul");
+const li = element("li");
 
 interface Book {
   readonly title: string;
@@ -58,6 +60,51 @@ function inputValue(event: UiEvent): string {
   return (event.target as HTMLInputElement | null)?.value ?? "";
 }
 
+/** One labelled block of the control bar: its buttons plus the hints that explain them. */
+function controlGroup(
+  label: ReadOnlyProperty<string>,
+  hints: readonly ReadOnlyProperty<string>[],
+  actions: () => void,
+): void {
+  div(() => {
+    classes("table-demo__group");
+    div(() => {
+      classes("table-demo__group-label");
+      text(label);
+    });
+    div(() => {
+      classes("table-demo__group-actions");
+      actions();
+    });
+    if (hints.length > 0) {
+      ul(() => {
+        classes("table-demo__hints");
+        for (const hint of hints) {
+          li(() => {
+            classes("table-demo__hint");
+            text(hint);
+          });
+        }
+      });
+    }
+  });
+}
+
+/** One readout tile. The value stays reactive; only the label is static. */
+function stat(label: ReadOnlyProperty<string>, value: ReadOnlyProperty<string>): void {
+  div(() => {
+    classes("table-demo__stat");
+    div(() => {
+      classes("table-demo__stat-label");
+      text(label);
+    });
+    div(() => {
+      classes("table-demo__stat-value");
+      text(value);
+    });
+  });
+}
+
 export function controlsTablePage(): void {
   const showAuthors = property(true);
   const selectionMode = property<TableSelectionMode>("multiple");
@@ -85,7 +132,7 @@ export function controlsTablePage(): void {
   });
 
   div(() => {
-    classes("flex", "flex-col", "gap-4");
+    classes("table-demo");
 
     div(() => {
       classes("showcase-note");
@@ -99,41 +146,8 @@ export function controlsTablePage(): void {
       });
     });
 
-    div(() => text(translated("Shift-click headers to sort by multiple columns. Enter or Space sorts a focused header; Shift keeps other sort columns.")));
-    button(translated("Clear sorting"), {}, () => { onClick(() => table.clearSort()); });
-    button(translated("Sort first two columns"), {}, () => onClick(() => table.setSortOrder([
-      { columnIndex: 0, ascending: true }, { columnIndex: 1, ascending: false },
-    ])));
-    button(translated("Reload current sorting"), {}, () => onClick(() => table.sort()));
-    button(translated("Toggle author column"), {}, () => {
-      onClick(() => showAuthors.set(!showAuthors.get));
-    });
-    button(translated("Toggle single / multiple selection"), {}, () => {
-      onClick(() => selectionMode.set(selectionMode.get === "multiple" ? "single" : "multiple"));
-    });
-    button(translated("Toggle row / cell selection"), {}, () => {
-      onClick(() => cellSelectionEnabled.set(!cellSelectionEnabled.get));
-    });
-    div(() => text(translated("Ctrl/Cmd-click toggles rows; Shift-click selects a range.")));
-    div(() => text(translated("In cell mode, Shift-click and Shift+Arrow select an inclusive rectangle.")));
-    div(() => text(translated("Focus the table: Up/Down, Home/End and PageUp/PageDown navigate rows; Left/Right enters and moves cell focus. Shift extends row selection; Ctrl/Cmd moves focus only; Space selects.")));
-    div(() => text(translated("Drag a column edge to resize. Focus its grip and use arrow keys for keyboard resizing.")));
-    div(() => text(translated("Double-click a column edge to fit its content, or press Enter on the focused grip.")));
-    div(() => text(translated("Drag a column header to move it. Or focus the header and press Alt+Shift+Left/Right.")));
-    div(() => text(translated("The note field is bound per book. Its focus and text selection stay in place while neighboring columns change.")));
-    button(translated("Toggle constrained / free column widths"), {}, () => onClick(() =>
-      resizePolicy.set(resizePolicy.get === "unconstrained" ? "flex-last-column" : "unconstrained")));
-    button(translated("Toggle left-to-right / right-to-left"), {}, () => onClick(() =>
-      direction.set(direction.get === "ltr" ? "rtl" : "ltr")));
-    button(translated("Go to row 500"), {}, () => onClick(() => table.scrollToIndex(499)));
-    button(translated("Go to first row"), {}, () => onClick(() => table.scrollToIndex(0)));
-    button(translated("Show selected row"), {}, () => onClick(() => table.scrollToIndex(table.selectedIndex.get)));
-    div(() => text(translated("For horizontal navigation, use free widths and widen the columns.")));
-    button(translated("Show first column"), {}, () => onClick(() => table.scrollToColumnIndex(0)));
-    button(translated("Show last column"), {}, () => onClick(() => table.scrollToColumnIndex(table.columnWidths.get.length - 1)));
-
     div(() => {
-      classes("table-page__table");
+      classes("table-page__table", "table-demo__surface");
       style("height", "420px");
       style("min-height", "0");
       table = tableView(
@@ -148,7 +162,7 @@ export function controlsTablePage(): void {
             column(translated("Note").get, (book) => {
               const note = noteFor(book);
               input(() => {
-                classes("w-full", "rounded-control", "border", "border-line", "px-2", "py-1");
+                classes("table-demo__note");
                 attr("aria-label", `${translated("Note").get}: ${book.title}`);
                 attr("value", note);
                 onInput((event) => note.set(inputValue(event)));
@@ -179,43 +193,104 @@ export function controlsTablePage(): void {
         }
       );
     });
+
     div(() => {
-      classes("showcase-result");
-      div(() => {
-        div(() => text(translated("Selection mode")));
-        div(() => text(table.selectionMode));
-      });
-      div(() => {
-        div(() => text(translated("Selected rows")));
-        div(() => text(table.selectedIndices.map((indices) => String(indices.length))));
-      });
-      div(() => {
-        div(() => text(translated("Selection target")));
-        div(() => text(table.cellSelectionEnabled.map(enabled => enabled ? "cells" : "rows")));
-      });
-      div(() => {
-        div(() => text(translated("Selected cells")));
-        div(() => text(table.selectedCells.map((positions) =>
-          String(positions.filter(position => position.column >= 0).length))));
-      });
-      div(() => {
-        div(() => text(translated("Focused row")));
-        div(() => text(table.focusedIndex.map(index => index < 0 ? "—" : String(index + 1))));
-      });
-      div(() => {
-        div(() => text(translated("Focused cell")));
-        div(() => text(table.focusedCell.map(position =>
-          position === null || position.column < 0 ? "—" : `${position.row + 1}:${position.column + 1}`)));
-      });
-      when(
-        table.selectedItem.map((book) => book === null),
-        () => text(translated("No book selected")),
+      classes("table-demo__stats");
+      stat(translated("Selection mode"), table.selectionMode);
+      stat(translated("Selection target"), table.cellSelectionEnabled.map(enabled => enabled ? "cells" : "rows"));
+      stat(translated("Selected rows"), table.selectedIndices.map((indices) => String(indices.length)));
+      stat(
+        translated("Selected cells"),
+        table.selectedCells.map((positions) => String(positions.filter(position => position.column >= 0).length)),
       );
-      when(
-        table.selectedItem.map((book) => book !== null),
-        () => text(table.selectedItem.map((book) => book?.title ?? "")),
+      stat(translated("Focused row"), table.focusedIndex.map(index => index < 0 ? "—" : String(index + 1)));
+      stat(
+        translated("Focused cell"),
+        table.focusedCell.map(position => position === null || position.column < 0 ? "—" : `${position.row + 1}:${position.column + 1}`),
       );
-      button(translated("Clear book selection"), {}, () => onClick(() => table.clearSelection()));
+      div(() => {
+        classes("table-demo__stat", "table-demo__stat--wide");
+        div(() => {
+          classes("table-demo__stat-label");
+          text(translated("Selected book"));
+        });
+        div(() => {
+          classes("table-demo__stat-value");
+          when(
+            table.selectedItem.map((book) => book === null),
+            () => text(translated("No book selected")),
+          );
+          when(
+            table.selectedItem.map((book) => book !== null),
+            () => text(table.selectedItem.map((book) => book?.title ?? "")),
+          );
+        });
+      });
+    });
+
+    div(() => {
+      classes("table-demo__controls");
+
+      controlGroup(
+        translated("Sorting"),
+        [translated("Shift-click headers to sort by multiple columns. Enter or Space sorts a focused header; Shift keeps other sort columns.")],
+        () => {
+          button(translated("Clear sorting"), {}, () => onClick(() => table.clearSort()));
+          button(translated("Sort first two columns"), {}, () => onClick(() => table.setSortOrder([
+            { columnIndex: 0, ascending: true }, { columnIndex: 1, ascending: false },
+          ])));
+          button(translated("Reload current sorting"), {}, () => onClick(() => table.sort()));
+        },
+      );
+
+      controlGroup(
+        translated("Selection"),
+        [
+          translated("Ctrl/Cmd-click toggles rows; Shift-click selects a range."),
+          translated("In cell mode, Shift-click and Shift+Arrow select an inclusive rectangle."),
+          translated("Focus the table: Up/Down, Home/End and PageUp/PageDown navigate rows; Left/Right enters and moves cell focus. Shift extends row selection; Ctrl/Cmd moves focus only; Space selects."),
+        ],
+        () => {
+          button(translated("Toggle single / multiple selection"), {}, () => {
+            onClick(() => selectionMode.set(selectionMode.get === "multiple" ? "single" : "multiple"));
+          });
+          button(translated("Toggle row / cell selection"), {}, () => {
+            onClick(() => cellSelectionEnabled.set(!cellSelectionEnabled.get));
+          });
+          button(translated("Clear book selection"), {}, () => onClick(() => table.clearSelection()));
+        },
+      );
+
+      controlGroup(
+        translated("Columns"),
+        [
+          translated("Drag a column edge to resize. Focus its grip and use arrow keys for keyboard resizing."),
+          translated("Double-click a column edge to fit its content, or press Enter on the focused grip."),
+          translated("Drag a column header to move it. Or focus the header and press Alt+Shift+Left/Right."),
+          translated("The note field is bound per book. Its focus and text selection stay in place while neighboring columns change."),
+        ],
+        () => {
+          button(translated("Toggle author column"), {}, () => {
+            onClick(() => showAuthors.set(!showAuthors.get));
+          });
+          button(translated("Toggle constrained / free column widths"), {}, () => onClick(() =>
+            resizePolicy.set(resizePolicy.get === "unconstrained" ? "flex-last-column" : "unconstrained")));
+          button(translated("Toggle left-to-right / right-to-left"), {}, () => onClick(() =>
+            direction.set(direction.get === "ltr" ? "rtl" : "ltr")));
+        },
+      );
+
+      controlGroup(
+        translated("Navigation"),
+        [translated("For horizontal navigation, use free widths and widen the columns.")],
+        () => {
+          button(translated("Go to row 500"), {}, () => onClick(() => table.scrollToIndex(499)));
+          button(translated("Go to first row"), {}, () => onClick(() => table.scrollToIndex(0)));
+          button(translated("Show selected row"), {}, () => onClick(() => table.scrollToIndex(table.selectedIndex.get)));
+          button(translated("Show first column"), {}, () => onClick(() => table.scrollToColumnIndex(0)));
+          button(translated("Show last column"), {}, () => onClick(() => table.scrollToColumnIndex(table.columnWidths.get.length - 1)));
+        },
+      );
     });
   });
 }

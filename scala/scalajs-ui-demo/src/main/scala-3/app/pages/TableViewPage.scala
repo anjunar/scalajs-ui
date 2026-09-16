@@ -5,20 +5,29 @@ import scala.concurrent.Future
 import app.components.Showcase.*
 import ui.control.table.TableColumn.*
 import ui.control.table.TableView.*
-import ui.control.table.{TableColumn, TableSort, TableView}
+import ui.control.table.{
+  ColumnResizePolicy,
+  TableColumn,
+  TableDirection,
+  TableSelectionMode,
+  TableSort,
+  TableView
+}
 import ui.core.component.AbstractComponent
 import ui.core.remote.{RemoteListProperty, RemoteLoader, RemotePage, RemoteSort}
 import ui.core.dsl.ClassDsl.classes
 import ui.core.dsl.EventDsl.onClick
-import ui.core.dsl.StyleDsl.*
+// minWidth/maxWidth exist in both DSLs. This page bounds column resizing, not boxes, so the
+// style variants are hidden rather than every column having to qualify its own setters.
+import ui.core.dsl.StyleDsl.{maxWidth as _, minWidth as _, *}
 import ui.core.layout.Div.div
 import ui.core.layout.Button.button
 import ui.core.layout.HBox.hbox
 import ui.core.layout.TextComponent.text
 import ui.core.layout.VBox.vbox
 import ui.core.render.Cursor
-import ui.core.state.{ListProperty, Property}
-import ui.core.i18n.i18n
+import ui.core.state.{ListProperty, Property, ReadOnlyProperty}
+import ui.core.i18n.{RuntimeMessage, i18n}
 
 import scala.scalajs.js
 
@@ -28,6 +37,17 @@ object TableViewPage {
       offset: Int,
       limit: Int,
       sorting: Vector[RemoteSort] = Vector.empty
+  )
+
+  /** The editing showcase writes through to the row, so its fields are properties rather than a
+    * case class: a standard cell commits into the property it was given by `cellValueFactory`.
+    */
+  final class Reading(
+      val title: Property[String],
+      val finished: Property[Boolean],
+      val shelf: Property[String],
+      val progress: Property[Double],
+      val rating: Property[Int]
   )
 
   private val bookCatalog = Vector(
@@ -114,11 +134,76 @@ object TableViewPage {
         .exists(_ < 0)
     }
 
+  /** One readout of the table's live state. */
+  private def statTile(
+      label: RuntimeMessage,
+      value: ReadOnlyProperty[String],
+      wide: Boolean = false
+  )(using AbstractComponent, Cursor): Unit =
+    div {
+      classes =
+        if (wide) Seq("table-demo__stat", "table-demo__stat--wide") else Seq("table-demo__stat")
+      div { classes = Seq("table-demo__stat-label"); text(label) {} }
+      div { classes = Seq("table-demo__stat-value"); text(value) {} }
+    }
+
+  /** One labelled block of the control bar: its buttons plus the hints that explain them. */
+  private def controlGroup(label: RuntimeMessage, hints: RuntimeMessage*)(
+      actions: AbstractComponent ?=> Cursor ?=> Unit
+  )(using AbstractComponent, Cursor): Unit =
+    div {
+      classes = Seq("table-demo__group")
+      div { classes = Seq("table-demo__group-label"); text(label) {} }
+      div { classes = Seq("table-demo__group-actions"); actions }
+      if (hints.nonEmpty) {
+        div {
+          classes = Seq("table-demo__hints")
+          hints.foreach { hint =>
+            div { classes = Seq("table-demo__hint"); text(hint) {} }
+          }
+        }
+      }
+    }
+
+  private val readingSeed: Vector[(String, Boolean, String, Double, Int)] = Vector(
+    ("Der Hobbit", true, "Archive", 1.0, 5),
+    ("1984", false, "Reading", 0.42, 4),
+    ("Siddhartha", false, "Backlog", 0.0, 3),
+    ("Der Prozess", false, "Reading", 0.18, 4)
+  )
+
+  private def readingList(): ListProperty[Reading] =
+    ListProperty(
+      js.Array(
+        readingSeed.map { (title, finished, shelf, progress, rating) =>
+          new Reading(
+            Property(title),
+            Property(finished),
+            Property(shelf),
+            Property(progress),
+            Property(rating)
+          )
+        }*
+      )
+    )
+
+  /** Restores the seed values in place, so the edited rows keep their identity. */
+  private def resetReadings(readings: ListProperty[Reading]): Unit =
+    readings.get.toVector.zip(readingSeed).foreach {
+      case (reading, (title, finished, shelf, progress, rating)) =>
+        reading.title.set(title)
+        reading.finished.set(finished)
+        reading.shelf.set(shelf)
+        reading.progress.set(progress)
+        reading.rating.set(rating)
+    }
+
   def render(books: RemoteListProperty[Book, BookQuery])(using AbstractComponent, Cursor): Unit = {
     val status       = Property("Double-click a row to inspect it.")
+    val lastEdit     = Property("—")
     val loadedStatus = books.totalCountProperty.flatMap { totalCount =>
       books.loadedLengthProperty.map(loaded =>
-        s"$loaded of ${totalCount.getOrElse(loaded)} rows loaded"
+        s"$loaded / ${totalCount.getOrElse(loaded)}"
       )
     }
 
@@ -134,32 +219,31 @@ object TableViewPage {
 
         componentShowcase(
           i18n"Remote in-memory book table",
-          i18n"Scroll through generated data and sort columns while RemoteListProperty loads pages from memory."
+          i18n"Grouped columns, row and cell selection, resizing, reordering and direction over a remote source."
         ) {
           vbox {
-            style { gap = "16px" }
+            classes = Seq("table-demo")
+
             var table: TableView[Book]                  = null
             var authorColumn: TableColumn[Book, String] = null
             var yearColumn: TableColumn[Book, Int]      = null
-            div {
-              text(
-                i18n"Shift-click headers to sort by multiple columns. Enter or Space sorts a focused header; Shift keeps other sort columns."
-              ) {}
-            }
 
-            hbox {
-              style { gap = "10px"; flexWrap = "wrap" }
+            div {
+              classes = Seq("showcase-note")
               div {
-                classes = Seq("showcase-note")
-                text(loadedStatus) {}
+                classes = Seq("showcase-note__title")
+                text(i18n"50 initial rows · 1,000 total") {}
               }
               div {
-                classes = Seq("showcase-note")
-                text(status) {}
+                classes = Seq("showcase-note__body")
+                text(
+                  i18n"Scroll through remote ranges or sort any column; the table keeps one stable virtual surface."
+                ) {}
               }
             }
 
             div {
+              classes = Seq("table-page__table")
               style {
                 height = "420px"
                 minHeight = "0"
@@ -171,31 +255,46 @@ object TableViewPage {
                 rowHeight = 44.0
                 crawlable = true
                 crawlId = "table"
+                tableMenuButtonVisible = true
+                columnMenuText = "Columns"
+                // The page demonstrates range and rectangle selection, so it starts in the mode
+                // where Ctrl/Cmd- and Shift-click actually do something.
+                selectionMode = TableSelectionMode.Multiple
 
-                column[Book, String]("Title") {
-                  prefWidth = 300.0
-                  sortable = true
-                  sortKey = "title"
-                  cell { book =>
-                    text(book.title) {}
+                columnGroup[Book]("Book") {
+                  column[Book, String]("Title") {
+                    prefWidth = 280.0
+                    minWidth = 140.0
+                    maxWidth = 900.0
+                    sortable = true
+                    sortKey = "title"
+                    cell { book =>
+                      text(book.title) {}
+                    }
+                  }
+
+                  authorColumn = column[Book, String]("Author") {
+                    prefWidth = 240.0
+                    minWidth = 100.0
+                    maxWidth = 600.0
+                    sortable = true
+                    sortKey = "author"
+                    cell { book =>
+                      text(book.author) {}
+                    }
                   }
                 }
 
-                authorColumn = column[Book, String]("Author") {
-                  prefWidth = 240.0
-                  sortable = true
-                  sortKey = "author"
-                  cell { book =>
-                    text(book.author) {}
-                  }
-                }
-
-                yearColumn = column[Book, Int]("Year") {
-                  prefWidth = 100.0
-                  sortable = true
-                  sortKey = "year"
-                  cell { book =>
-                    text(book.year.toString) {}
+                columnGroup[Book]("Details") {
+                  yearColumn = column[Book, Int]("Year") {
+                    prefWidth = 100.0
+                    minWidth = 70.0
+                    maxWidth = 300.0
+                    sortable = true
+                    sortKey = "year"
+                    cell { book =>
+                      text(book.year.toString) {}
+                    }
                   }
                 }
 
@@ -222,15 +321,204 @@ object TableViewPage {
                 onRowDoubleClick((book: Book) => status.set(s"${book.title} — ${book.author}"))
               }
             }
-            hbox {
-              style { gap = "10px"; flexWrap = "wrap" }
-              button(i18n"Author ascending, year descending") {
-                onClick(_ =>
-                  table.setSortOrder(Seq(TableSort(authorColumn), TableSort(yearColumn, false)))
+
+            div {
+              classes = Seq("table-demo__stats")
+              statTile(i18n"Rows loaded", loadedStatus)
+              statTile(
+                i18n"Selection mode",
+                table.selectionModelProperty
+                  .flatMap(_.selectionModeProperty)
+                  .map(mode => if (mode == TableSelectionMode.Multiple) "multiple" else "single")
+              )
+              statTile(
+                i18n"Selection target",
+                table.selectionModelProperty
+                  .flatMap(_.cellSelectionEnabledProperty)
+                  .map(enabled => if (enabled) "cells" else "rows")
+              )
+              statTile(i18n"Selected rows", table.selectedIndicesProperty.map(_.size.toString))
+              statTile(i18n"Selected cells", table.selectedCellsProperty.map(_.size.toString))
+              statTile(
+                i18n"Focused row",
+                table.focusedIndexProperty.map(index =>
+                  if (index < 0) "—" else (index + 1).toString
                 )
+              )
+              statTile(i18n"Last double-click", status, wide = true)
+            }
+
+            div {
+              classes = Seq("table-demo__controls")
+
+              controlGroup(
+                i18n"Sorting",
+                i18n"Shift-click headers to sort by multiple columns. Enter or Space sorts a focused header; Shift keeps other sort columns."
+              ) {
+                button(i18n"Author ascending, year descending") {
+                  onClick(_ =>
+                    table.setSortOrder(Seq(TableSort(authorColumn), TableSort(yearColumn, false)))
+                  )
+                }
+                button(i18n"Reload current sorting") {
+                  onClick(_ => table.sort())
+                }
+                button(i18n"Clear sorting") {
+                  onClick(_ => table.clearSort())
+                }
               }
-              button(i18n"Reload current sorting") {
-                onClick(_ => table.sort())
+
+              controlGroup(
+                i18n"Selection",
+                i18n"Ctrl/Cmd-click toggles rows; Shift-click selects a range.",
+                i18n"In cell mode, Shift-click and Shift+Arrow select an inclusive rectangle."
+              ) {
+                button(i18n"Toggle single / multiple selection") {
+                  onClick { _ =>
+                    val model = table.selectionModel
+                    model.selectionMode =
+                      if (model.selectionMode == TableSelectionMode.Multiple)
+                        TableSelectionMode.Single
+                      else TableSelectionMode.Multiple
+                  }
+                }
+                button(i18n"Toggle row / cell selection") {
+                  onClick { _ =>
+                    val model = table.selectionModel
+                    model.cellSelectionEnabled = !model.cellSelectionEnabled
+                  }
+                }
+                button(i18n"Clear book selection") {
+                  onClick(_ => table.clearSelection())
+                }
+              }
+
+              controlGroup(
+                i18n"Columns",
+                i18n"Drag a column edge to resize. Focus its grip and use arrow keys for keyboard resizing.",
+                i18n"Drag a column header to move it. Or focus the header and press Alt+Shift+Left/Right.",
+                i18n"The column menu button in the header corner hides and shows individual columns."
+              ) {
+                button(i18n"Toggle constrained / free column widths") {
+                  onClick { _ =>
+                    val current = table.columnResizePolicyProperty.get
+                    table.columnResizePolicyProperty.set(
+                      if (current == ColumnResizePolicy.Unconstrained)
+                        ColumnResizePolicy.FlexLastColumn
+                      else ColumnResizePolicy.Unconstrained
+                    )
+                  }
+                }
+                button(i18n"Toggle left-to-right / right-to-left") {
+                  onClick { _ =>
+                    val current = table.directionProperty.get
+                    table.directionProperty.set(
+                      if (current == TableDirection.LeftToRight) TableDirection.RightToLeft
+                      else TableDirection.LeftToRight
+                    )
+                  }
+                }
+              }
+
+              controlGroup(
+                i18n"Navigation",
+                i18n"For horizontal navigation, use free widths and widen the columns."
+              ) {
+                button(i18n"Go to row 500") {
+                  onClick(_ => table.scrollTo(499))
+                }
+                button(i18n"Go to first row") {
+                  onClick(_ => table.scrollTo(0))
+                }
+                button(i18n"Show selected row") {
+                  onClick(_ => table.scrollTo(table.selectedIndexProperty.get))
+                }
+              }
+            }
+          }
+        }
+
+        componentShowcase(
+          i18n"Editable cells",
+          i18n"Standard cells edit the property the column was given: text, check box, choice box, converting text and a read-only progress bar."
+        ) {
+          vbox {
+            classes = Seq("table-demo")
+
+            val readings = readingList()
+            val shelves  = ListProperty(js.Array("Backlog", "Reading", "Archive"))
+
+            div {
+              classes = Seq("table-page__table")
+              style {
+                // Four seed rows plus the column header and the footer, so nothing is clipped.
+                height = "320px"
+                minHeight = "0"
+              }
+
+              tableView[Reading](readings) {
+                style { height = "100%" }
+                rowHeight = 44.0
+                editable = true
+
+                column[Reading, String]("Title") {
+                  prefWidth = 240.0
+                  cellValueFactory = _.value.title
+                  textFieldCell()
+                  onEditCommit(event => lastEdit.set(s"Title → ${event.newValue}"))
+                }
+
+                column[Reading, Boolean]("Finished") {
+                  prefWidth = 110.0
+                  cellValueFactory = _.value.finished
+                  checkBoxCell
+                  onEditCommit(event => lastEdit.set(s"Finished → ${event.newValue}"))
+                }
+
+                column[Reading, String]("Shelf") {
+                  prefWidth = 150.0
+                  cellValueFactory = _.value.shelf
+                  choiceBoxCell(shelves)
+                  onEditCommit(event => lastEdit.set(s"Shelf → ${event.newValue}"))
+                }
+
+                column[Reading, Int]("Rating") {
+                  prefWidth = 110.0
+                  cellValueFactory = _.value.rating
+                  convertingTextFieldCell(text =>
+                    text.toIntOption
+                      .filter(value => value >= 1 && value <= 5)
+                      .toRight("1 to 5 required")
+                  )
+                  onEditCommit(event => lastEdit.set(s"Rating → ${event.newValue}"))
+                }
+
+                column[Reading, Double]("Progress") {
+                  prefWidth = 160.0
+                  cellValueFactory = _.value.progress
+                  progressBarCell
+                }
+              }
+            }
+
+            div {
+              classes = Seq("table-demo__stats")
+              statTile(i18n"Last commit", lastEdit, wide = true)
+            }
+
+            div {
+              classes = Seq("table-demo__controls")
+              controlGroup(
+                i18n"Editing",
+                i18n"Double-click a cell, or press Enter on a focused one, to start editing. Enter commits, Escape cancels.",
+                i18n"The converting rating cell rejects anything outside 1 to 5 instead of writing it back."
+              ) {
+                button(i18n"Reset rows") {
+                  onClick { _ =>
+                    resetReadings(readings)
+                    lastEdit.set("—")
+                  }
+                }
               }
             }
           }
@@ -269,13 +557,16 @@ object TableViewPage {
                |  tableView[Book](books) {
                |    style { height = "100%" }
                |    rowHeight = 44.0
+               |    tableMenuButtonVisible = true
                |
-               |    column[Book, String]("Title") {
-               |      prefWidth = 300.0
-               |      sortable = true
-               |      sortKey = "title"
-               |      cell { book =>
-               |        text(book.title) {}
+               |    columnGroup[Book]("Book") {
+               |      column[Book, String]("Title") {
+               |        prefWidth = 280.0
+               |        sortable = true
+               |        sortKey = "title"
+               |        cell { book =>
+               |          text(book.title) {}
+               |        }
                |      }
                |    }
                |
@@ -284,6 +575,41 @@ object TableViewPage {
                |    }
                |
                |    onRowDoubleClick(openBook)
+               |  }
+               |}""".stripMargin
+          )
+        }
+
+        apiSection(
+          i18n"Editable standard cells",
+          i18n"A standard cell edits the property its column resolved for the row."
+        ) {
+          codeBlock(
+            "scala",
+            """|tableView[Reading](readings) {
+               |  editable = true
+               |
+               |  column[Reading, String]("Title") {
+               |    cellValueFactory = _.value.title
+               |    textFieldCell()
+               |    onEditCommit(event => log(event.newValue))
+               |  }
+               |
+               |  column[Reading, Boolean]("Finished") {
+               |    cellValueFactory = _.value.finished
+               |    checkBoxCell
+               |  }
+               |
+               |  column[Reading, String]("Shelf") {
+               |    cellValueFactory = _.value.shelf
+               |    choiceBoxCell(shelves)
+               |  }
+               |
+               |  column[Reading, Int]("Rating") {
+               |    cellValueFactory = _.value.rating
+               |    convertingTextFieldCell(text =>
+               |      text.toIntOption.toRight("Whole number required")
+               |    )
                |  }
                |}""".stripMargin
           )
