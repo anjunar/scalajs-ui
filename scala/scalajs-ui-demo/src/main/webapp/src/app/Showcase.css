@@ -1193,3 +1193,156 @@
         gap: 4px;
     }
 }
+
+/* --- TableView showcase ---------------------------------------------------
+ * Shared by the Scala demo's TableViewPage and the TypeScript demo's
+ * controls-table page (npm/scalajs-ui-demo/src/styles/style.css imports this
+ * file), so both show the same control surface with the same vocabulary:
+ * a readout strip of tiles and a control bar whose groups carry their own hints.
+ */
+.table-demo {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.table-demo__note {
+    width: 100%;
+    min-width: 0;
+    padding: 4px 8px;
+    border: 1px solid var(--aj-line);
+    border-radius: var(--radius-control, 8px);
+    background: var(--aj-surface);
+    color: inherit;
+    font: inherit;
+}
+
+.table-demo__note:focus-visible {
+    outline: 2px solid var(--aj-accent);
+    outline-offset: -1px;
+}
+
+.book-row:hover {
+    background: color-mix(in srgb, var(--aj-accent-muted) 45%, transparent);
+}
+
+.table-demo__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.table-demo__stat {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 14px;
+    border: 1px solid var(--aj-line-soft);
+    border-radius: var(--radius-surface);
+    background: var(--aj-surface-raised);
+}
+
+.table-demo__stat--wide {
+    grid-column: span 2;
+}
+
+.table-demo__stat-label {
+    color: var(--aj-ink-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.table-demo__stat-value {
+    overflow: hidden;
+    color: var(--aj-ink);
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.table-demo__controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+    align-items: start;
+}
+
+.table-demo__group {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--aj-line-soft);
+    border-radius: var(--radius-surface);
+    background: var(--aj-surface-raised);
+}
+
+.table-demo__group-label {
+    color: var(--aj-ink-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.table-demo__group-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.table-demo__group-actions button {
+    min-height: 34px;
+    padding: 6px 12px;
+    border: 1px solid var(--aj-line);
+    border-radius: var(--radius-control, 8px);
+    background: var(--aj-surface);
+    color: var(--aj-ink);
+    cursor: pointer;
+    font: inherit;
+}
+
+.table-demo__group-actions button:hover {
+    border-color: var(--aj-accent);
+    background: var(--aj-accent-muted);
+    color: var(--aj-accent-strong);
+}
+
+.table-demo__group-actions button:focus-visible {
+    outline: 2px solid var(--aj-accent);
+    outline-offset: 1px;
+}
+
+.table-demo__hints {
+    display: flex;
+    margin: 0;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0;
+    list-style: none;
+}
+
+.table-demo__hint {
+    padding-left: 16px;
+    position: relative;
+    color: var(--aj-ink-soft);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.table-demo__hint::before {
+    content: "";
+    position: absolute;
+    top: 0.6em;
+    left: 2px;
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--aj-accent);
+}
