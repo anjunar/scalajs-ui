@@ -1206,6 +1206,12 @@
     gap: 20px;
 }
 
+/* headerClass/cellClass (C10): a column's own extra classes, applied to the separately created
+ * header cell and every data cell, alongside the framework's own ui-table-header-cell/ui-table-cell.
+ */
+.table-demo__numeric-header { justify-content: flex-end; text-align: right; }
+.table-demo__numeric-cell { justify-content: flex-end; text-align: right; font-variant-numeric: tabular-nums; }
+
 .table-demo__note {
     width: 100%;
     min-width: 0;

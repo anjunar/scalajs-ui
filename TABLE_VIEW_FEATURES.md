@@ -1,6 +1,6 @@
 # TableView: Feature-Stand und Implementierungsplan
 
-Stand: 14.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltenbaum/Gruppenheader, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, stabile Zeilenschlüssel, RowFactory, Mehrfach- und Zell-/Rechteckauswahl, austauschbare Selection-/FocusModels, Zeilen-/Spaltennavigation samt Ereignissen und RTL, Spalten-Resizing, Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung, Standardzellen sowie Remote-Mehrspaltensortierung · Referenz: JavaFX 26.
+Stand: 16.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltenbaum/Gruppenheader, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, stabile Zeilenschlüssel, RowFactory, Mehrfach- und Zell-/Rechteckauswahl, austauschbare Selection-/FocusModels, Zeilen-/Spaltennavigation samt Ereignissen und RTL, Spalten-Resizing, Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung, Standardzellen, Remote-Mehrspaltensortierung sowie Spaltenklassen (C10) · Referenz: JavaFX 26.
 
 Dieses Dokument beschreibt, welche Funktionen unsere TableView bereits unterstützt und wie wir die fehlenden Fähigkeiten der JavaFX-TableView ergänzen. Es ist ein Implementierungsplan; als **geplant** bezeichnete Modelle, Methoden und Dateien existieren noch nicht.
 
@@ -214,7 +214,7 @@ Referenzen: [TableColumnBase](https://openui.io/javadoc/26/javafx.controls/javaf
 | C07 | Drag-Reordering und reorderable | Vorhanden | Sichtbare Blattspalten: Pointer-Drag mit Einfügemarkierung, Alt+Shift+Links/Rechts, reaktives reorderable und moveColumn. Maßgebliche Geschwisterliste und stabile Runtime-Projektion; gruppenübergreifende Moves, Gruppen-Drag und Drag-Autoscroll bleiben offen. M5. |
 | C08 | Menü zum Ein-/Ausblenden der Spalten | Vorhanden | Optionales Viewport-Overlay mit Checkbox-Menü, Tastaturbedienung und tableMenuButtonVisible. Rekursive Baumreihenfolge einschließlich Gruppen und ausgeblendeter Spalten. M5/M6. |
 | C09 | Header-Grafik, Sortierdarstellung, Kontextmenü | Teilweise | Text, Richtung und numerische Sortierpriorität vorhanden. Slots für graphic/sortNode/Menü fehlen. M5/M6. |
-| C10 | Spalten-ID, Klassen, Stil, Metadaten | Teilweise | Geerbte Komponentenmittel erreichen den separat erzeugten Header nicht automatisch. Anwendung auf Header/Zellen explizit festlegen. M1/M6. |
+| C10 | Spalten-ID, Klassen, Stil, Metadaten | Vorhanden | `headerClassesProperty`/`cellClassesProperty` (Scala) und reaktives `headerClass`/`cellClass` (TypeScript) projizieren zusätzliche Klassen additiv auf den separat erzeugten Header bzw. jede Datenzelle der Spalte, ohne die eingebauten `ui-table-header-cell`/`ui-table-cell`-Klassen zu ersetzen. Ein spaltenweites Stil-/ID-Attribut über die reine Klassenliste hinaus ist kein Ziel dieses Ausbaus. M1/M6. |
 
 ### 3.4 Sortierung
 
@@ -507,6 +507,12 @@ Pointer-Griffe ändern das Breitenmodell; Header und Zellen übernehmen denselbe
 
 Auto-Fit berücksichtigt Header und einen dokumentiert begrenzten Satz von Zellinhalten. Remote-Daten werden dafür nicht vollständig geladen. JavaFX stellt Inhaltsanpassung im Header-Skin bereit; das ist keine bereits vorhandene öffentliche `TableView.autoSizeColumn`-Methode. Quelle: [TableColumnHeader.resizeColumnToFitContent](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/skin/TableColumnHeader.html#resizeColumnToFitContent(int)).
 
+**Umgesetzt – Spaltenklassen (C10):** `TableColumn.headerClassesProperty`/`cellClassesProperty` bzw. reaktives TypeScript `headerClass`/`cellClass` lösen den zuvor offenen Befund, dass die geerbten `AbstractComponent`-Mittel einer Spalte den separat erzeugten Header (`TableView.HeaderSlot`) und die separat erzeugten `TableCell`-Instanzen nicht automatisch erreichen. Ein neuer Helfer `TableColumn.applyClasses` beobachtet die jeweilige `Seq[String]`-Property und spiegelt sie über `addClass`/`removeClass` auf das Zielelement – diese Methoden führen ihre eigene Klassenliste (`baseClasses`), getrennt von `classes = Seq(...)` (`userClasses`), sodass die zusätzlichen Klassen neben den eingebauten `ui-table-header-cell`/`ui-table-cell`-Klassen stehen, ohne sie zu ersetzen. `cellClasses` gilt für jede Datenzelle der Spalte, nicht nur die erste. Beide Properties sind reaktiv; ein Wechsel entfernt und ergänzt gezielt nur die geänderten Klassen. Die Bridge liest `headerClass`/`cellClass` über den bestehenden `ReactiveBridge.asProperty`-Pfad (statischer Wert oder `ReadOnlyProperty`), wie bei `visible`/`resizable`.
+
+Ein spaltenweites Stil- oder ID-Attribut über die reine Klassenliste hinaus ist bewusst nicht Teil dieses Ausbaus: Die Klassenliste ist der idiomatische Hook in dieser Framework-Konvention (durchgängig `classes = Seq(...)` statt roher Inline-Styles als Daten), und JavaFX' eigenes `TableColumnBase.styleProperty` (roher CSS-String) hat hier keine Entsprechung.
+
+Abnahme am 16.09.2026: vollständiges Scala-Gate (`Test/testOnly *`) mit einem neuen Fall, der Erhalt der eingebauten Header-/Zellklassen bei Erst- und Folgewert sowie Anwendung auf alle Zeilen einer Spalte prüft; Bridge-Full-Link und `verify.mjs` grün. npm-Gate Controls (86 Integrationstests + 3 Paket-Consumer, letzterer mit strikter TypeScript-Kompilierung von `headerClass`/`cellClass`) und Demo (Typecheck, Client-/SSR-Build, `verify:pages`) grün. Beide Demos zeigen die Jahresspalte rechtsbündig über `table-demo__numeric-header`/`-cell`; im echten Browser (Scala- und TypeScript-Demo) bestätigt: `headerClasses`/`cellClasses` stehen neben den eingebauten Klassen, `justify-content: flex-end` greift auf Header und Zellen.
+
 ### 4.8 SSR und Zugänglichkeit
 
 Die Tabelle behält eine feste positive Zeilenhöhe; `fixedCellSize` und `rowHeight` bezeichnen denselben Wert. Inhalte mit individuellen, browserseitig gemessenen Höhen werden mit `VirtualListView` umgesetzt. Alte Defaults für Breiten und Sortierbarkeit sind ausdrücklich zu dokumentieren, bevor eine Änderung veröffentlicht wird.
@@ -563,8 +569,11 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 - [x] M4: Standard-Text-/Boolean-Editoren sowie F2/Enter/Escape/Tab- und explizite Blur-Regeln in Scala und TypeScript. M4 ist damit im festgelegten Umfang abgeschlossen.
 - [x] M6: Auswahl-/Progress-Zellen, Popup-Fokusregeln und Parser-/Validierungsfehler samt zugänglicher Fehlermeldung.
 - [x] M6: Reaktive LTR-/RTL-Richtung für Layout, horizontales Scrollen, Zellnavigation, Resize, Reordering und Spaltenmenü.
+- [x] M1/M6: Spaltenweise Header-/Zellklassen (C10), additiv zu den eingebauten Klassen, reaktiv in Scala und TypeScript.
 
 ## 6. Verifikation
+
+Abnahme der Spaltenklassen (C10) am 16.09.2026: vollständiges Scala-Gate mit **459 Tests**, Bridge-Full-Link, `verify.mjs` und npm-Gates für Controls (86 Integrationstests + 3 Paket-Consumer) sowie Demo (Typecheck, Client-/SSR-Builds, `verify:pages`) grün. Der neue Scala-Fall prüft additive Header-/Zellklassen neben den eingebauten Klassen, Anwendung auf alle Zeilen und reaktive Umbenennung. Der neue Bridge-Test prüft dieselbe Reaktivität über die echte TypeScript-Fassade gegen das reale DOM. Beide Demos zeigen die Jahresspalte rechtsbündig; im echten Browser bestätigt für Scala- und TypeScript-Demo.
 
 Abnahme des achtzehnten Ausbaus am 14.09.2026: vollständiges Scala-Gate mit **444 Tests**, Bridge-Full-Link, CSS-/Design-Gate und npm-Gates für Controls (81 Integrationstests + 3 Paket-Consumer) sowie Demo (Typecheck, Client-/SSR-Builds, Eine-Runtime-Nachweis und 31 Routen) grün. Der neue Scala-Fall prüft beide Standardfactories, Anzeige-/Editorwechsel und Writable-Property-Writeback. Der reale Bridge-Test deckt Doppelklick, F2, Enter, Escape, Tab/Shift+Tab, IME-Abgrenzung, explizites Keep-on-Blur, DOM-/Zellfokus, Text-Commit/Cancel und atomare Checkbox-Umschaltung ab. Der Tarball-Consumer kompiliert die neuen typisierten Helfer und Blur-Policy strikt.
 

@@ -110,6 +110,8 @@ private[bridge] trait ColumnFacade extends js.Object {
   val editable: js.UndefOr[js.Any]                                    = js.native
   val sortable: js.UndefOr[Boolean]                                   = js.native
   val sortKey: js.UndefOr[String]                                     = js.native
+  val headerClass: js.UndefOr[js.Any]                                 = js.native
+  val cellClass: js.UndefOr[js.Any]                                   = js.native
   val visible: js.UndefOr[js.Any]                                     = js.native
   val onVisibilityChange: js.UndefOr[js.Function1[Boolean, Unit]]     = js.native
   val onEditStart: js.UndefOr[js.Function1[js.Object, Unit]]          = js.native
@@ -507,6 +509,22 @@ private[bridge] object TableViewFactory extends ComponentFactory {
         }
         col.sortable.foreach(column.sortableProperty.set)
         col.sortKey.foreach(key => column.sortKeyProperty.set(Some(key)))
+        col.headerClass.foreach { value =>
+          column.addDisposable(
+            ReactiveBridge
+              .asProperty[js.Array[String]](value)
+              .map(_.toSeq)
+              .observe(column.headerClassesProperty.set)
+          )
+        }
+        col.cellClass.foreach { value =>
+          column.addDisposable(
+            ReactiveBridge
+              .asProperty[js.Array[String]](value)
+              .map(_.toSeq)
+              .observe(column.cellClassesProperty.set)
+          )
+        }
         col.onEditStart.foreach(callback =>
           column.onEditStartProperty.set(Some(event => callback(editStartFacade(event))))
         )

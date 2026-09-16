@@ -235,6 +235,7 @@ final class TableView[S] private (
         else removeAttribute("aria-rowspan")
       })
       text(column.textProperty) {}
+      addDisposable(TableColumn.applyClasses(this, column.headerClassesProperty))
 
       if (initial.leaf) {
         addClass("ui-table-header-cell-leaf")

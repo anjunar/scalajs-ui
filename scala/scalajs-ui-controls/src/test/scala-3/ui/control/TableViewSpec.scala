@@ -1,5 +1,6 @@
 package ui.control
 
+import ui.control.table.TableColumn
 import ui.control.table.TableColumn.*
 import ui.control.table.TableView
 import ui.control.table.TableView.*
@@ -313,6 +314,45 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
     html should include("ui-table-header-cell-sortable")
     html should include("ui-table-header-cell-sorted")
     html should include("ui-table-header-cell-sorted-desc")
+  }
+
+  "TableColumn header/cell classes" should "reach the separately created header and every data cell" in {
+    var nameColumn: TableColumn[String, String] = null
+    val cursor                                   = new SsrCursor()
+    val root = Runtime.mount(
+      new AbstractComponent {
+        override val tagName: String = "main"
+        override def compose(cursor: Cursor): Unit =
+          DslLayer.render(this, cursor) {
+            tableView[String](ListProperty(js.Array("Ada", "Cara"))) {
+              nameColumn = column[String, String]("Name") {
+                headerClasses = Seq("numeric-header")
+                cellClasses = Seq("numeric-cell")
+                cell { item => text(item) {} }
+              }
+            }
+          }
+      },
+      cursor
+    )
+
+    val initial = cursor.collectHtml()
+    initial should include("numeric-header")
+    // Both rows' cells carry the class, not just the first.
+    (initial.split("numeric-cell").length - 1) shouldBe 2
+    // The built-in header/cell classes are unaffected, not replaced.
+    initial should include("ui-table-header-cell")
+    initial should include("ui-table-cell")
+
+    nameColumn.headerClasses = Seq("date-header")
+    nameColumn.cellClasses = Seq("date-cell")
+    val relabelled = cursor.collectHtml()
+    relabelled should include("date-header")
+    relabelled should not include "numeric-header"
+    relabelled should include("date-cell")
+    relabelled should not include "numeric-cell"
+
+    Runtime.unmount(root)
   }
 
   private final case class PageQuery(

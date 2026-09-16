@@ -98,6 +98,29 @@ Invalid/hidden/locked columns, unmeasurable layout, protected hosts and active n
 composition are no-ops, not queued retries. A true result means a width changed or a
 hydration-time request was accepted; SSR and disposed handles return false.
 
+### Column classes
+
+A column's own `AbstractComponent`/DOM facilities do not reach its header cell or its data
+cells: the header is a separately created component (`TableView.HeaderSlot`), and each data
+cell is its own `TableCell` instance. `headerClass`/`cellClass` are the explicit hook:
+
+```ts
+const numericColumn = valueColumn("Year", book => book.year, {
+  headerClass: ["numeric-header"],
+  cellClass: ["numeric-cell"],
+});
+```
+
+```css
+.numeric-header, .numeric-cell { justify-content: flex-end; text-align: right; }
+```
+
+Both are reactive and additive: they sit alongside the framework's own `ui-table-header-cell`/
+`ui-table-cell` classes rather than replacing them, and changing the array adds/removes exactly
+the classes that changed. `cellClass` applies to every data cell of that column, not just the
+first. Scala exposes `headerClassesProperty`/`cellClassesProperty` and the DSL setters
+`headerClasses`/`cellClasses`, taking a `Seq[String]` or a bindable `ReadOnlyProperty[Seq[String]]`.
+
 ### Remote multi-column sorting
 
 Click a sortable header to cycle ascending, descending, unsorted. Shift-click keeps other

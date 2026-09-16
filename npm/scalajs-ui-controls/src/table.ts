@@ -35,6 +35,10 @@ export interface ColumnDef<T> {
   readonly sortable?: boolean;
   /** The field name passed back to the source's `sortQuery`. */
   readonly sortKey?: string;
+  /** Extra classes on this column's header cell, in addition to the framework's own ui-table-* classes. */
+  readonly headerClass?: Reactive<readonly string[]>;
+  /** Extra classes on every data cell of this column, in addition to the framework's own ui-table-* classes. */
+  readonly cellClass?: Reactive<readonly string[]>;
   /** Composes one cell's content for `row`, with the core DSL. */
   readonly cell?: (row: T) => void;
   /** A snapshot or observed cell value. Used by the default text cell when `cell` is absent. */
@@ -476,6 +480,8 @@ export function tableView<T, Q = unknown>(
     onVisibilityChange: col.onVisibilityChange,
     sortable: col.sortable,
     sortKey: col.sortKey,
+    headerClass: col.headerClass,
+    cellClass: col.cellClass,
     cell: col.cell ? rowBody(col.cell) : undefined,
     value: col.value,
     valueCell: col.valueCell
