@@ -7,6 +7,7 @@
  */
 import { component, type Property } from "@anjunar/scalajs-ui-core";
 import { defined } from "./internal.js";
+import type { EditorSession } from "./session.js";
 
 /** The only public value representation of an editor document. */
 export type Markdown = string;
@@ -42,7 +43,8 @@ export interface MediaUploadStatus {
   readonly error: string | null;
 }
 
-/** Toolbar capabilities. Empty/omitted uses the standard set.
+/** Toolbar capabilities of a mounted editor -- not extensions; see `createEditor` for those.
+ * Empty/omitted uses the standard set.
  * base: bold, italic, inline code; table: opens the Markdown source view.
  * Omitted capabilities do not restrict the document schema.
  */
@@ -82,6 +84,12 @@ export interface EditorOptions {
   readonly toolbarMode?: EditorToolbarMode;
   /** Defaults to the standard toolbar. The table capability opens Markdown source. */
   readonly plugins?: readonly EditorPluginName[];
+  /**
+   * Receives the live session each time the visual surface mounts one -- in the browser only, and
+   * again after the Markdown view hands back. The session belongs to the editor: `dispose()` ends
+   * only this handle, and the handle stops working when the surface closes.
+   */
+  readonly onSession?: (session: EditorSession) => void;
   /** Skips registration with the enclosing form context -- an editor with no model binding. */
   readonly standalone?: boolean;
 }

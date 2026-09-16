@@ -267,7 +267,7 @@ const catalogEntries: readonly DocEntry[] = [
   {
     path: "/editor/basics",
     title: "Editor",
-    summary: "A Ember-based rich-text field with Markdown output, a complete toolbar, and live value feedback.",
+    summary: "An Ember-based rich-text field with Markdown output, a complete toolbar, and live value feedback.",
     pkg: "editor",
     keywords: ["editor", "ember", "richtext", "plugins"],
     doc: editorBasicsDoc,

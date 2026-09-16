@@ -1,4 +1,4 @@
-/* Compatibility roles for existing UI/Lexical consumers. All values derive from the active design. */
+/* Compatibility roles for existing UI and editor consumers. All values derive from the active design. */
 :root {
   --aj-accent: var(--color-interactive);
   --aj-accent-strong: var(--color-interactive-hover);

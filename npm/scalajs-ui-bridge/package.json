@@ -33,6 +33,10 @@
       "types": "./types/editor.d.ts",
       "default": "./editor.js"
     },
+    "./editor-api": {
+      "types": "./types/editor-api.d.ts",
+      "default": "./editor-api.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -43,6 +47,7 @@
     "viewport.js",
     "forms.js",
     "editor.js",
+    "editor-api.js",
     "dist",
     "types",
     "README.md"

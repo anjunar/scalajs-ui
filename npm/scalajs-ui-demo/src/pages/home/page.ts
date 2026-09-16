@@ -35,7 +35,7 @@ export const packageTiles: readonly PackageTile[] = [
   {
     id: "editor",
     name: "@anjunar/scalajs-ui-editor",
-    blurb: "A Lexical-backed rich-text field, bound by name like input.",
+    blurb: "An Ember rich-text field, bound by name like input.",
     entryPath: "/editor/basics",
   },
   {

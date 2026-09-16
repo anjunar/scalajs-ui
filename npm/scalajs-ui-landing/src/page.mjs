@@ -149,7 +149,7 @@ export async function renderPage(url = "/", assets = { script: "/src/client.mjs"
 
     <section data-presentation-section class="section section-showcase" aria-labelledby="showcase-3-title">
       <h2 id="showcase-3-title">Rich editing. A Markdown value.</h2>
-        <article class="showcase"><div class="preview">${previews.articleEditor}<p class="preview-caption">Scala JS UI 1.0 Editor / semantic readonly HTML</p></div><div class="showcase-body"><p>Scala JS UI 1.0’s Lexical-backed editor supports headings, lists, links, tables and code. Readonly mode serves semantic HTML; editable mode starts with a Markdown textarea.</p><a href="./typescript/editor/basics">Open the editor ↗</a></div></article>
+        <article class="showcase"><div class="preview">${previews.articleEditor}<p class="preview-caption">Scala JS UI 1.0 Editor / semantic readonly HTML</p></div><div class="showcase-body"><p>Scala JS UI 1.0’s Ember-based editor supports headings, lists, links, images and code; tables stay editable in the Markdown view. Readonly mode serves semantic HTML; editable mode starts with a Markdown textarea.</p><a href="./typescript/editor/basics">Open the editor ↗</a></div></article>
     </section>
 
     <section data-presentation-section class="section section-routing" aria-labelledby="routing-title">

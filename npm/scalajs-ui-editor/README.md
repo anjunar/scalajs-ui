@@ -4,7 +4,10 @@ A native Ember rich-text field for Scala JS UI. Markdown is the public value; th
 
 ## Overview
 
-The TypeScript package exposes the editor's options and plugin names. The Scala `ui.editor.Editor` component owns SSR, hydration, Markdown conversion, browser editing, and form binding. Link and image dialogs use the UI viewport layer.
+The TypeScript package has two entry points into the same linked Scala.js runtime:
+
+- `editor(name, options)` mounts a form-bound field. The Scala `ui.editor.Editor` component owns SSR, hydration, Markdown conversion, browser editing, and form binding. Link and image dialogs use the UI viewport layer.
+- `createEditor({ extensions })` creates a headless Ember session -- no DOM, usable in the browser, in Node and during SSR -- driven by typed commands. A mounted editor lends its own live session of the same type through `onSession`.
 
 ## Installation
 
@@ -37,6 +40,68 @@ viewport(() => form(model, {}, () => {
 The native view supports headings, paragraphs, quotes, lists, emphasis, strong, inline code, links, fenced code, images and horizontal rules. The UI Markdown dialect preserves image titles and `{width=320}`. Tables, raw HTML and extra marks (`++underline++`, `~~strike~~`, `==highlight==`) open in the Markdown source view, so unrelated edits cannot silently change their meaning.
 
 `plugins` selects toolbar and insertion commands: `base`, `heading`, `list`, `link`, `image`, `table`, `code`, and `horizontalRule`. Without plugin configuration the standard toolbar is shown. `table` opens the source view. Link and image dialogs call Viewport directly. Image resizing is available as a width field in the image dialog.
+
+## Sessions and typed commands
+
+```ts
+import {
+  createEditor, richText, history, lists, links, code,
+  insertText, setHeading, toggleList, undo,
+} from "@anjunar/scalajs-ui-editor";
+
+const session = createEditor({
+  extensions: [richText(), history(), lists(), code(), links({ schemes: ["https"] })],
+  markdown: "Ada",
+});
+
+session.dispatch(insertText, { text: "Hello " });      // payload type-checked and validated
+session.dispatch(setHeading, { level: 2 });
+session.dispatch(undo);                                  // commands without payload take none
+const subscription = session.subscribe((commit) => console.log(commit.revision, commit.origin));
+
+const markdown = session.toMarkdown();                   // { ok: true, value, losses } | { ok: false, error }
+const json = session.toJson();                           // the Ember JSON envelope as a plain value
+subscription.dispose();
+session.dispose();
+```
+
+Handles are opaque values of the linked runtime. A look-alike object, or a handle of a second,
+separately bundled copy of the bridge, is refused -- as is every call on a disposed session.
+
+- **Extensions** are factories, not a name list: `richText()`, `history()`, `lists()`, `code()`,
+  `links({ schemes?, allowRelative? })`, `images({ schemes?, allowRelative?, hosts? })`. Each call
+  is a recipe; the same handle can configure any number of sessions. The Markdown and JSON formats of
+  a session are exactly what its extensions bring.
+- **Commands**: `insertText`, `insertParagraph`, `deleteBackward`, `deleteForward`, `toggleMark`,
+  `setHeading`, `quote`, `unquote`, `insertThematicBreak`, `toggleList`, `indent`, `outdent`,
+  `toggleCodeBlock`, `setLink`, `removeLink`, `undo`, `redo`. A command whose extension is not
+  installed returns `handled: false` and changes nothing.
+- **Errors**: misuse throws (wrong payload or selection shape, a foreign or disposed handle, extensions
+  that do not resolve). What the document decides is a result: `{ ok: false, error }` for a rejected
+  change, a source that does not import, or an export that would lose content. Exports and imports are
+  strict unless `{ allowLoss: true }` is passed.
+- **Selection**: `session.selection` and `session.select(...)` use node ids and UTF-16 offsets
+  (`{ type: "range", anchor: { node, offset }, focus: { node, offset } }` or
+  `{ type: "node", nodes }`). A new session starts with a caret at the beginning.
+- **Imports**: `replaceMarkdown` and `replaceJson` replace the document as an import; history resets.
+
+A mounted editor lends its session in the browser, once per visual surface:
+
+```ts
+let session: EditorSession | null = null;
+editor("body", { onSession: (lent) => { session = lent; } });
+// later: session?.dispatch(undo)
+```
+
+Changes made through it flow into the form value. `toMarkdown` there uses the form's own Markdown
+dialect. `dispose()` ends only the handle; the handle stops working when the surface closes (unmount,
+or switching to the Markdown view -- switching back lends a new one). `onSession` is never called
+during SSR.
+
+`plugins` stays what it is: a list of toolbar capabilities of the mounted editor, not extensions.
+
+The session API is imported from `@anjunar/scalajs-ui-bridge/editor-api`, which installs nothing.
+Importing this package therefore neither installs a runtime nor conflicts with a test runtime.
 
 ## Media uploads
 
@@ -120,7 +185,11 @@ Link and image forms use `Viewport.WindowConf` directly. The Lexical dialog-serv
 - `Markdown` — the public string value alias.
 - `EditorPluginName` — supported plugin names.
 - `EditorToolbarMode` — `ribbon`, `menu`, or `floating`.
-- `EditorOptions` — value, binding, SSR mode, URLs, toolbar, and plugins.
+- `EditorOptions` — value, binding, SSR mode, URLs, toolbar, plugins, and `onSession`.
+- `createEditor(options)`, `CreateEditorOptions`, `EditorSession` — headless sessions and the lent session type.
+- `Command<P>` and the command constants listed above.
+- `EditorExtension` and the factories `richText`, `history`, `lists`, `code`, `links`, `images`.
+- Result and DTO types: `EditorResult`, `DispatchResult`, `MarkdownResult`, `JsonResult`, `RevisionResult`, `EditorCommit`, `EditorSelection`, `EditorPoint`, `EditorJson`.
 
 ## Related modules
 

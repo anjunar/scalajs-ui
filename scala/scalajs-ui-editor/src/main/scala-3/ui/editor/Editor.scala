@@ -57,6 +57,12 @@ final class Editor private[editor] (
   var onMediaStatus: MediaUploadStatus => Unit         = _ => ()
   val mediaStatusProperty: Property[MediaUploadStatus] = Property(MediaUploadStatus())
 
+  /** Called each time the visual surface mounts a new Ember session -- in the browser only, and
+    * again after the source view hands back to the visual one. The session belongs to the surface;
+    * see [[NativeEditorBinding]].
+    */
+  private[ui] var onNativeSession: Option[NativeEditorBinding => Unit] = None
+
   private var toolbarModeValue: EditorToolbarMode       = EditorToolbarMode.Ribbon
   private var editUrlValue: Option[String]              = None
   private var editLabelValue                            = "Edit"
@@ -345,6 +351,9 @@ final class Editor private[editor] (
         }
         syncPresentation(editableProperty.get)
         setAttribute("data-scalajs-ui-editor-loading", "false")
+        // Outside the try: a failing listener is the application's error, not a reason to fall
+        // back to the Markdown view.
+        Option(nativeAdapter).foreach(mounted => onNativeSession.foreach(_(mounted.binding)))
       }
 
   private def updateEditable(editable: Boolean): Unit = {

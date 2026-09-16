@@ -52,7 +52,10 @@ import "@anjunar/scalajs-ui-bridge/viewport";
 Each subpath (`./core`, `./router`, `./controls`, `./viewport`, `./forms`, `./editor`) installs only
 that feature's registrations and only pulls in the Scala.js code it actually needs -- `./forms` also
 carries `parseLocalDate`/`parseInstant`/`parseLocalDateTime`, since date fields are what uses them.
-They all resolve to the same `bridgeRuntime` instance, so importing several together (e.g. `./core`
+`./editor-api` is different: it exports `editorApi`, the untyped editor session API that
+`@anjunar/scalajs-ui-editor` wraps, and installs **nothing** -- no runtime, no registration. It comes
+from the same linked `editor.js` chunk as `./editor`, so sessions and mounted editors share one
+Scala.js runtime. The feature subpaths all resolve to the same `bridgeRuntime` instance, so importing several together (e.g. `./core`
 + `./controls` + `./viewport`, as a browser-only client that never touches forms/editor server-side
 would) is safe -- `installRuntime`'s duplicate-runtime guard treats repeated installs of the same
 instance as a no-op. Measured on a real client bundle (`npm/scalajs-ui-landing`, core + controls +
@@ -68,6 +71,8 @@ The package must be paired with matching versions of `@anjunar/scalajs-ui-core` 
 ## API overview
 
 - `bridgeRuntime` — the linked `UiRuntime` instance.
+- `editorApi` (`./editor-api`) — the editor session API behind `@anjunar/scalajs-ui-editor`'s `createEditor`,
+  commands and extension factories. Every argument is validated at run time.
 - `parseLocalDate`, `parseLocalDateTime`, `parseInstant` — stable TypeScript access to the real
   `scala-java-time` values linked into the runtime.
 - `UiRuntime` — the shared contract implemented by the linked bundle.
