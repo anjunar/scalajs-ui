@@ -4,6 +4,7 @@ import ember.editor.core.*
 import ember.editor.richtext.*
 import ember.editor.list.*
 import ember.editor.code.*
+import ember.editor.codehighlighting.CodeDecorations
 import ember.editor.link.*
 import ember.editor.image.{
   ImageExtension,
@@ -111,6 +112,12 @@ private[editor] final class NativeEditorAdapter(
       .create(decode(markdown), resolved, resolved.sessionConfig())
       .fold(errors => throw new IllegalArgumentException(errors.toString), identity)
     view = DocumentView.mount(session, DomCursor.root(surface), ImageSupport.views)
+    // Paints code blocks via the CSS Custom Highlight API, never touching the document DOM --
+    // ember-code-highlighting (X02), added right before ember 1.0.0. Disposed like every other
+    // one-off subscription below; painting itself degrades silently where the API is unsupported
+    // (CodeDecorations.isSupported).
+    val decorations = CodeDecorations.attach(session, view)
+    cleanups += (() => decorations.dispose())
     selection = SelectionPort.attachTo(session, view, surface)
     input = BrowserInputController.attachTo(
       session,

@@ -89,10 +89,45 @@
 .scalajs-ui-editor__surface ol { list-style: decimal; }
 .scalajs-ui-editor__surface strong { font-weight: 700; }
 .scalajs-ui-editor__surface em { font-style: italic; }
-.scalajs-ui-editor__surface pre { overflow: auto; padding: 1em; background: var(--aj-surface, #f1f4f8); border-radius: 6px; }
+/* overflow-wrap: anywhere above (long URLs/words in prose) is inherited here too, and per spec it
+   can still force in-word breaks under white-space: pre -- so a long code line wrapped instead of
+   ever triggering this overflow: auto scrollbar. Reset it back to normal for code specifically.
+   white-space needs !important: ember's NodeView (ember-ui, NodeView.scala) deliberately sets
+   style="white-space: pre-wrap" as an inline attribute on a code block's <pre> while editing
+   (RenderProfile.Editor) -- a soft-wrap default for the live editing surface, not a bug -- and an
+   inline style attribute outranks any external stylesheet rule short of !important. Readonly/SSR
+   rendering never sets that inline style, so it is unaffected either way. */
+.scalajs-ui-editor__surface pre { overflow: auto; overflow-wrap: normal; white-space: pre !important; padding: 1em; background: var(--aj-surface, #f1f4f8); border-radius: 6px; }
 .scalajs-ui-editor__surface code { font-family: "Cascadia Code", monospace; }
 .scalajs-ui-editor__surface a { color: var(--aj-accent-strong, #174c94); text-decoration: underline; }
 .scalajs-ui-editor__surface img { max-width: 100%; height: auto; }
+/* Code-block syntax highlighting (ember-code-highlighting). The editor paints these as CSS
+   Custom Highlights over the existing text node -- no element, no split text node. Static output
+   (StaticHighlight, for read-only rendering without an editor) uses the same class names, so one
+   set of rules serves both. Grouping follows ember-code-highlighting's own reference theme
+   (ember-demo/dev/style.css); colors come from the --aj-code-* tokens every design already
+   defines (base/Theme.css), not new ones, so this follows the active design/theme automatically. */
+::highlight(ember-tok-keyword), .ember-tok-keyword,
+::highlight(ember-tok-heading), .ember-tok-heading { color: var(--aj-code-keyword, #3977c5); }
+::highlight(ember-tok-type), .ember-tok-type,
+::highlight(ember-tok-tag), .ember-tok-tag,
+::highlight(ember-tok-property), .ember-tok-property,
+::highlight(ember-tok-link), .ember-tok-link { color: var(--aj-code-type, #2d6b8a); }
+::highlight(ember-tok-string), .ember-tok-string,
+::highlight(ember-tok-code), .ember-tok-code { color: var(--aj-code-string, #4a7524); }
+::highlight(ember-tok-number), .ember-tok-number,
+::highlight(ember-tok-attribute), .ember-tok-attribute { color: var(--aj-code-number, #95570a); }
+::highlight(ember-tok-constant), .ember-tok-constant { color: var(--aj-code-constant, #95570a); }
+::highlight(ember-tok-comment), .ember-tok-comment { color: var(--aj-code-comment, #858b82); }
+::highlight(ember-tok-function), .ember-tok-function,
+::highlight(ember-tok-emphasis), .ember-tok-emphasis,
+::highlight(ember-tok-strong), .ember-tok-strong { color: var(--aj-code-function, #684b9c); }
+::highlight(ember-tok-variable), .ember-tok-variable,
+::highlight(ember-tok-meta), .ember-tok-meta { color: var(--aj-code-variable, #172536); }
+::highlight(ember-tok-operator), .ember-tok-operator,
+::highlight(ember-tok-punctuation), .ember-tok-punctuation { color: var(--aj-code-operator, #526071); }
+::highlight(ember-tok-escape), .ember-tok-escape { color: var(--aj-code-accent, #b0402a); }
+.ember-tok-link { text-decoration: underline; }
 .scalajs-ui-editor-dialog {
   display: flex;
   flex-wrap: wrap;

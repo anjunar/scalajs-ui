@@ -236,6 +236,10 @@
 .scalajs-ui-editor__surface-wrap {
     position: relative;
     min-height: 180px;
+    /* scalajs-ui-editor__shell is display:grid; a grid item's default min-width is auto, which
+       lets a long code line's intrinsic width grow this box past its track instead of letting the
+       code block's own overflow: auto scroll. */
+    min-width: 0;
 }
 
 .scalajs-ui-editor__surface {
@@ -244,6 +248,14 @@
     padding: 18px;
     color: var(--aj-ink);
     outline: none;
+}
+
+/* Ember sets style="white-space: pre-wrap" inline on a code block's <pre> while editing
+   (ember-ui NodeView.scala, editingTextBlock) -- deliberate, but it means long lines wrap instead
+   of scrolling. !important is the only way to override an inline style attribute from CSS. */
+.scalajs-ui-editor__surface pre {
+    overflow: auto;
+    white-space: pre !important;
 }
 
 .scalajs-ui-editor__surface:focus {
