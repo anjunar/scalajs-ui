@@ -286,13 +286,14 @@ lazy val uiEditor = Project(id = "scalajs-ui-editor", base = file("scala/scalajs
     name                                 := "scalajs-ui-editor",
     moduleName                           := "scalajs-ui-editor",
     libraryDependencies ++= Seq(
-      "com.anjunar" %% "scalajs-ember-browser-support" % "1.0.0",
-      "com.anjunar" %% "scalajs-ember-standard" % "1.0.0",
-      "com.anjunar" %% "scalajs-ember-toolbar" % "1.0.0",
-      "com.anjunar" %% "scalajs-ember-forms" % "1.0.0",
+      "com.anjunar" %% "scalajs-ember-browser-support" % "1.0.1",
+      "com.anjunar" %% "scalajs-ember-standard" % "1.0.1",
+      "com.anjunar" %% "scalajs-ember-toolbar" % "1.0.1",
+      "com.anjunar" %% "scalajs-ember-forms" % "1.0.1",
+      "com.anjunar" %% "scalajs-ember-table" % "1.0.1",
       // Syntax highlighting for code blocks (ember X02) -- optional in ember, but
       // NativeEditorAdapter.scala always attaches it, so it is not optional here.
-      "com.anjunar" %% "scalajs-ember-code-highlighting" % "1.0.0"
+      "com.anjunar" %% "scalajs-ember-code-highlighting" % "1.0.1"
     )
   )
   .settings(commonLibrarySettings)
