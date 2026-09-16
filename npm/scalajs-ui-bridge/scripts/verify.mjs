@@ -6,10 +6,36 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const subpaths = ["core", "router", "controls", "viewport", "forms", "editor"];
 
+// "./editor-api" is the one subpath that must install nothing: the editor facade imports it, and the
+// facade has to stay loadable where a stub runtime is installed. Checked first, before "." below
+// installs the bridge into core's shared slot. It also proves a headless session runs in plain Node.
+{
+  const core = await import("@anjunar/scalajs-ui-core");
+  const { editorApi } = await import(pathToFileURL(resolve(packageRoot, "editor-api.js")));
+  let installed = true;
+  try {
+    core.runtime();
+  } catch {
+    installed = false;
+  }
+  if (installed) {
+    throw new Error("importing editor-api.js installed a UI runtime");
+  }
+  const session = editorApi.createEditor({ extensions: [editorApi.richText()], markdown: "Ada" });
+  const typed = session.dispatch(editorApi.commands.insertText, { text: "Hi " });
+  const markdown = session.toMarkdown();
+  session.dispose();
+  if (!typed.ok || !typed.handled || markdown.value !== "Hi Ada\n" ||!session.isDisposed) {
+    throw new Error("headless editor session is not usable: " + JSON.stringify({ typed, markdown }));
+  }
+}
+
 for (const file of [
   "index.js",
   ...subpaths.map((name) => `${name}.js`),
   ...subpaths.map((name) => `types/${name}.d.ts`),
+  "editor-api.js",
+  "types/editor-api.d.ts",
   "dist/fullopt/main.js",
   ...subpaths.map((name) => `dist/fullopt/${name}.js`),
   "types/index.d.ts",

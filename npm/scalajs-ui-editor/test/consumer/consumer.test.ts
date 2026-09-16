@@ -13,8 +13,10 @@
  *     shipped declaration.
  *  4. SSR of a form-bound editor against the linked Scala.js bridge produces
  *     the expected HTML.
+ *  5. A headless session (P29) runs from the packed install in plain Node, and
+ *     importing the facade installs no runtime of its own.
  */
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -25,6 +27,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const packageRoot = resolve(process.cwd());
@@ -38,29 +41,36 @@ const linkedArtifact = join(bridgePackage, "dist", "fullopt", "main.js");
 
 let consumer = "";
 
-function run(command: string, args: readonly string[], cwd: string): string {
-  return execFileSync(command, [...args], {
+const execFileAsync = promisify(execFile);
+
+// Asynchronous on purpose. npm install and loading the linked bridge in a child process take tens of
+// seconds; a synchronous call blocks the Vitest worker for all of it, and the worker then misses its
+// own RPC deadline ("Timeout calling onTaskUpdate") although every test passed.
+async function run(command: string, args: readonly string[], cwd: string): Promise<string> {
+  const { stdout } = await execFileAsync(command, [...args], {
     cwd,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 64 * 1024 * 1024,
   });
+  return stdout;
 }
 
-function npm(args: readonly string[], cwd: string): string {
+async function npm(args: readonly string[], cwd: string): Promise<string> {
   const entry = process.env["npm_execpath"];
   if (entry !== undefined && entry.endsWith(".js")) {
     return run(process.execPath, [entry, ...args], cwd);
   }
-  return execFileSync("npm", [...args], {
+  const { stdout } = await execFileAsync("npm", [...args], {
     cwd,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 64 * 1024 * 1024,
     shell: process.platform === "win32",
   });
+  return stdout;
 }
 
-function pack(directory: string, into: string): string {
-  const output = npm(["pack", "--pack-destination", into, "--silent"], directory);
+async function pack(directory: string, into: string): Promise<string> {
+  const output = await npm(["pack", "--pack-destination", into, "--silent"], directory);
   const name = output.trim().split("\n").pop()!.trim();
   return join(into, name);
 }
@@ -73,7 +83,7 @@ function lastJsonLine<T>(output: string): T {
   return JSON.parse(output.trim().split("\n").pop()!) as T;
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   if (!existsSync(linkedArtifact)) {
     throw new Error(
       "The Scala.js bridge is not linked. Run:\n\n" +
@@ -87,12 +97,12 @@ beforeAll(() => {
   const tarballs = join(consumer, "tarballs");
   mkdirSync(tarballs);
 
-  const coreTarball = pack(corePackage, tarballs);
-  const controlsTarball = pack(controlsPackage, tarballs);
-  const viewportTarball = pack(viewportPackage, tarballs);
-  const formsTarball = pack(formsPackage, tarballs);
-  const bridgeTarball = pack(bridgePackage, tarballs);
-  const editorTarball = pack(packageRoot, tarballs);
+  const coreTarball = await pack(corePackage, tarballs);
+  const controlsTarball = await pack(controlsPackage, tarballs);
+  const viewportTarball = await pack(viewportPackage, tarballs);
+  const formsTarball = await pack(formsPackage, tarballs);
+  const bridgeTarball = await pack(bridgePackage, tarballs);
+  const editorTarball = await pack(packageRoot, tarballs);
 
   writeFileSync(
     join(consumer, "package.json"),
@@ -118,7 +128,7 @@ beforeAll(() => {
 
   // --legacy-peer-deps: core/controls/viewport/forms/editor all declare a peer
   // on the CSS package this probe does not install (it renders no stylesheet).
-  npm(["install", "--no-audit", "--no-fund", "--legacy-peer-deps", "--silent"], consumer);
+  await npm(["install", "--no-audit", "--no-fund", "--legacy-peer-deps", "--silent"], consumer);
 });
 
 afterAll(() => {
@@ -139,11 +149,14 @@ describe("a packed install", () => {
     expect(dist).toContain("index.js");
     expect(dist).toContain("index.d.ts");
     expect(dist).toContain("editor.d.ts");
+    expect(dist).toContain("session.d.ts");
+    expect(dist).toContain("commands.d.ts");
+    expect(dist).toContain("extensions.d.ts");
   });
 });
 
 describe("typechecking a consumer", () => {
-  it("resolves all packages under --strict", () => {
+  it("resolves all packages under --strict", async () => {
     mkdirSync(join(consumer, "src"), { recursive: true });
 
     const source = [
@@ -153,7 +166,8 @@ describe("typechecking a consumer", () => {
       'import { form } from "@anjunar/scalajs-ui-forms";',
       'import { viewport } from "@anjunar/scalajs-ui-viewport";',
       'import { editor } from "@anjunar/scalajs-ui-editor";',
-      'import type { EditorOptions, Markdown } from "@anjunar/scalajs-ui-editor";',
+      'import type { EditorOptions, EditorSession, Markdown } from "@anjunar/scalajs-ui-editor";',
+      'import { createEditor, history, insertText, links, richText, setHeading, undo } from "@anjunar/scalajs-ui-editor";',
       "",
       'const initial: Markdown = "";',
       'const model = { body: property(initial) };',
@@ -164,6 +178,20 @@ describe("typechecking a consumer", () => {
       "  return renderToString(() => {",
       "    viewport(() => form(model, {}, () => editor(\"body\", options)));",
       "  });",
+      "}",
+      "",
+      "export function headless(): string {",
+      '  const session: EditorSession = createEditor({ extensions: [richText(), history(), links({ schemes: ["https"] })], markdown: "Ada" });',
+      '  session.dispatch(insertText, { text: "Hi " });',
+      "  session.dispatch(setHeading, { level: 1 });",
+      "  session.dispatch(undo);",
+      "  const result = session.toMarkdown();",
+      "  session.dispose();",
+      '  return result.ok ? result.value : result.error;',
+      "}",
+      "",
+      "export function onSession(): EditorOptions {",
+      "  return { onSession: (session) => void session.dispatch(insertText, { text: \"!\" }) };",
       "}",
       "",
       "export function boot(root: Element): void {",
@@ -198,12 +226,37 @@ describe("typechecking a consumer", () => {
     );
 
     const tsc = join(repoRoot, "node_modules", "typescript", "bin", "tsc");
-    expect(() => run(process.execPath, [tsc, "-p", "tsconfig.json"], consumer)).not.toThrow();
+    await expect(run(process.execPath, [tsc, "-p", "tsconfig.json"], consumer)).resolves.toBeTypeOf("string");
+  });
+});
+
+describe("a headless session from a packed install", () => {
+  it("runs in plain Node without installing a runtime", async () => {
+    const script = [
+      'import { runtime } from "@anjunar/scalajs-ui-core";',
+      'import { createEditor, insertText, richText } from "@anjunar/scalajs-ui-editor";',
+      "let installed = true;",
+      "try { runtime(); } catch { installed = false; }",
+      'const session = createEditor({ extensions: [richText()], markdown: "Ada" });',
+      'const typed = session.dispatch(insertText, { text: "Hi " });',
+      "const markdown = session.toMarkdown();",
+      "session.dispose();",
+      "console.log(JSON.stringify({ installed, handled: typed.ok && typed.handled, markdown: markdown.ok && markdown.value }));",
+      "",
+    ].join("\n");
+
+    writeFileSync(join(consumer, "headless-session.mjs"), script);
+
+    const result = lastJsonLine<{ installed: boolean; handled: boolean; markdown: string }>(
+      await run(process.execPath, ["headless-session.mjs"], consumer)
+    );
+
+    expect(result).toEqual({ installed: false, handled: true, markdown: "Hi Ada\n" });
   });
 });
 
 describe("rendering a Markdown editor from a packed install", () => {
-  it("renders against the bridge", () => {
+  it("renders against the bridge", async () => {
     const script = [
       'import { installRuntime, property, renderToString } from "@anjunar/scalajs-ui-core";',
       'import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";',
@@ -227,7 +280,7 @@ describe("rendering a Markdown editor from a packed install", () => {
     writeFileSync(join(consumer, "ssr-editor.mjs"), script);
 
     const result = lastJsonLine<{ status: number; hasEditor: boolean; hasValue: boolean; hasHeading: boolean }>(
-      run(process.execPath, ["ssr-editor.mjs"], consumer)
+      await run(process.execPath, ["ssr-editor.mjs"], consumer)
     );
 
     expect(result.status).toBe(200);

@@ -1,4 +1,4 @@
-/* Structural roles shared by UI controls and the Lexical integration.
+/* Structural roles shared by UI controls and the editor integration.
  * The palette is supplied by Theme.css; applications may override these roles.
  * No Tailwind or external design package is needed to use the component CSS.
  */

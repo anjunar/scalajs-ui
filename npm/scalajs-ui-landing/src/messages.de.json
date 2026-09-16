@@ -75,7 +75,7 @@
   "Virtual list ↗": "Virtuelle Liste ↗",
   "Scala JS UI 1.0 Editor / semantic readonly HTML": "Scala JS UI 1.0 Editor / semantisches, schreibgeschütztes HTML",
   "Rich editing. A Markdown value.": "Umfangreich bearbeiten. Als Markdown speichern.",
-  "Scala JS UI 1.0’s Lexical-backed editor supports headings, lists, links, tables and code. Readonly mode serves semantic HTML; editable mode starts with a Markdown textarea.": "Der auf Lexical basierende Scala JS UI 1.0-Editor unterstützt Überschriften, Listen, Links, Tabellen und Code. Der Lesemodus liefert semantisches HTML; der Bearbeitungsmodus beginnt mit einem Markdown-Textfeld.",
+  "Scala JS UI 1.0’s Ember-based editor supports headings, lists, links, images and code; tables stay editable in the Markdown view. Readonly mode serves semantic HTML; editable mode starts with a Markdown textarea.": "Der auf Ember basierende Scala JS UI 1.0-Editor unterstützt Überschriften, Listen, Links, Bilder und Code; Tabellen bleiben in der Markdown-Ansicht bearbeitbar. Der Lesemodus liefert semantisches HTML; der Bearbeitungsmodus beginnt mit einem Markdown-Textfeld.",
   "Open the editor ↗": "Editor öffnen ↗",
   "Routes are application structure": "Routen strukturieren die Anwendung",
   "Declarative routes, nested outlets and constrained parameters, with server response status handled by the router.": "Deklarative Routen, verschachtelte Outlets und eingeschränkte Parameter. Den Status der Server-Antwort verwaltet der Router.",

@@ -12,17 +12,18 @@ import scala.scalajs.js.annotation.JSExportTopLevel
   *
   * which forced `BridgeRuntime`'s single static initializer to register router+controls+viewport+
   * forms+editor unconditionally -- Scala.js's own dead-code elimination cannot drop code that one
-  * eager initializer unconditionally touches, no matter how the linker output is chunked into files.
-  * Measured: a consumer using only `ui.core` (isolated link, `scala/scalajs-ui-core-browser-tests`)
-  * needs 865 KB raw / 139 KB gzip; the full bridge bundle was 6.81 MB raw / 970 KB gzip, of which
-  * ~31% (unminified byte share) is `scalajs-ember`, pulled in only by [[EditorRuntime]] below.
+  * eager initializer unconditionally touches, no matter how the linker output is chunked into
+  * files. Measured: a consumer using only `ui.core` (isolated link,
+  * `scala/scalajs-ui-core-browser-tests`) needs 865 KB raw / 139 KB gzip; the full bridge bundle
+  * was 6.81 MB raw / 970 KB gzip, of which ~31% (unminified byte share) is `scalajs-ember`, pulled
+  * in only by [[EditorRuntime]] below.
   *
-  * Each object here is its own registration root with its own `@JSExportTopLevel` anchor, so the npm
-  * package can expose one entry point per feature (`@anjunar/scalajs-ui-bridge/controls`, `/forms`,
-  * ...) that touches only that feature's objects -- and, transitively, only the Scala.js linker
-  * chunks (`ModuleSplitStyle.SmallModulesFor`, `build.sbt`) those objects actually reach. The bare
-  * `"."` export (`index.js`) composes all six `installXRuntime()` calls itself, unchanged in
-  * observable behavior for every existing consumer -- see [[BridgeRuntime]] below for why that
+  * Each object here is its own registration root with its own `@JSExportTopLevel` anchor, so the
+  * npm package can expose one entry point per feature (`@anjunar/scalajs-ui-bridge/controls`,
+  * `/forms`, ...) that touches only that feature's objects -- and, transitively, only the Scala.js
+  * linker chunks (`ModuleSplitStyle.SmallModulesFor`, `build.sbt`) those objects actually reach.
+  * The bare `"."` export (`index.js`) composes all six `installXRuntime()` calls itself, unchanged
+  * in observable behavior for every existing consumer -- see [[BridgeRuntime]] below for why that
   * composition happens in `index.js` rather than inside `bridgeRuntime`'s own construction.
   *
   * `ComponentRegistry`/`UiRuntimeBridge`/`ScopeHandleBridge.component` stay exactly as before: one
@@ -111,6 +112,15 @@ private[bridge] object EditorRuntime {
 
   @JSExportTopLevel("installEditorRuntime", "editor")
   def install(): Unit = ()
+}
+
+// The P29 session API. Its own object, and deliberately not touched by EditorRuntime.install():
+// reaching `editorApi` registers nothing and installs no runtime, so the npm editor facade can import
+// it (npm/scalajs-ui-bridge/editor-api.js) and still load where a stub runtime is installed. Same
+// moduleID as the registration, so both land in the one physical editor.js chunk.
+private[bridge] object EditorApiRuntime {
+  @JSExportTopLevel("editorApi", "editor")
+  val editorApi: EditorApiBridge = new EditorApiBridge()
 }
 
 object BridgeRuntime {

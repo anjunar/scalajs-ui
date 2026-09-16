@@ -99,6 +99,11 @@ private[bridge] object EditorFactory extends ComponentFactory {
         self.onMediaStatus = status =>
           callback(js.Dynamic.literal(pending = status.pending, error = status.error.orNull))
       }
+      options.get("onSession").foreach { value =>
+        val callback = value.asInstanceOf[js.Function1[EditorSessionHandleBridge, Unit]]
+        self.onNativeSession =
+          Some(binding => callback(EditorSessionHandleBridge.borrowed(binding)))
+      }
 
       options.get("value").foreach(value => self.valueProperty.set(ControlFactories.str(value)))
       options.get("placeholder").foreach(value => self.placeholder(ControlFactories.strProp(value)))

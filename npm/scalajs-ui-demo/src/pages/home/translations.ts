@@ -7,7 +7,7 @@ export const entries: readonly CatalogEntry[] = [
   catalogEntry(i18n`The ambient-scope DSL: reactive state, control flow, elements, lifecycle.`, { de: "Die DSL mit Ambient-Scope: reaktiver Zustand, Kontrollfluss, Elemente und Lebenszyklus." }),
   catalogEntry(i18n`Tabs, tables, carousels, a virtualized grid and list, remote data sources.`, { de: "Tabs, Tabellen, Karussells, virtualisiertes Grid und Listen sowie entfernte Datenquellen." }),
   catalogEntry(i18n`Validated forms, sub-forms, repeating fields, a combo box, an image cropper.`, { de: "Validierte Formulare, Unterformulare, wiederholende Felder, eine ComboBox und ein Bildzuschnitt." }),
-  catalogEntry(i18n`A Lexical-backed rich-text field, bound by name like input.`, { de: "Ein Lexical-basiertes Rich-Text-Feld, wie input per Namen gebunden." }),
+  catalogEntry(i18n`An Ember rich-text field, bound by name like input.`, { de: "Ein Ember-Rich-Text-Feld, wie input per Namen gebunden." }),
   catalogEntry(i18n`Notifications, floating windows and overlays, mounted above the routed page.`, { de: "Benachrichtigungen, schwebende Fenster und Overlays über der gerouteten Seite." }),
   catalogEntry(i18n`Client-side routing: links, a nested outlet, params, constraints, async loaders.`, { de: "Clientseitiges Routing: Links, ein verschachteltes Outlet, Parameter, Bedingungen und asynchrone Loader." }),
   catalogEntry(i18n`Schema-driven JSON mapping for TypeScript models, including IDs and nested state.`, { de: "Schema-basiertes JSON-Mapping für TypeScript-Modelle mit IDs und verschachteltem Zustand." }),

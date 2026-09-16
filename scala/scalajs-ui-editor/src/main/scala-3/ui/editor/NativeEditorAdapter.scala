@@ -376,6 +376,18 @@ private[editor] final class NativeEditorAdapter(
     setEditable(editable)
   }
 
+  /** The mounted session for [[Editor.onNativeSession]]. Only valid after [[mount]]. */
+  private[editor] def binding: NativeEditorBinding = {
+    require(session != null, "The editor session is not mounted.")
+    new NativeEditorBinding(
+      session,
+      markdownCodec,
+      StandardJsonSupport.everything(media = mediaPolicy),
+      LinkUrlPolicy.default,
+      history
+    )
+  }
+
   private def available =
     input != null && input.mode == EditorMode.Editable && input.state == ControllerState.Ready && !closed
   private def announce(message: String): Unit = if (bar != null) bar.announce(message)
@@ -591,3 +603,26 @@ private[editor] final class NativeEditorAdapter(
     onFocusChanged(false)
   }
 }
+
+/** A mounted editor's live Ember session, as seen by code outside this module.
+  *
+  * Exists for the JavaScript bridge (P29): it lends the session to TypeScript as a non-owning
+  * handle. Everything here belongs to the adapter -- `session` is disposed when the visual surface
+  * closes, and a borrower has to check `session.isDisposed` rather than keep a copy of anything.
+  *
+  * @param markdown
+  *   the form's own Markdown dialect, so a borrower reads exactly the value the form submits.
+  * @param json
+  *   the JSON support matching the extensions this adapter installs.
+  * @param links
+  *   the policy [[LinkExtension]] was installed with; a link payload has to pass the same one.
+  * @param history
+  *   the adapter's history, for undo/redo availability.
+  */
+private[ui] final class NativeEditorBinding(
+    val session: EditorSession,
+    val markdown: FieldCodec,
+    val json: ember.editor.json.JsonSupport,
+    val links: LinkUrlPolicy,
+    val history: History
+)

@@ -80,29 +80,6 @@
     background: var(--aj-surface-overlay);
 }
 
-.scalajs-ui-editor-readonly .lexical-paragraph {
-    margin: 0 0 0.9em;
-    line-height: 1.65;
-}
-
-.scalajs-ui-editor-readonly .lexical-heading-h1,
-.scalajs-ui-editor-readonly .lexical-heading-h2,
-.scalajs-ui-editor-readonly .lexical-heading-h3,
-.scalajs-ui-editor-readonly .lexical-heading-h4,
-.scalajs-ui-editor-readonly .lexical-heading-h5,
-.scalajs-ui-editor-readonly .lexical-heading-h6 {
-    margin: 1.2em 0 0.55em;
-    font-weight: 850;
-    letter-spacing: -0.04em;
-    line-height: 1.2;
-}
-
-.scalajs-ui-editor-readonly .lexical-quote {
-    border-left: 3px solid var(--aj-accent);
-    padding-left: 14px;
-    color: var(--aj-ink-soft);
-}
-
 .scalajs-ui-editor-readonly__placeholder {
     margin: 0;
     color: var(--aj-ink-muted);

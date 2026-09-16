@@ -255,7 +255,7 @@ async function main() {
     const editorHtml = await (await fetch(`http://localhost:${port}/editor/basics`)).text();
     check(
       "/editor/basics -- Markdown value feedback and sample actions are present",
-      ["Load article", "Clear editor", "Markdown value", "characters"]
+      ["Load article", "Clear editor", "Undo last change", "Markdown value", "characters"]
         .every((copy) => editorHtml.includes(copy)),
       "the richer editor example is incomplete"
     );

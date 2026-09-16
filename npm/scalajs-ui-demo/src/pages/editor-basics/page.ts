@@ -1,6 +1,6 @@
 import { button, classes, div, onClick, property, text } from "@anjunar/scalajs-ui-core";
 import { form, inputContainer, input } from "@anjunar/scalajs-ui-forms";
-import { editor } from "@anjunar/scalajs-ui-editor";
+import { editor, undo, type EditorSession } from "@anjunar/scalajs-ui-editor";
 import { translated } from "../../app/i18n.js";
 
 const sampleMarkdown =
@@ -13,6 +13,8 @@ export function editorBasicsPage(): void {
     title: property(translated("Getting started").get),
     body: property(sampleMarkdown),
   };
+  // Lent by the mounted editor in the browser; stays null during SSR.
+  let session: EditorSession | null = null;
 
   div(() => {
     classes("flex", "flex-col", "gap-4");
@@ -25,6 +27,9 @@ export function editorBasicsPage(): void {
         editor("body", {
           placeholder: translated("Write the article...").get,
           plugins: ["base", "heading", "list", "link", "image", "table", "code", "horizontalRule"],
+          onSession: (lent) => {
+            session = lent;
+          },
         });
       });
     });
@@ -33,6 +38,7 @@ export function editorBasicsPage(): void {
       classes("showcase-action-row");
       button(translated("Load article"), {}, () => onClick(() => model.body.set(sampleMarkdown)));
       button(translated("Clear editor"), {}, () => onClick(() => model.body.set("")));
+      button(translated("Undo last change"), {}, () => onClick(() => session?.dispatch(undo)));
     });
 
     div(() => {
