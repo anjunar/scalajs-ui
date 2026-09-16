@@ -30,6 +30,13 @@ export function rowBody<T>(render: (row: T) => void): (row: T) => ScopeBody {
   return (row) => (scope) => withScope(scope, null, () => render(row));
 }
 
+/** Wraps a `(state) => void` sort indicator body into `(state) => ScopeBody`. Composed once per
+ * header, like `rowBody`; `state` itself stays reactive, so the app binds to it declaratively
+ * instead of being re-invoked on every sort change. */
+export function stateBody<T>(render: (state: T) => void): (state: T) => ScopeBody {
+  return (state) => (scope) => withScope(scope, null, () => render(state));
+}
+
 /**
  * Drops `undefined` entries.
  *

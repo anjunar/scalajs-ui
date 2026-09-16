@@ -234,7 +234,10 @@ final class TableView[S] private (
         if (entry.rowSpan > 1) setAttribute("aria-rowspan", entry.rowSpan.toString)
         else removeAttribute("aria-rowspan")
       })
-      text(column.textProperty) {}
+      column.headerCellBody match {
+        case Some(body) => body
+        case None       => text(column.textProperty) {}
+      }
       addDisposable(TableColumn.applyClasses(this, column.headerClassesProperty))
 
       if (initial.leaf) {
@@ -299,6 +302,27 @@ final class TableView[S] private (
           "ui-table-header-cell-sorted-desc",
           headerStateRevisionProperty.map(_ => currentSortFor(typedColumn).exists(!_.ascending))
         )
+        column.sortIndicatorBody.foreach { body =>
+          // Suppresses the default CSS-only ::after arrow (TableView.css) so a custom indicator
+          // does not double up with it; the sortable/sorted/priority classes and ARIA above are
+          // otherwise unaffected, so CSS-only theming keeps working for every other column.
+          addClass("ui-table-header-cell-sort-indicator-custom")
+          val state = headerStateRevisionProperty.map { _ =>
+            val sorting = currentRemoteSorting
+            currentSortFor(typedColumn) match {
+              case Some(term) =>
+                val priority = sortKeyOf(column).fold(0)(key => sorting.indexWhere(_.field == key) + 1)
+                TableSortIndicatorState(sorted = true, ascending = term.ascending, priority = priority)
+              case None => TableSortIndicatorState(sorted = false, ascending = true, priority = 0)
+            }
+          }
+          DslLayer.child(new Div {
+            override def compose(cursor: Cursor): Unit = DslLayer.render(this, cursor) {
+              addClass("ui-table-header-cell-sort-indicator")
+              body(state)
+            }
+          }) {}
+        }
       } else addClass("ui-table-header-cell-group")
     }
   }

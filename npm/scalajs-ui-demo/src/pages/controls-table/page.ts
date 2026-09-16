@@ -154,7 +154,26 @@ export function controlsTablePage(): void {
         source,
         [
           columnGroup(translated("Book").get, [
-            column(translated("Title").get, (book) => text(book.title), { prefWidth: 280, minWidth: 140, maxWidth: 900, sortable: true, sortKey: "title" }),
+            column(translated("Title").get, (book) => text(book.title), {
+              prefWidth: 280, minWidth: 140, maxWidth: 900, sortable: true, sortKey: "title",
+              // C09: replaces the default header text with an icon + label, and the default
+              // CSS-only sort arrow with a small pill showing direction/priority.
+              headerCell: () => {
+                div(() => {
+                  style("display", "flex");
+                  style("align-items", "center");
+                  style("gap", "6px");
+                  text("📖");
+                  text(translated("Title"));
+                });
+              },
+              sortIndicator: state => {
+                div(() => {
+                  classes("table-demo__sort-pill");
+                  text(state.map(s => s.sorted ? `${s.ascending ? "▲" : "▼"} ${s.priority}` : ""));
+                });
+              },
+            }),
             column(translated("Author").get, (book) => text(book.author), { prefWidth: 220, minWidth: 100, maxWidth: 600, sortable: true, sortKey: "author", visible: showAuthors, onVisibilityChange: value => showAuthors.set(value) }),
           ]),
           columnGroup(translated("Details").get, [

@@ -252,6 +252,46 @@ describe("table-view", () => {
     } finally { app.dispose(); root.remove(); }
   });
 
+  it("replaces the default header text and CSS-only sort arrow with headerCell/sortIndicator content", () => {
+    type Query = { sorting: readonly SortSpec[] };
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const load = vi.fn(async (_query: Query) => ({ items: ["Ada"], totalCount: 1 }));
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(remoteSource<string, Query>({
+        initialQuery: { sorting: [] }, initial: ["Ada"], totalCount: 1,
+        load, sortQuery: (q, sorting) => ({ ...q, sorting }),
+      }), [
+        valueColumn("Name", row => row, {
+          sortable: true, sortKey: "name",
+          headerCell: () => { div(() => { classes("custom-header"); text("Custom Name"); }); },
+          sortIndicator: state => {
+            div(() => {
+              classes("custom-sort-icon");
+              text(state.map(s => s.sorted ? `${s.ascending ? "up" : "down"}${s.priority}` : "none"));
+            });
+          },
+        }),
+      ]);
+    });
+    try {
+      const header = root.querySelector<HTMLElement>(".ui-table-header-cell")!;
+      expect(header.querySelector(".custom-header")?.textContent).toBe("Custom Name");
+      expect(header.classList).toContain("ui-table-header-cell-sort-indicator-custom");
+      const indicator = header.querySelector(".custom-sort-icon")!;
+      expect(indicator.textContent).toBe("none");
+
+      expect(table.setSortOrder([{ columnIndex: 0, ascending: true }])).toBe(true);
+      expect(indicator.textContent).toBe("up1");
+      expect(header.classList).toContain("ui-table-header-cell-sorted-asc");
+
+      expect(table.setSortOrder([{ columnIndex: 0, ascending: false }])).toBe(true);
+      expect(indicator.textContent).toBe("down1");
+      expect(header.classList).toContain("ui-table-header-cell-sorted-desc");
+    } finally { app.dispose(); root.remove(); }
+  });
+
   it("opens the column menu in the nearest viewport and keeps visibility, widths and selection coherent", () => {
     const root = document.createElement("div"); document.body.appendChild(root);
     const visible = property(true);
