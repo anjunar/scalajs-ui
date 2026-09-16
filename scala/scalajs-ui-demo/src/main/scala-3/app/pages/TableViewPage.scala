@@ -268,6 +268,26 @@ object TableViewPage {
                     maxWidth = 900.0
                     sortable = true
                     sortKey = "title"
+                    // C09: replaces the default header text with an icon + label, and the
+                    // default CSS-only sort arrow with a small pill showing direction/priority.
+                    headerCell {
+                      hbox {
+                        style { gap = "6px"; alignItems = "center" }
+                        text("📖") {}
+                        text("Title") {}
+                      }
+                    }
+                    sortIndicator { state =>
+                      div {
+                        classes = Seq("table-demo__sort-pill")
+                        text(
+                          state.map(s =>
+                            if (!s.sorted) ""
+                            else s"${if (s.ascending) "▲" else "▼"} ${s.priority}"
+                          )
+                        ) {}
+                      }
+                    }
                     cell { book =>
                       text(book.title) {}
                     }

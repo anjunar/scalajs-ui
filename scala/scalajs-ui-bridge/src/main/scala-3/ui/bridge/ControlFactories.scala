@@ -112,6 +112,17 @@ private[bridge] trait ColumnFacade extends js.Object {
   val sortKey: js.UndefOr[String]                                     = js.native
   val headerClass: js.UndefOr[js.Any]                                 = js.native
   val cellClass: js.UndefOr[js.Any]                                   = js.native
+  /** `() => void`, run through the same ambient-scope DSL as `cell`. Replaces the default header
+    * text entirely (C09) -- an icon next to the label, a badge, or a `contextmenu` trigger for the
+    * app's own viewport overlay all fall out of this being real composition, not a narrow property.
+    */
+  val headerCell: js.UndefOr[js.Function1[ScopeHandleBridge, Unit]] = js.native
+  /** `(state) => void` where `state` is a live `ReadOnlyProperty<TableSortIndicatorState>`.
+    * Replaces the default CSS-only sort arrow for a leaf, sortable column (C09).
+    */
+  val sortIndicator: js.UndefOr[
+    js.Function1[ReadOnlyPropertyHandle[js.Any], js.Function1[ScopeHandleBridge, Unit]]
+  ] = js.native
   val visible: js.UndefOr[js.Any]                                     = js.native
   val onVisibilityChange: js.UndefOr[js.Function1[Boolean, Unit]]     = js.native
   val onEditStart: js.UndefOr[js.Function1[js.Object, Unit]]          = js.native
@@ -524,6 +535,21 @@ private[bridge] object TableViewFactory extends ComponentFactory {
               .map(_.toSeq)
               .observe(column.cellClassesProperty.set)
           )
+        }
+        col.headerCell.foreach(renderer => column.headerCell(ControlFactories.slotBody(renderer)))
+        col.sortIndicator.foreach { renderer =>
+          column.sortIndicator { stateProperty =>
+            val jsState = stateProperty.map { state =>
+              js.Dynamic
+                .literal(
+                  sorted = state.sorted,
+                  ascending = state.ascending,
+                  priority = state.priority
+                )
+                .asInstanceOf[js.Any]
+            }
+            ControlFactories.slotBody(renderer(new ReadOnlyPropertyHandle(jsState)))
+          }
         }
         col.onEditStart.foreach(callback =>
           column.onEditStartProperty.set(Some(event => callback(editStartFacade(event))))

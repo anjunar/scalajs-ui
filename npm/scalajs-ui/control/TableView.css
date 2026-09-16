@@ -193,6 +193,20 @@
   content: "↓" attr(data-sort-priority);
 }
 
+/* C09: a custom sortIndicator body renders its own DOM content instead, so suppress the default
+   CSS-only arrow rather than showing both. sortable/sorted/priority classes and ARIA are otherwise
+   unaffected -- the app's indicator reads the reactive TableSortIndicatorState it was given. */
+.ui-table-header-cell.ui-table-header-cell-sort-indicator-custom.ui-table-header-cell-sorted-asc::after,
+.ui-table-header-cell.ui-table-header-cell-sort-indicator-custom.ui-table-header-cell-sorted-desc::after {
+  content: none;
+}
+
+.ui-table-header-cell-sort-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+}
+
 .ui-table-row {
   color: var(--aj-ink);
   background-color: transparent;

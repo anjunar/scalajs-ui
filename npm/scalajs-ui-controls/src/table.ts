@@ -9,10 +9,19 @@
  */
 import { component, currentScope, withScope } from "@anjunar/scalajs-ui-core";
 import type { ComponentHandle, ListProperty, Reactive, ReadOnlyProperty, ScopeHandle } from "@anjunar/scalajs-ui-core";
-import { body, defined, rowBody } from "./internal.js";
+import { body, defined, rowBody, stateBody } from "./internal.js";
 import type { Source, SortSpec } from "./data-source.js";
 
 type TableEditHandler<E> = { bivarianceHack(event: E): void }["bivarianceHack"];
+
+/** A leaf column's own current position in the requested remote sort, for `sortIndicator`.
+ * `ascending`/`priority` are meaningless when `sorted` is false; `priority` is one-based,
+ * matching the header's own `data-sort-priority`/`aria-description`. */
+export interface SortIndicatorState {
+  readonly sorted: boolean;
+  readonly ascending: boolean;
+  readonly priority: number;
+}
 
 export interface ColumnDef<T> {
   readonly text: string;
@@ -39,6 +48,14 @@ export interface ColumnDef<T> {
   readonly headerClass?: Reactive<readonly string[]>;
   /** Extra classes on every data cell of this column, in addition to the framework's own ui-table-* classes. */
   readonly cellClass?: Reactive<readonly string[]>;
+  /** Replaces the default header text entirely: an icon next to the label, a badge, or any other
+   * composed content. A right-click menu on a header is just `on("contextmenu", ...)` inside this
+   * body opening the app's own viewport overlay -- no separate context-menu API. */
+  readonly headerCell?: () => void;
+  /** Replaces the default CSS-only sort arrow for a leaf, sortable column. `state` is reactive;
+   * bind to it declaratively (e.g. `text(state.map(s => s.sorted ? (s.ascending ? "▲" : "▼") : ""))`)
+   * rather than expecting this body to be re-invoked on every sort change. */
+  readonly sortIndicator?: (state: ReadOnlyProperty<SortIndicatorState>) => void;
   /** Composes one cell's content for `row`, with the core DSL. */
   readonly cell?: (row: T) => void;
   /** A snapshot or observed cell value. Used by the default text cell when `cell` is absent. */
@@ -482,6 +499,8 @@ export function tableView<T, Q = unknown>(
     sortKey: col.sortKey,
     headerClass: col.headerClass,
     cellClass: col.cellClass,
+    headerCell: col.headerCell ? body(col.headerCell) : undefined,
+    sortIndicator: col.sortIndicator ? stateBody(col.sortIndicator) : undefined,
     cell: col.cell ? rowBody(col.cell) : undefined,
     value: col.value,
     valueCell: col.valueCell

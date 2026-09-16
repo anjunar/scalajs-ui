@@ -24,6 +24,13 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
   // ui-table-cell-* classes; they do not replace those.
   val headerClassesProperty: Property[Seq[String]]                       = Property(Seq.empty)
   val cellClassesProperty: Property[Seq[String]]                         = Property(Seq.empty)
+  // C09: composed once, like TableView's own header/placeholder slots -- not reactive bodies
+  // themselves, since reactivity belongs inside the body (text(...), classIf(...), ...), the same
+  // way `cell { book => text(book.title) {} }` already works.
+  private[table] var headerCellBody: Option[AbstractComponent ?=> Cursor ?=> Unit] = None
+  private[table] var sortIndicatorBody
+      : Option[ReadOnlyProperty[TableSortIndicatorState] => AbstractComponent ?=> Cursor ?=> Unit] =
+    None
   val cellValueFactoryProperty: Property[Option[CellValueFactory[S, T]]] = Property(None)
   val cellFactoryProperty: Property[Option[CellFactory[S, T]]]           = Property(None)
   val editCommitHandlerProperty: Property[Option[TableEditCommitEvent[S, T] => Unit]] =
@@ -150,6 +157,17 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
   def cellClasses: Seq[String]                        = cellClassesProperty.get
   def cellClasses_=(value: Seq[String]): Unit         = cellClassesProperty.set(value)
 
+  /** Instance-level twins of the companion `headerCell`/`sortIndicator` DSL functions (C09), for
+    * callers -- the bridge -- that hold a `TableColumn` value directly instead of composing inside
+    * a `column[S, T](text) { ... }` block with an implicit column in scope.
+    */
+  def headerCell(body: AbstractComponent ?=> Cursor ?=> Unit): Unit =
+    headerCellBody = Some(body)
+  def sortIndicator(
+      body: ReadOnlyProperty[TableSortIndicatorState] => AbstractComponent ?=> Cursor ?=> Unit
+  ): Unit =
+    sortIndicatorBody = Some(body)
+
   def setCellRenderer(renderer: CellRenderer[S]): Unit =
     cellRenderer.set(Some(renderer))
 }
@@ -210,6 +228,28 @@ object TableColumn {
       column: TableColumn[S, T]
   ): Unit =
     column.addDisposable(value.observe(column.cellClassesProperty.set))
+
+  /** Replaces the header's default `text(column.textProperty)` with arbitrary content -- an icon
+    * next to the label, a badge, or any other composed graphic (C09). Since this is real DSL
+    * composition, not a narrow "graphic node" property, an app that wants a right-click menu on a
+    * header gets there the same way any other component does: `on("contextmenu") { ... }` inside
+    * the body, opening its own viewport overlay -- no second menu API, matching C08's own choice
+    * not to build a second popup engine.
+    */
+  def headerCell[S, T](
+      body: AbstractComponent ?=> Cursor ?=> Unit
+  )(using column: TableColumn[S, T]): Unit =
+    column.headerCellBody = Some(body)
+
+  /** Replaces the header's default CSS-only sort arrow (`::after` on `ui-table-header-cell-sorted-*`)
+    * with composed content, for a leaf, sortable column. `state` is reactive, mirroring the same
+    * requested-sort snapshot the default decoration and `aria-description` already read; bind to it
+    * declaratively (`text(state.map(...))`) rather than re-invoking this body on every change.
+    */
+  def sortIndicator[S, T](
+      body: ReadOnlyProperty[TableSortIndicatorState] => AbstractComponent ?=> Cursor ?=> Unit
+  )(using column: TableColumn[S, T]): Unit =
+    column.sortIndicatorBody = Some(body)
   def minWidth[S, T](using column: TableColumn[S, T]): Double                = column.minWidth
   def minWidth_=[S, T](value: Double)(using column: TableColumn[S, T]): Unit = column.minWidth =
     value

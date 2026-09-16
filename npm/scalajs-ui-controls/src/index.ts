@@ -7,7 +7,7 @@ export { tab, tabs } from "./tabs.js";
 export type { CarouselOptions } from "./carousel.js";
 export { carousel } from "./carousel.js";
 
-export type { CheckBoxColumnOptions, ColumnDef, ColumnGroupOptions, ColumnResizePolicy, ConvertingTextFieldColumnOptions, ProgressBarColumnOptions, SelectionColumnOptions, TableDirection, TableEditCancelEvent, TableEditCancelReason, TableEditCommitEvent, TableEditStartEvent, TablePosition, TableRowContext, TableSelectionMode, TableSort, TableTextParseResult, TableViewHandle, TableViewOptions, TextFieldBlurPolicy, TextFieldColumnOptions, ValueColumnOptions } from "./table.js";
+export type { CheckBoxColumnOptions, ColumnDef, ColumnGroupOptions, ColumnResizePolicy, ConvertingTextFieldColumnOptions, ProgressBarColumnOptions, SelectionColumnOptions, SortIndicatorState, TableDirection, TableEditCancelEvent, TableEditCancelReason, TableEditCommitEvent, TableEditStartEvent, TablePosition, TableRowContext, TableSelectionMode, TableSort, TableTextParseResult, TableViewHandle, TableViewOptions, TextFieldBlurPolicy, TextFieldColumnOptions, ValueColumnOptions } from "./table.js";
 export { checkBoxColumn, choiceBoxColumn, column, columnGroup, comboBoxColumn, convertingTextFieldColumn, progressBarColumn, textFieldColumn, valueColumn, tableView } from "./table.js";
 
 export type { DataGridOptions, VirtualListOptions } from "./collections.js";

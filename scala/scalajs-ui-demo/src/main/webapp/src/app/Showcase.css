@@ -1212,6 +1212,21 @@
 .table-demo__numeric-header { justify-content: flex-end; text-align: right; }
 .table-demo__numeric-cell { justify-content: flex-end; text-align: right; font-variant-numeric: tabular-nums; }
 
+/* headerCell/sortIndicator (C09): the header's own composed content and sort marker, replacing
+ * the default text and the CSS-only ::after arrow (ui-table-header-cell-sort-indicator-custom
+ * suppresses that arrow -- see TableView.css). Empty when the column is not currently sorted.
+ */
+.table-demo__sort-pill {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--aj-accent-muted);
+    color: var(--aj-accent-strong);
+    font-size: 11px;
+    font-weight: 700;
+}
+.table-demo__sort-pill:empty { display: none; }
+
 .table-demo__note {
     width: 100%;
     min-width: 0;

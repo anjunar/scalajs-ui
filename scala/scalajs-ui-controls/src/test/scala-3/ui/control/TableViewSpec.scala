@@ -7,7 +7,7 @@ import ui.control.table.TableView.*
 import ui.core.component.{AbstractComponent, Runtime}
 import ui.core.context.UrlScope
 import ui.core.remote.{RemoteListProperty, RemoteLoader, RemotePage, RemoteSort}
-import ui.core.dsl.ClassDsl.addClass
+import ui.core.dsl.ClassDsl.{addClass, classes, classes_=}
 import ui.core.dsl.DslLayer
 import ui.core.layout.Div.div
 import ui.core.layout.TextComponent.text
@@ -351,6 +351,63 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
     relabelled should not include "numeric-header"
     relabelled should include("date-cell")
     relabelled should not include "numeric-cell"
+
+    Runtime.unmount(root)
+  }
+
+  "TableColumn headerCell/sortIndicator" should "replace the default header text and sort arrow with composed content" in {
+    var nameColumn: TableColumn[String, String] = null
+    val remote                                    = remoteMembers(pageSize = 5)
+    val cursor                                    = new SsrCursor()
+    val root = Runtime.mount(
+      new AbstractComponent {
+        override val tagName: String = "main"
+        override def compose(cursor: Cursor): Unit =
+          DslLayer.render(this, cursor) {
+            tableView[String](remote) {
+              nameColumn = column[String, String]("Name") {
+                sortable = true
+                sortKey = "name"
+                headerCell {
+                  div { classes = Seq("custom-header"); text("Custom Name") {} }
+                }
+                sortIndicator { state =>
+                  div {
+                    classes = Seq("custom-sort-icon")
+                    text(
+                      state.map(s => if (!s.sorted) "none" else if (s.ascending) s"up${s.priority}" else s"down${s.priority}")
+                    ) {}
+                  }
+                }
+              }
+            }
+          }
+      },
+      cursor
+    )
+
+    val initial = cursor.collectHtml()
+    initial should include("custom-header")
+    initial should include("Custom Name")
+    initial should not include "\">Name<" // the default, unreplaced header text
+    initial should include("custom-sort-icon")
+    initial should include(">none<")
+    initial should include("ui-table-header-cell-sort-indicator-custom")
+    // The built-in sort classes/attributes stay -- CSS-level theming and ARIA keep working even
+    // though the ::after arrow is suppressed for this column specifically.
+    initial should include("ui-table-header-cell-sortable")
+
+    // Drives the same requested-sort state toggleSort/setSortOrder ultimately set, without
+    // depending on the loader's Future resolving synchronously in this test.
+    remote.sortingProperty.set(Vector(RemoteSort("name", ascending = true)))
+    val ascending = cursor.collectHtml()
+    ascending should include(">up1<")
+    ascending should include("ui-table-header-cell-sorted-asc")
+
+    remote.sortingProperty.set(Vector(RemoteSort("name", ascending = false)))
+    val descending = cursor.collectHtml()
+    descending should include(">down1<")
+    descending should include("ui-table-header-cell-sorted-desc")
 
     Runtime.unmount(root)
   }
