@@ -9,7 +9,7 @@ The controls build on `scalajs-ui-core` state and data-source contracts. They re
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-controls" % "1.0.2"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-controls" % "1.0.3"
 ```
 
 ## Quick start

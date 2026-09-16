@@ -9,7 +9,7 @@ Rich-text editing for Scala JS UI 1.0, backed by Lexical in the browser and expo
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-editor" % "1.0.2"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-editor" % "1.0.3"
 ```
 
 The module also uses the repository's `scalajs-lexical` dependency and the viewport for default plugin dialogs.
