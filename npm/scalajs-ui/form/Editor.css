@@ -166,6 +166,11 @@
     position: relative;
     min-height: 180px;
     height: 100%;
+    /* A grid item's (scalajs-ui-editor__shell is display:grid) default min-width is auto, not 0 --
+       without this, a long unbroken code line's intrinsic width grows this box (and the whole
+       editor shell with it) past its grid track instead of staying put so NativeEditor.css's
+       overflow: auto on the code block's <pre> can ever produce a scrollbar. */
+    min-width: 0;
 }
 
 .scalajs-ui-editor__surface {
