@@ -63,7 +63,7 @@ export function appShell(routes: readonly RouteDefinition[], config: RouterConfi
         classes("app-footer");
         text(translated("Scala JS UI 1.0 · Scala.js and TypeScript · one runtime."));
         externalLink("GitHub", "https://github.com/anjunar/scalajs-ui");
-        text("v1.0.3");
+        text("v1.0.4");
       });
     });
   });
