@@ -101,6 +101,13 @@
 .scalajs-ui-editor__surface code { font-family: "Cascadia Code", monospace; }
 .scalajs-ui-editor__surface a { color: var(--aj-accent-strong, #174c94); text-decoration: underline; }
 .scalajs-ui-editor__surface img { max-width: 100%; height: auto; }
+.scalajs-ui-editor__surface table { border-collapse: collapse; margin: 0 0 .8em; width: 100%; }
+.scalajs-ui-editor__surface :is(th,td) { border: 1px solid var(--aj-line, #d7dce3); padding: 6px 10px; text-align: left; vertical-align: top; }
+.scalajs-ui-editor__surface th { background: var(--aj-surface, #f8fafc); font-weight: 600; }
+/* Read by ember-table's cell-range highlight (TableSelectionView), a stylesheet it injects into
+   the document head, not this one -- defining the token here just makes its color follow the
+   active design/theme instead of ember's own hardcoded fallback. */
+.scalajs-ui-editor__surface { --ember-table-selection: var(--aj-accent-muted, #e6effc); }
 /* Code-block syntax highlighting (ember-code-highlighting). The editor paints these as CSS
    Custom Highlights over the existing text node -- no element, no split text node. Static output
    (StaticHighlight, for read-only rendering without an editor) uses the same class names, so one

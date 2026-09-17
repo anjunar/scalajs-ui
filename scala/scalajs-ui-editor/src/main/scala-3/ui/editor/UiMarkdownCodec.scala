@@ -17,15 +17,12 @@ private[editor] final class UiMarkdownCodec(
   val name                                               = "ui-markdown"
   def emptyValue(schema: Schema, rootId: NodeId): String = ""
   def decode(source: String, schema: Schema, rootId: NodeId): Either[EditorError, Document] = {
-    // Tables are outside the native model. Keep their source editable without importing them
-    // as paragraphs and changing their meaning on the next unrelated edit.
+    // Raw HTML and the extra text marks are outside the native model. Keep their source editable
+    // without importing them as paragraphs and changing their meaning on the next unrelated edit.
+    // Tables are native (ember-table, X01) and decoded below like any other block.
     var unsupported = false
     MarkdownImages.mapProse(source) { prose =>
-      if (
-        "(?im)^ *\\|? *:?-{3,}:? *\\|.*$|</?[a-z][^>]*>|\\+\\+[^+]+\\+\\+|~~[^~]+~~|==[^=]+==".r
-          .findFirstIn(prose)
-          .nonEmpty
-      )
+      if ("(?im)</?[a-z][^>]*>|\\+\\+[^+]+\\+\\+|~~[^~]+~~|==[^=]+==".r.findFirstIn(prose).nonEmpty)
         unsupported = true
       prose
     }
@@ -33,7 +30,7 @@ private[editor] final class UiMarkdownCodec(
       return Left(
         FieldError.NotDecodable(
           name,
-          "Tabellen, HTML und zusätzliche Textmarkierungen werden derzeit im Markdown-Quelltext bearbeitet."
+          "HTML und zusätzliche Textmarkierungen werden derzeit im Markdown-Quelltext bearbeitet."
         )
       )
     val widths     = mutable.Map.empty[String, mutable.Queue[Option[Int]]]
@@ -56,31 +53,40 @@ private[editor] final class UiMarkdownCodec(
     failure match {
       case Some(error) => Left(error)
       case None        =>
-        MarkdownCodec.decode(commonMark, schema, rules, generator, rootId).flatMap { decoded =>
-          val losses = decoded.diagnostics.filter(_.loss)
-          if (losses.nonEmpty)
-            Left(FieldError.NotDecodable(name, losses.map(_.message).mkString("; ")))
-          else {
-            val nodes = decoded.document.inDocumentOrder.map {
-              case image: ImageNode =>
-                val width = widths
-                  .get(image.src.value)
-                  .filter(_.nonEmpty)
-                  .flatMap(_.dequeue())
-                  .flatMap(PositivePixels.parse)
-                val reference = MediaUrlPolicy.checked(policy, image.src.value)
-                if (reference.isEmpty)
-                  failure = Some(FieldError.NotDecodable(name, "Bildadresse ist nicht zulässig."))
-                image.copy(
-                  width = width,
-                  source =
-                    image.source.copy(mediaId = reference.flatMap(_.mediaId).flatMap(MediaId.parse))
-                )
-              case node => node
-            }.toVector
-            failure.toLeft(Document.unsafe(schema, rootId, nodes))
+        MarkdownCodec
+          .decode(
+            commonMark,
+            schema,
+            rules,
+            generator,
+            rootId,
+            MarkdownProfile.commonMarkSafeWithTables
+          )
+          .flatMap { decoded =>
+            val losses = decoded.diagnostics.filter(_.loss)
+            if (losses.nonEmpty)
+              Left(FieldError.NotDecodable(name, losses.map(_.message).mkString("; ")))
+            else {
+              val nodes = decoded.document.inDocumentOrder.map {
+                case image: ImageNode =>
+                  val width = widths
+                    .get(image.src.value)
+                    .filter(_.nonEmpty)
+                    .flatMap(_.dequeue())
+                    .flatMap(PositivePixels.parse)
+                  val reference = MediaUrlPolicy.checked(policy, image.src.value)
+                  if (reference.isEmpty)
+                    failure = Some(FieldError.NotDecodable(name, "Bildadresse ist nicht zulässig."))
+                  image.copy(
+                    width = width,
+                    source = image.source
+                      .copy(mediaId = reference.flatMap(_.mediaId).flatMap(MediaId.parse))
+                  )
+                case node => node
+              }.toVector
+              failure.toLeft(Document.unsafe(schema, rootId, nodes))
+            }
           }
-        }
     }
   }
   def encode(document: Document): Either[EditorError, String] = {

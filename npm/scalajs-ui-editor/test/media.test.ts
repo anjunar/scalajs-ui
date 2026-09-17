@@ -155,11 +155,15 @@ describe("native media and Markdown form contract", () => {
     Object.defineProperty(input, "files", { value: [file()] }); input.dispatchEvent(new Event("change"));
     await vi.waitFor(() => expect(f.model.body.get).toContain("/media/cat.png")); expect(upload).toHaveBeenCalledOnce();
   });
-  it("keeps unsupported tables unchanged in the source editor", () => {
+  it("renders and edits native tables instead of falling back to the source editor", () => {
     const markdown = "| A | B |\n| --- | --- |\n| 1 | 2 |";
     const f = setup(markdown);
-    expect(f.root.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe(markdown);
-    expect(f.surface.style.display).toBe("none"); expect(f.model.body.get).toBe(markdown);
+    expect(f.surface.style.display).toBe("");
+    const table = f.surface.querySelector("table")!;
+    expect(table).not.toBeNull();
+    expect(table.textContent).toContain("A");
+    expect(table.textContent).toContain("1");
+    expect(f.model.body.get).toBe(markdown);
   });
   it("does not start uploads in readonly mode", () => {
     const upload = vi.fn(); const f = setup("Before", { editable: false, mediaUploader: { upload } });

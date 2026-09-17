@@ -98,5 +98,10 @@ object EditorPage {
       |- A textarea for `?article.editor=editable` on a request-aware SSR host
       |- Post-hydration mode changes on the static GitHub Pages showcase
       |- Rich editing after hydration
+      |
+      || Plugin | Renders as |
+      || --- | --- |
+      || Headings | `h1`–`h6` |
+      || Tables | `table` |
       |""".stripMargin
 }

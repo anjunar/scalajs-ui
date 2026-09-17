@@ -332,9 +332,7 @@ final class Editor private[editor] (
           mediaUrlPolicy = mediaUrlPolicy,
           onMediaStatus = status => { mediaStatusProperty.set(status); onMediaStatus(status) },
           onMarkdownChanged = publishMarkdown,
-          onFocusChanged = updateFocus,
-          onSourceRequested =
-            () => { sourceMode = true; destroyEditor(); syncPresentation(editableProperty.get) }
+          onFocusChanged = updateFocus
         )
         try {
           adapter.mount(valueProperty.get, editableProperty.get)

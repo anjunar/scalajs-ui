@@ -37,9 +37,9 @@ viewport(() => form(model, {}, () => {
 
 ## Markdown and plugins
 
-The native view supports headings, paragraphs, quotes, lists, emphasis, strong, inline code, links, fenced code, images and horizontal rules. The UI Markdown dialect preserves image titles and `{width=320}`. Tables, raw HTML and extra marks (`++underline++`, `~~strike~~`, `==highlight==`) open in the Markdown source view, so unrelated edits cannot silently change their meaning.
+The native view supports headings, paragraphs, quotes, lists, emphasis, strong, inline code, links, fenced code, images, horizontal rules and GFM pipe tables. The UI Markdown dialect preserves image titles and `{width=320}`. Raw HTML and extra marks (`++underline++`, `~~strike~~`, `==highlight==`) open in the Markdown source view, so unrelated edits cannot silently change their meaning.
 
-`plugins` selects toolbar and insertion commands: `base`, `heading`, `list`, `link`, `image`, `table`, `code`, and `horizontalRule`. Without plugin configuration the standard toolbar is shown. `table` opens the source view. Link and image dialogs call Viewport directly. Image resizing is available as a width field in the image dialog.
+`plugins` selects toolbar and insertion commands: `base`, `heading`, `list`, `link`, `image`, `table`, `code`, and `horizontalRule`. Without plugin configuration the standard toolbar is shown. `table` adds an insert-table command plus row/column/table commands that are enabled only with the caret inside one; a table itself always decodes and renders regardless of `plugins`. Link and image dialogs call Viewport directly. Image resizing is available as a width field in the image dialog.
 
 ## Sessions and typed commands
 

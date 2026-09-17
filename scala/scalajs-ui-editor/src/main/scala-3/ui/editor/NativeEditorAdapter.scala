@@ -5,6 +5,7 @@ import ember.editor.richtext.*
 import ember.editor.list.*
 import ember.editor.code.*
 import ember.editor.codehighlighting.CodeDecorations
+import ember.editor.table.*
 import ember.editor.link.*
 import ember.editor.image.{
   ImageExtension,
@@ -46,15 +47,14 @@ private[editor] final class NativeEditorAdapter(
     mediaUrlPolicy: MediaUrlPolicy,
     onMediaStatus: MediaUploadStatus => Unit,
     onMarkdownChanged: String => Unit,
-    onFocusChanged: Boolean => Unit,
-    onSourceRequested: () => Unit
+    onFocusChanged: Boolean => Unit
 ) extends AutoCloseable {
   private given ExecutionContext = scala.scalajs.concurrent.JSExecutionContext.queue
   private val generator          = NodeIdGenerator.sequential("editor")
   private val history            = new History()
   private val holder             = new CompositionHolder()
   private val mediaPolicy        = NativeMediaPolicy(schemes = Set.empty)
-  private val rules              = MarkdownSupports.everything(media = mediaPolicy)
+  private val rules              = MarkdownSupports.everything(media = mediaPolicy) ++ TableSupport.markdownRules
   private val markdownCodec      = new UiMarkdownCodec(rules, generator, mediaUrlPolicy)
   private val field              = new EditorField(name, markdownCodec)
   private val gate               = new Extension {
@@ -70,6 +70,7 @@ private[editor] final class NativeEditorAdapter(
         CodeExtension(generator),
         LinkExtension(generator),
         ImageExtension(generator, mediaPolicy),
+        TableExtension(generator),
         new ClipboardExtension(generator),
         history,
         new FormFieldExtension(field),
@@ -111,7 +112,7 @@ private[editor] final class NativeEditorAdapter(
     session = EditorSession
       .create(decode(markdown), resolved, resolved.sessionConfig())
       .fold(errors => throw new IllegalArgumentException(errors.toString), identity)
-    view = DocumentView.mount(session, DomCursor.root(surface), ImageSupport.views)
+    view = DocumentView.mount(session, DomCursor.root(surface), TableSupport.views)
     // Paints code blocks via the CSS Custom Highlight API, never touching the document DOM --
     // ember-code-highlighting (X02), added right before ember 1.0.0. Disposed like every other
     // one-off subscription below; painting itself degrades silently where the API is unsupported
@@ -119,13 +120,20 @@ private[editor] final class NativeEditorAdapter(
     val decorations = CodeDecorations.attach(session, view)
     cleanups += (() => decorations.dispose())
     selection = SelectionPort.attachTo(session, view, surface)
+    // A cell rectangle dragged across a table (ember-table, X01): painted through a stylesheet in
+    // the document head, never the editor's own DOM. Escape collapses it back to a caret; Tab stays
+    // untouched here (TabPolicy.LeavesEditor below), so cell-to-cell Tab navigation from
+    // TableBindings.tabNavigation would be dead code -- arrow keys already move the caret across
+    // cells like any other block boundary.
+    val cellSelection = TableSelectionView.attach(session, view, selection)
+    cleanups += (() => cellSelection.dispose())
     input = BrowserInputController.attachTo(
       session,
       view,
       selection,
       EditorBindings.everything,
-      EditorBindings.everythingKeyboard,
-      semantics = Some(ImageSupport.everything)
+      EditorBindings.everythingKeyboard ++ TableBindings.keyboard,
+      semantics = Some(TableSupport.everything)
     )
     holder.bind(input)
     val compositionHistory = HistoryBindings.groupCompositions(input, history)
@@ -193,9 +201,11 @@ private[editor] final class NativeEditorAdapter(
     val codec = new ClipboardCodec(
       "ui.editor.markdown",
       resolved.schema,
-      StandardJsonSupport.everything(media = mediaPolicy),
-      ImageSupport.everything,
-      StandardHtmlImport.everything(LinkUrlPolicy.default, mediaPolicy)
+      StandardJsonSupport.everything(media = mediaPolicy) ++ TableSupport.json,
+      TableSupport.everything,
+      StandardHtmlImport
+        .everything(LinkUrlPolicy.default, mediaPolicy)
+        .withRules(TableSupport.htmlImport*)
     )
     clipboard = new BrowserClipboardController(
       session,
@@ -213,6 +223,17 @@ private[editor] final class NativeEditorAdapter(
     )
     def command[A](id: String, label: String, command: EditorCommand[A], payload: A) =
       ToolbarAction.command(id, label, session, command, payload, () => blockState(id, enabled))
+    // Enabled only with the caret or a selection inside a table -- Tables.contextAt is the same
+    // check ember-table's own demo ribbon uses, so a row/column command never fires outside one.
+    def inTable[A](id: String, label: String, cmd: EditorCommand[A], payload: A) =
+      ToolbarAction.command(
+        id,
+        label,
+        session,
+        cmd,
+        payload,
+        () => CommandState(available && Tables.contextAt(session.document, session.selection).isDefined)
+      )
     def mark(id: String, label: String, value: TextMark) =
       ToolbarAction.command(
         id,
@@ -296,12 +317,7 @@ private[editor] final class NativeEditorAdapter(
             command("code-block", "Codeblock", CodeCommands.ToggleCodeBlock, CodeInfo())
           ),
           Option.when(enabledPlugins("table"))(
-            ToolbarAction(
-              "table-source",
-              "Tabelle (Markdown)",
-              () => CommandState(available),
-              () => { onSourceRequested(); Right(()) }
-            )
+            command("table-insert", "Tabelle einfügen", TableCommands.InsertTable, TableSize(rows = 3, columns = 3))
           ),
           Option.when(enabledPlugins("image") && mediaUploader.nonEmpty)(
             ToolbarAction("upload-image", "Bild hochladen", () => enabled, () => picker.open())
@@ -310,25 +326,56 @@ private[editor] final class NativeEditorAdapter(
             command("rule", "Trennlinie", RichText.InsertThematicBreak, ())
           )
         ).flatten
+      ),
+      ToolbarGroup(
+        "Tabelle",
+        if (enabledPlugins("table"))
+          Vector(
+            inTable("table-row-above", "Zeile oben einfügen", TableCommands.InsertRow, RowPosition.Above),
+            inTable("table-row-below", "Zeile unten einfügen", TableCommands.InsertRow, RowPosition.Below),
+            inTable(
+              "table-column-before",
+              "Spalte davor einfügen",
+              TableCommands.InsertColumn,
+              ColumnPosition.Before
+            ),
+            inTable(
+              "table-column-after",
+              "Spalte danach einfügen",
+              TableCommands.InsertColumn,
+              ColumnPosition.After
+            ),
+            inTable("table-delete-row", "Zeile löschen", TableCommands.DeleteRow, ()),
+            inTable("table-delete-column", "Spalte löschen", TableCommands.DeleteColumn, ()),
+            inTable("table-delete", "Tabelle löschen", TableCommands.DeleteTable, ())
+          )
+        else Vector.empty
       )
     ).filter(_.actions.nonEmpty)
     val labels = Map(
-      "undo"         -> "↶",
-      "redo"         -> "↷",
-      "bold"         -> "F",
-      "italic"       -> "K",
-      "inline-code"  -> "</>",
-      "heading-1"    -> "H1",
-      "heading-2"    -> "H2",
-      "heading-3"    -> "H3",
-      "unquote"      -> "Ohne Zitat",
-      "bullet-list"  -> "• Liste",
-      "ordered-list" -> "1. Liste",
-      "image"        -> "Bild",
-      "code-block"   -> "Code",
-      "table-source" -> "Tabelle",
-      "rule"         -> "Linie",
-      "upload-image" -> "Upload"
+      "undo"                -> "↶",
+      "redo"                -> "↷",
+      "bold"                -> "F",
+      "italic"              -> "K",
+      "inline-code"         -> "</>",
+      "heading-1"           -> "H1",
+      "heading-2"           -> "H2",
+      "heading-3"           -> "H3",
+      "unquote"             -> "Ohne Zitat",
+      "bullet-list"         -> "• Liste",
+      "ordered-list"        -> "1. Liste",
+      "image"               -> "Bild",
+      "code-block"          -> "Code",
+      "table-insert"        -> "Tabelle",
+      "rule"                -> "Linie",
+      "upload-image"        -> "Upload",
+      "table-row-above"     -> "Zeile ↑",
+      "table-row-below"     -> "Zeile ↓",
+      "table-column-before" -> "Spalte ←",
+      "table-column-after"  -> "Spalte →",
+      "table-delete-row"    -> "Zeile −",
+      "table-delete-column" -> "Spalte −",
+      "table-delete"        -> "Tabelle −"
     )
     val labelledGroups = groups.map(group =>
       group.copy(actions =
@@ -382,7 +429,7 @@ private[editor] final class NativeEditorAdapter(
     new NativeEditorBinding(
       session,
       markdownCodec,
-      StandardJsonSupport.everything(media = mediaPolicy),
+      StandardJsonSupport.everything(media = mediaPolicy) ++ TableSupport.json,
       LinkUrlPolicy.default,
       history
     )
