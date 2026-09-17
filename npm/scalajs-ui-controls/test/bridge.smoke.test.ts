@@ -1975,6 +1975,47 @@ describe("table-view", () => {
     } finally { app.dispose(); }
   });
 
+  it("keeps a disabled row visible and keyboard-reachable but refuses to select or edit it (V05)", () => {
+    const lockedName = property("locked");
+    const openName = property("open");
+    type Row = { name: typeof lockedName };
+    const source = listProperty<Row>([{ name: lockedName }, { name: openName }]);
+    const root = document.createElement("div");
+    let table!: TableViewHandle<Row>;
+    const app = mount(root, () => {
+      table = tableView(source, [textFieldColumn("Name", (row) => row.name)], {
+        paging: true,
+        editable: true,
+        selectionMode: "multiple",
+        rowDisabled: (row) => row.name.get === "locked",
+      });
+    });
+    try {
+      const rows = root.querySelectorAll(".ui-table-row");
+      expect(rows[0]!.classList.contains("ui-table-row-disabled")).toBe(true);
+      expect(rows[0]!.getAttribute("aria-disabled")).toBe("true");
+      expect(rows[1]!.classList.contains("ui-table-row-disabled")).toBe(false);
+      expect(rows[1]!.getAttribute("aria-disabled")).toBe("false");
+
+      table.focusIndex(0); // disabled is not the same as unreachable: logical focus still lands
+      expect(table.focusedIndex.get).toBe(0);
+
+      rows[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(table.selectedIndices.get).toEqual([]);
+      rows[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(table.selectedIndices.get).toEqual([1]);
+
+      const lockedCell = root.querySelectorAll(".ui-table-cell")[0]!;
+      lockedCell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      expect(root.querySelector(".ui-table-text-field-cell__editor")).toBeNull();
+      expect(table.getCellData(0, 0)).toBe("locked"); // still readable, just not editable
+
+      const openCell = root.querySelectorAll(".ui-table-cell")[1]!;
+      openCell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      expect(root.querySelector(".ui-table-text-field-cell__editor")).not.toBeNull();
+    } finally { app.dispose(); }
+  });
+
   it("hydrates a multi-selected table and preserves selections when columns are hidden", async () => {
     const source = listProperty(["a", "b", "c"]);
     const shown = property(true);

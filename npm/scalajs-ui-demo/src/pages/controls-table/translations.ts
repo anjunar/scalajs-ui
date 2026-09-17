@@ -29,6 +29,7 @@ export const entries: readonly CatalogEntry[] = [
   catalogEntry(i18n`Toggle row / cell selection`, { de: "Zeilen-/Zellauswahl umschalten" }),
   catalogEntry(i18n`Ctrl/Cmd-click toggles rows; Shift-click selects a range.`, { de: "Ctrl/Cmd-Klick wählt Zeilen an oder ab; Shift-Klick wählt einen Bereich." }),
   catalogEntry(i18n`In cell mode, Shift-click and Shift+Arrow select an inclusive rectangle.`, { de: "Im Zellmodus wählen Shift-Klick und Shift+Pfeil einen einschließenden Rechteckbereich." }),
+  catalogEntry(i18n`Books before 2000 are disabled (V05): visible and keyboard-reachable, but not selectable or editable.`, { de: "Bücher vor 2000 sind deaktiviert (V05): sichtbar und per Tastatur erreichbar, aber nicht auswählbar oder bearbeitbar." }),
   catalogEntry(i18n`Selection mode`, { de: "Auswahlmodus" }),
   catalogEntry(i18n`Selected rows`, { de: "Ausgewählte Zeilen" }),
   catalogEntry(i18n`Selection target`, { de: "Auswahlziel" }),

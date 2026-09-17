@@ -519,6 +519,31 @@ server-side all-results token and does not expand automatically when the source 
 Accepted reloads clear the selection; structural deltas preserve surviving occurrences.
 Replaceable selection models, cell selection and full grid accessibility remain separate work.
 
+### Disabled rows
+
+```ts
+tableView(books, columns, { rowDisabled: book => book.archived });
+```
+
+A disabled row and its cells stay visible and keyboard-reachable -- disabled is not the same as
+absent -- but cannot be selected, edited, or fire the row double-click event; the same guard
+covers mouse, keyboard and cell-selection paths, in one place (`TableSelectionModel.click`/
+`clickCell` and `TableView.canStartEdit`, not one check per input path). Projected as
+`ui-table-row-disabled`/`ui-table-cell-disabled` and `aria-disabled`. Not reactive as a whole
+function -- `rowDisabled` itself is read once -- but each row re-evaluates it whenever that row's
+own bound value changes, the same as any other per-row derived state.
+
+A custom `row` callback reads the same state through `row.disabled`, alongside `row.selected` and
+`row.focused`. Programmatic selection (`selectIndex`, `clearAndSelect`, ...) is untouched: disabled
+blocks user interaction through the widget, not deliberate application control -- the same
+distinction JavaFX's `Node.disable` draws for event dispatch versus direct API calls. There is no
+independent per-cell predicate; a cell simply inherits its row's disabled state, matching how
+`Node.disable` cascades from a disabled parent to its children.
+
+A column-wide style attribute beyond `headerClass`/`cellClass` (JavaFX's own raw-CSS-string
+`TableColumnBase.styleProperty`) is deliberately not part of this API either, for the same reason
+C10 gave for skipping it: the class list is the idiomatic hook in this framework's convention.
+
 ### Logical row and cell focus
 
 Focus is independent of selection. `focusedIndex` and `focusedItem` describe the logical row;
@@ -582,8 +607,8 @@ positions, and duplicate or failing keys are cleared rather than matched ambiguo
 reaches a measurable browser viewport. They do not run for invalid, hidden, SSR, superseded, or
 disposed requests. Column indices use the visible order at execution time.
 
-`TableRowContext<T>` exposes read-only `item`, absolute `index`, `empty`, and `selected`
-properties. Remote placeholders also receive the callback, with `empty = true` and
+`TableRowContext<T>` exposes read-only `item`, absolute `index`, `empty`, `selected`, `focused`
+and `disabled` properties. Remote placeholders also receive the callback, with `empty = true` and
 `item = null`; they remain non-interactive and unselected until replaced by loaded rows.
 A loaded null value is distinguishable by `empty = false`. Row selection, standard classes
 and cleanup remain runtime-owned even when standard cells are omitted.

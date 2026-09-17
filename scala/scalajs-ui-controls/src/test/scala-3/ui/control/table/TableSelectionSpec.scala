@@ -646,4 +646,28 @@ class TableSelectionSpec extends AnyFlatSpec with Matchers {
       }
     }
   }
+
+  "A disabled row (V05)" should "refuse row and cell selection while a non-disabled row stays selectable" in {
+    mounted(ListProperty(js.Array("disabled", "enabled"))) { table =>
+      table.rowDisabledProperty.set(Some(_ == "disabled"))
+
+      table.selectionModel.click(0, toggle = false, extend = false)
+      table.selectionModel.isSelected(0) shouldBe false
+      table.selectionModel.click(1, toggle = false, extend = false)
+      table.selectionModel.isSelected(1) shouldBe true
+
+      table.selectionModel.cellSelectionEnabled = true
+      val column = table.allColumns.head
+      table.selectionModel.clickCell(0, column, toggle = false, extend = false)
+      table.selectionModel.isSelected(0, column) shouldBe false
+      table.selectionModel.clickCell(1, column, toggle = false, extend = false)
+      table.selectionModel.isSelected(1, column) shouldBe true
+
+      // Clearing the predicate makes the row selectable again -- disabled is reactive, not a
+      // one-time snapshot taken when the row was bound.
+      table.rowDisabledProperty.set(None)
+      table.selectionModel.clickCell(0, column, toggle = false, extend = false)
+      table.selectionModel.isSelected(0, column) shouldBe true
+    }
+  }
 }

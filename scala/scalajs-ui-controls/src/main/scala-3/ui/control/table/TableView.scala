@@ -65,6 +65,17 @@ final class TableView[S] private (
     * must be unique in a result. Resolution scans loaded values only and never fetches gaps.
     */
   val rowKeyProperty: Property[Option[S => Any]] = Property(None)
+
+  /** Optional per-item predicate (V05). A disabled row and its cells stay visible and reachable by
+    * keyboard focus -- disabled is not the same as absent -- but cannot be selected, edited, or
+    * fire the row double-click event; `TableRow`/`TableCell` project it as `.ui-table-row-disabled`
+    * `/.ui-table-cell-disabled` and `aria-disabled`. An unloaded row is never disabled by this: the
+    * predicate only runs against a value that has actually arrived.
+    */
+  val rowDisabledProperty: Property[Option[S => Boolean]] = Property(None)
+
+  private[table] def isRowDisabled(index: Int): Boolean =
+    rowDisabledProperty.get.exists(predicate => items.itemAt(index).exists(predicate))
   private val rowRendererRevisionProperty        = Property(0)
   private[table] val visibleColumns              = ListProperty[TableColumn[S, ?]]()
   val visibleLeafColumns: ReadOnlyProperty[Vector[TableColumn[S, ?]]] =
@@ -857,7 +868,7 @@ final class TableView[S] private (
     )
     !isDisposed && editableProperty.get && column != null &&
     (column.tableViewProperty.get eq this) && getVisibleLeafIndex(column) >= 0 &&
-    row >= 0 && row < items.totalLength && items.itemAt(row).nonEmpty &&
+    row >= 0 && row < items.totalLength && items.itemAt(row).nonEmpty && !isRowDisabled(row) &&
     isColumnEditable(column) && mounted.forall(_.editableProperty.get)
   }
 
@@ -1595,6 +1606,11 @@ object TableView {
   def rowKey[S](using table: TableView[S]): Option[S => Any]      = table.rowKeyProperty.get
   def rowKey_=[S](using table: TableView[S])(key: S => Any): Unit =
     table.rowKeyProperty.set(Option(key))
+
+  def rowDisabled[S](using table: TableView[S]): Option[S => Boolean] =
+    table.rowDisabledProperty.get
+  def rowDisabled_=[S](using table: TableView[S])(predicate: S => Boolean): Unit =
+    table.rowDisabledProperty.set(Option(predicate))
 
   def rowHeight(using table: TableView[?]): Double                = table.rowHeightProperty.get
   def rowHeight_=(value: Double)(using table: TableView[?]): Unit =

@@ -458,7 +458,8 @@ object TableViewPage {
               controlGroup(
                 i18n"Selection",
                 i18n"Ctrl/Cmd-click toggles rows; Shift-click selects a range.",
-                i18n"In cell mode, Shift-click and Shift+Arrow select an inclusive rectangle."
+                i18n"In cell mode, Shift-click and Shift+Arrow select an inclusive rectangle.",
+                i18n"Disabled rows (V05) stay visible and keyboard-reachable, but cannot be selected or edited."
               ) {
                 button(i18n"Toggle single / multiple selection") {
                   onClick { _ =>
@@ -477,6 +478,14 @@ object TableViewPage {
                 }
                 button(i18n"Clear book selection") {
                   onClick(_ => table.clearSelection())
+                }
+                button(i18n"Toggle disabling books before 2000") {
+                  onClick { _ =>
+                    table.rowDisabledProperty.set(
+                      if (table.rowDisabledProperty.get.isDefined) None
+                      else Some(_.year < 2000)
+                    )
+                  }
                 }
               }
 

@@ -254,6 +254,8 @@ export interface TableRowContext<T> {
   readonly selected: ReadOnlyProperty<boolean>;
   /** Logical row focus; independent of selection and whether the grid owns DOM focus. */
   readonly focused: ReadOnlyProperty<boolean>;
+  /** Stays visible and keyboard-reachable but cannot be selected or edited (V05, `rowDisabled`). */
+  readonly disabled: ReadOnlyProperty<boolean>;
   /** Optional standard cells. Call at most once, synchronously in this row body or a nested element. */
   renderCells(): void;
 }
@@ -326,6 +328,12 @@ export interface TableViewOptions<T = unknown> {
    * replacements and local resets. Duplicate or currently unloaded keys are not guessed or fetched.
    */
   readonly rowKey?: (row: T) => unknown;
+  /** A disabled row and its cells stay visible and keyboard-reachable -- disabled is not the same
+   * as absent -- but cannot be selected, edited, or fire the row double-click event. Projected as
+   * `ui-table-row-disabled`/`ui-table-cell-disabled` and `aria-disabled`. Not reactive as a whole
+   * function, but re-evaluated per row whenever that row's own value changes.
+   */
+  readonly rowDisabled?: (row: T) => boolean;
   /** Runs once after an accepted row request is applied to a measurable browser viewport. */
   readonly onScrollTo?: (absoluteIndex: number) => void;
   /** Runs once after an accepted column request is applied; index uses the then-current visible order. */
@@ -555,12 +563,14 @@ export function tableView<T, Q = unknown>(
       cellSelectionEnabled: options.cellSelectionEnabled,
       editable: options.editable,
       rowKey: options.rowKey,
+      rowDisabled: options.rowDisabled,
       onScrollTo: options.onScrollTo,
       onScrollToColumn: options.onScrollToColumn,
       row: options.row
         ? (row: Omit<TableRowContext<T>, "renderCells">, self: ComponentHandle, scope: ScopeHandle,
            cells: (scope: ScopeHandle) => void) => withScope(scope, self, () => options.row!({
              item: row.item, index: row.index, empty: row.empty, selected: row.selected, focused: row.focused,
+             disabled: row.disabled,
              renderCells: () => cells(currentScope()),
            }))
         : undefined,

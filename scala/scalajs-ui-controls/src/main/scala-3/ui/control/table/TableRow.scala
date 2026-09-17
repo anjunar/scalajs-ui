@@ -17,16 +17,18 @@ class TableRow[S] private[control] (
 
   override val tagName: String = "div"
 
-  private val itemState                           = Property[S | Null](null)
-  private val indexState                          = Property(-1)
-  private val emptyState                          = Property(true)
-  private val selectedState                       = Property(false)
-  private val focusedState                        = Property(false)
-  val focusedProperty: ReadOnlyProperty[Boolean]  = focusedState
-  val itemProperty: ReadOnlyProperty[S | Null]    = itemState
-  val indexProperty: ReadOnlyProperty[Int]        = indexState
-  val emptyProperty: ReadOnlyProperty[Boolean]    = emptyState
-  val selectedProperty: ReadOnlyProperty[Boolean] = selectedState
+  private val itemState                            = Property[S | Null](null)
+  private val indexState                           = Property(-1)
+  private val emptyState                           = Property(true)
+  private val selectedState                        = Property(false)
+  private val focusedState                         = Property(false)
+  private val disabledState                        = Property(false)
+  val focusedProperty: ReadOnlyProperty[Boolean]   = focusedState
+  val itemProperty: ReadOnlyProperty[S | Null]     = itemState
+  val indexProperty: ReadOnlyProperty[Int]         = indexState
+  val emptyProperty: ReadOnlyProperty[Boolean]     = emptyState
+  val selectedProperty: ReadOnlyProperty[Boolean]  = selectedState
+  val disabledProperty: ReadOnlyProperty[Boolean]  = disabledState
 
   private var ownerTable: TableView[S] | Null = null
   def tableView: TableView[S] | Null          = ownerTable
@@ -102,22 +104,45 @@ class TableRow[S] private[control] (
           selectedProperty.observe(value => setAttribute("aria-selected", value.toString))
         )
 
-        onClick { event =>
-          if (cursor.isBrowser && event.raw != null) {
-            val mouse   = event.raw.asInstanceOf[dom.MouseEvent]
-            val element = host.asInstanceOf[DomHostElement].node.asInstanceOf[dom.Element]
-            if (TableRowKeyboard.isRowBackground(mouse, element) && table.canMoveColumns) {
-              table.selectionModel.click(
-                indexProperty.get,
-                mouse.ctrlKey || mouse.metaKey,
-                mouse.shiftKey
-              )
-              table.focusRowFromPointer(indexProperty.get)
+        // V05: a disabled row stays visible and keyboard-reachable -- it just cannot be selected,
+        // edited, or fire the double-click event. The selection model itself refuses select/edit
+        // for a disabled index too (TableSelectionModel.click/clickCell, TableView.canStartEdit),
+        // so this is a defense-in-depth short-circuit, not the only guard.
+        addDisposable(
+          table.rowDisabledProperty.flatMap { predicate =>
+            itemProperty.map { item =>
+              predicate.exists { pred =>
+                item match {
+                  case value: S @unchecked => pred(value)
+                  case null                => false
+                }
+              }
             }
-          } else table.selectionModel.click(indexProperty.get, toggle = false, extend = false)
+          }.observe(disabledState.set)
+        )
+        classIf("ui-table-row-disabled", disabledProperty)
+        addDisposable(
+          disabledProperty.observe(value => setAttribute("aria-disabled", value.toString))
+        )
+
+        onClick { event =>
+          if (!disabledProperty.get) {
+            if (cursor.isBrowser && event.raw != null) {
+              val mouse   = event.raw.asInstanceOf[dom.MouseEvent]
+              val element = host.asInstanceOf[DomHostElement].node.asInstanceOf[dom.Element]
+              if (TableRowKeyboard.isRowBackground(mouse, element) && table.canMoveColumns) {
+                table.selectionModel.click(
+                  indexProperty.get,
+                  mouse.ctrlKey || mouse.metaKey,
+                  mouse.shiftKey
+                )
+                table.focusRowFromPointer(indexProperty.get)
+              }
+            } else table.selectionModel.click(indexProperty.get, toggle = false, extend = false)
+          }
         }
         onDoubleClick { _ =>
-          itemProperty.get match {
+          if (!disabledProperty.get) itemProperty.get match {
             case item: S @unchecked => table.fireRowDoubleClick(item)
             case null               => ()
           }

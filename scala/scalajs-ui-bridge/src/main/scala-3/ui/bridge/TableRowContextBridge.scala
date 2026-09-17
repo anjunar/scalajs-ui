@@ -10,4 +10,5 @@ final class TableRowContextBridge(row: TableRow[js.Any]) extends js.Object {
   val empty    = new ReadOnlyPropertyHandle(row.emptyProperty)
   val selected = new ReadOnlyPropertyHandle(row.selectedProperty)
   val focused  = new ReadOnlyPropertyHandle(row.focusedProperty)
+  val disabled = new ReadOnlyPropertyHandle(row.disabledProperty)
 }
