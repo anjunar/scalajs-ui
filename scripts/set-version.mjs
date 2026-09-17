@@ -198,41 +198,35 @@ async function updateScalaReadmes(nextVersion) {
 }
 
 async function updateDemos(nextVersion) {
+  // Both demo shells show one footer version tag: `text("vX.Y.Z")`. `replaceExactlyOnce`
+  // turns a shape change (like the missing trailing comma that let a stale "v3.0.2" survive
+  // silently in shell.ts for several releases) into an immediate error, not another silent no-op.
+  const versionTagPattern = /text\("v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"\)/;
+
   const scalaPath = resolve(repositoryRoot, "scala/scalajs-ui-demo/src/main/scala-3/app/App.scala");
   const scalaCurrent = await readFile(scalaPath, "utf8");
-  const scalaNext = scalaCurrent
-    .replace(/routerLink\("v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"\)/, `routerLink("v${nextVersion}")`)
-    .replace(
-      /(repo1\.maven\.org\/maven2\/com\/anjunar\/scalajs-ui-core_sjs1_3\/)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(\/)/,
-      `$1${nextVersion}$2`
-    )
-    .replace(/text\("v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"\)/, `text("v${nextVersion}")`);
+  const scalaNext = replaceExactlyOnce(
+    scalaCurrent,
+    versionTagPattern,
+    `text("v${nextVersion}")`,
+    "Scala demo footer version tag"
+  );
   await record(scalaPath, scalaCurrent, scalaNext);
 
   const typescriptPath = resolve(repositoryRoot, "npm/scalajs-ui-demo/src/app/shell.ts");
   const typescriptCurrent = await readFile(typescriptPath, "utf8");
-  const typescriptNext = typescriptCurrent
-    .replace(/"v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?",/, `"v${nextVersion}",`)
-    .replace(
-      /(npmjs\.com\/package\/@anjunar\/scalajs-ui-core\/v\/)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?=")/,
-      `$1${nextVersion}`
-    );
+  const typescriptNext = replaceExactlyOnce(
+    typescriptCurrent,
+    versionTagPattern,
+    `text("v${nextVersion}")`,
+    "TypeScript demo footer version tag"
+  );
   await record(typescriptPath, typescriptCurrent, typescriptNext);
 
-  const starterPath = resolve(repositoryRoot, "docs/starters/build.sbt");
-  let starterCurrent;
-  try {
-    starterCurrent = await readFile(starterPath, "utf8");
-  } catch (error) {
-    // The generated starter is absent in source-only checkouts.
-    if (error?.code === "ENOENT") return;
-    throw error;
-  }
-  const starterNext = starterCurrent.replace(
-    /(libraryDependencies\s*\+=\s*"com\.anjunar"\s*%%\s*"scalajs-ui-[^"]+"\s*%\s*")[^"]+("\s*)/g,
-    `$1${nextVersion}$2`
-  );
-  await record(starterPath, starterCurrent, starterNext);
+  // The landing page (npm/scalajs-ui-landing) needs no update here: its version, starter
+  // build.sbt and every install snippet are read from build.sbt/package.json at build time
+  // (vite.config.mjs's "virtual:landing-content" plugin, which also throws if a package
+  // version disagrees), not duplicated into a static file this script would have to track.
 }
 
 function replaceExactlyOnce(source, pattern, replacement, description) {
