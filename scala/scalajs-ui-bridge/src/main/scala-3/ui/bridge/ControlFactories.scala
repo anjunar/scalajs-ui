@@ -3,6 +3,8 @@ package ui.bridge
 import ui.control.carousel.Carousel
 import ui.control.datagrid.DataGrid
 import ui.control.table.{
+  ColumnResizeRequest,
+  CustomColumnResizePolicy,
   TableCheckBoxCell,
   TableCell,
   TableChoiceBoxCell,
@@ -389,6 +391,33 @@ private[bridge] object TableViewFactory extends ComponentFactory {
         table.addDisposable(ReactiveBridge.asProperty[String](value).observe { policy =>
           table.columnResizePolicyProperty.set(TableViewHandleBridge.parseResizePolicy(policy))
         })
+      }
+      // C05: an escape hatch alongside the seven built-in strategies, not reactive -- set once,
+      // like `row`/`rowKey` above, rather than wrapped in a Property.
+      options.get("customResizePolicy").foreach { callback =>
+        val table = summon[TableView[js.Any]]
+        val fn    = callback.asInstanceOf[js.Function1[js.Any, js.Array[Double]]]
+        val policy: CustomColumnResizePolicy = request => {
+          val jsColumns = request.columns.map(c =>
+            js.Dynamic.literal(
+              min = c.min,
+              max = c.max,
+              preferred = c.preferred,
+              resizable = c.resizable
+            )
+          )
+          val jsRequest = js.Dynamic.literal(
+            columns = jsColumns.toJSArray,
+            widths = request.widths.toJSArray,
+            viewport = request.viewport,
+            targetIndices = request.target
+              .map((indices, _) => indices.map(_.toDouble).toJSArray)
+              .orUndefined,
+            targetDelta = request.target.map((_, delta) => delta).orUndefined
+          )
+          fn(jsRequest).toVector
+        }
+        table.customResizePolicyProperty.set(Some(policy))
       }
       options.get("selectionMode").foreach { value =>
         val table  = summon[TableView[js.Any]]

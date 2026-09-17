@@ -46,7 +46,7 @@ import {
 import { div, text } from "@anjunar/scalajs-ui-core";
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
 import { carousel, checkBoxColumn, choiceBoxColumn, columnGroup, comboBoxColumn, convertingTextFieldColumn, dataGrid, progressBarColumn, remoteSource, tab, tableView, tabs, textFieldColumn, valueColumn, virtualList } from "../src/index.js";
-import type { ColumnResizePolicy, TableDirection, TablePosition, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
+import type { ColumnResizePolicy, ColumnResizeRequest, TableDirection, TablePosition, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
 
 const linkedArtifact = resolve(process.cwd(), "../scalajs-ui-bridge/dist/fullopt/main.js");
 
@@ -697,6 +697,42 @@ describe("table-view", () => {
       expect(table.columnWidths.get).toEqual([250, 550]);
       app.dispose();
       expect(table.resizeColumn(0, 10)).toBe(false);
+    } finally { app.dispose(); }
+  });
+
+  it("replaces the built-in resize strategy with a custom policy, atomically rejecting a malformed result", () => {
+    const seen: ColumnResizeRequest[] = [];
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [
+        valueColumn("First", row => row, { prefWidth: 200 }),
+        valueColumn("Second", row => row, { prefWidth: 200 }),
+      ], {
+        paging: true,
+        customResizePolicy: (request) => {
+          seen.push(request);
+          if (request.targetIndices === undefined) return request.widths;
+          return request.widths.map((width, index) =>
+            request.targetIndices!.includes(index) ? width + request.targetDelta! : width - request.targetDelta! * 2);
+        },
+      });
+    });
+    try {
+      expect(table.columnWidths.get).toEqual([200, 200]);
+      expect(seen[0]!.columns).toEqual([
+        { min: 40, max: Number.MAX_VALUE, preferred: 200, resizable: true },
+        { min: 40, max: Number.MAX_VALUE, preferred: 200, resizable: true },
+      ]);
+      expect(seen[0]!.targetIndices).toBeUndefined();
+      expect(table.resizeColumn(0, 30)).toBe(true);
+      expect(table.columnWidths.get).toEqual([230, 140]);
+      // Committing the resize bumps table state, which re-runs the policy once more as a pure
+      // re-layout (target undefined) -- the resize call itself is the last targeted one, not
+      // necessarily the very last entry overall.
+      const resized = seen.filter((request) => request.targetIndices !== undefined).at(-1)!;
+      expect(resized.targetIndices).toEqual([0]);
+      expect(resized.targetDelta).toBe(30);
     } finally { app.dispose(); }
   });
 

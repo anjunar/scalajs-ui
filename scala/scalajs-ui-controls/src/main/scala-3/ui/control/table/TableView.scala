@@ -85,6 +85,10 @@ final class TableView[S] private (
   val columnResizePolicyProperty: Property[ColumnResizePolicy] = Property(
     ColumnResizePolicy.FlexLastColumn
   )
+  // C05: an escape hatch alongside the seven built-in strategies, not a replacement for them --
+  // None (the default) keeps using columnResizePolicyProperty. Set, it takes over both re-layout
+  // and every resize, including a group column's overflow into its neighbors (resizeGroupColumn).
+  val customResizePolicyProperty: Property[Option[CustomColumnResizePolicy]] = Property(None)
   private val userColumnWidths = mutable.Map.empty[TableColumn[S, ?], Double]
 
   // Alternate models remain table-owned while detached so source and column changes cannot leave
@@ -323,7 +327,14 @@ final class TableView[S] private (
             }
           }) {}
         }
-      } else addClass("ui-table-header-cell-group")
+      } else {
+        addClass("ui-table-header-cell-group")
+        // A group has no width of its own -- only its visible leaves do (widthProperty sums them,
+        // TableColumn.scala) -- but it still gets a handle: resizeColumn(group, delta) offers the
+        // delta to the group's own children first and only spills into neighbors outside the
+        // group with whatever is left (C05, TableView.resizeGroupColumn).
+        DslLayer.child(new TableColumnResizeHandle(TableView.this, column)) {}
+      }
     }
   }
 
@@ -761,7 +772,12 @@ final class TableView[S] private (
   val renderedWidthsProperty: ReadOnlyProperty[Vector[Double]] =
     viewportWidthProperty.flatMap { viewportWidth =>
       columnStateRevisionProperty.map { _ =>
-        TableColumnLayout.layout(columnWidthSpecs, viewportWidth, columnResizePolicyProperty.get)
+        val specs = columnWidthSpecs
+        customResizePolicyProperty.get match {
+          case Some(policy) =>
+            TableColumnLayout.applyCustom(specs, specs.map(_.initial), viewportWidth, None, policy)
+          case None => TableColumnLayout.layout(specs, viewportWidth, columnResizePolicyProperty.get)
+        }
       }
     }
 
@@ -770,24 +786,47 @@ final class TableView[S] private (
       column.widthSpec(userColumnWidths.getOrElse(column, column.prefWidth))
     )
 
-  /** Resizes a visible column by a pixel delta. True when any part of the request was applied. */
+  /** A resize of exactly `indices` (one leaf, or every visible leaf of a group -- C05), through
+    * the active custom policy if one is set, the built-in strategy otherwise.
+    */
+  private def resizeAt(
+      specs: Vector[TableColumnLayout.Column],
+      widths: Vector[Double],
+      indices: Vector[Int],
+      delta: Double
+  ): Vector[Double] =
+    customResizePolicyProperty.get match {
+      case Some(policy) =>
+        TableColumnLayout.applyCustom(specs, widths, viewportWidthProperty.get, Some((indices, delta)), policy)
+      case None =>
+        TableColumnLayout.resizeGroup(specs, widths, indices, delta, columnResizePolicyProperty.get)
+    }
+
+  /** Resizes a visible leaf or group column by a pixel delta. A group has no width of its own --
+    * only its visible leaf descendants do (`TableColumn.widthProperty` sums them) -- so resizing
+    * one means resizing all of them together: they share `delta` proportionally to their current
+    * width, and whatever they collectively cannot absorb compensates columns outside the group
+    * through the same active policy as any other resize (`TableColumnLayout.resize`). True when
+    * any part of the request was applied.
+    */
   def resizeColumn(column: TableColumn[S, ?], delta: Double): Boolean = {
-    if (isDisposed || column == null || !delta.isFinite) return false
-    val before = renderedWidthsProperty.get
-    val next   = TableColumnLayout.resize(
-      columnWidthSpecs,
-      before,
-      getVisibleLeafIndex(column),
-      delta,
-      columnResizePolicyProperty.get
-    )
-    if (before == next) false
+    if (isDisposed || column == null || !delta.isFinite || !column.resizable) return false
+    val indices =
+      if (column.columns.isEmpty) Vector(getVisibleLeafIndex(column))
+      else visibleLeavesUnder(column).map(getVisibleLeafIndex)
+    if (indices.isEmpty || indices.contains(-1)) false
     else {
-      visibleColumns.toVector.zip(next).foreach { (col, width) =>
-        userColumnWidths.update(col, width)
+      val specs  = columnWidthSpecs
+      val before = renderedWidthsProperty.get
+      val next   = resizeAt(specs, before, indices, delta)
+      if (before == next) false
+      else {
+        visibleColumns.toVector.zip(next).foreach { (col, width) =>
+          userColumnWidths.update(col, width)
+        }
+        bumpColumnState()
+        true
       }
-      bumpColumnState()
-      true
     }
   }
 
@@ -1288,6 +1327,12 @@ final class TableView[S] private (
       domElement(viewportComponent).foreach(applyLogicalHorizontalOffset)
       scheduleViewportMeasure()
     })
+    addDisposable(customResizePolicyProperty.observeWithoutInitial { _ =>
+      bumpColumnState()
+      scrollLeftProperty.set(0.0)
+      domElement(viewportComponent).foreach(applyLogicalHorizontalOffset)
+      scheduleViewportMeasure()
+    })
     addDisposable(pageSizeProperty.observeWithoutInitial { _ =>
       pageIndexProperty.set(0)
       refreshItemState()
@@ -1503,6 +1548,13 @@ object TableView {
     table.columnResizePolicyProperty.get
   def columnResizePolicy_=(policy: ColumnResizePolicy)(using table: TableView[?]): Unit =
     table.columnResizePolicyProperty.set(policy)
+  // C05: an escape hatch alongside the seven built-in strategies. table.customResizePolicyProperty
+  // .set(None) restores columnResizePolicy; there is no dedicated clearing setter here, matching
+  // rowFactory's own convention below.
+  def customResizePolicy[S](using table: TableView[S]): Option[CustomColumnResizePolicy] =
+    table.customResizePolicyProperty.get
+  def customResizePolicy_=[S](using table: TableView[S])(policy: CustomColumnResizePolicy): Unit =
+    table.customResizePolicyProperty.set(Option(policy))
   private[control] val overscanRows          = 6
   private[control] val lazyLoadThresholdRows = 3
   private val defaultLimit                   = 50

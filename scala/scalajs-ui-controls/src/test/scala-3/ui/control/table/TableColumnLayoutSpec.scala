@@ -74,6 +74,75 @@ class TableColumnLayoutSpec extends AnyFlatSpec with Matchers {
     resize(columns, widths, 1, Double.NaN, Unconstrained) shouldBe widths
   }
 
+  "Group resizing" should "share a delta across every index proportionally to its width" in {
+    val columns = Vector(col(), col(), col())
+    val widths  = Vector(100.0, 100.0, 100.0)
+    // Unconstrained: no neighbor compensation, so both group members reach their full request.
+    resizeGroup(columns, widths, Vector(0, 1), 100, Unconstrained) shouldBe Vector(150, 150, 100)
+  }
+
+  it should "spill whatever the group cannot absorb into columns outside it" in {
+    // Both group members cap at 130: at most 60 total headroom, so a +150 request only takes
+    // 60 from the sibling outside the group (index 2), split evenly like any AllColumns delta.
+    val columns = Vector(col(max = 130), col(max = 130), col())
+    val widths  = Vector(100.0, 100.0, 100.0)
+    resizeGroup(columns, widths, Vector(0, 1), 150, AllColumns) shouldBe Vector(130, 130, 40)
+  }
+
+  it should "resize the columns still resizable in the group and reject only if every one is locked" in {
+    val columns = Vector(col(resizable = false), col(), col())
+    val widths  = Vector(100.0, 100.0, 100.0)
+    resizeGroup(columns, widths, Vector(0, 1), 60, FlexLastColumn) shouldBe Vector(100, 160, 40)
+    resizeGroup(
+      Vector(col(resizable = false), col(resizable = false)),
+      Vector(100.0, 100.0),
+      Vector(0, 1),
+      60,
+      FlexLastColumn
+    ) shouldBe Vector(100.0, 100.0)
+  }
+
+  "A custom policy" should "receive every column's bounds and the requested target" in {
+    var seen: Option[ColumnResizeRequest] = None
+    val columns                           = Vector(col(), col(max = 200))
+    val widths                            = Vector(100.0, 100.0)
+    val policy: CustomColumnResizePolicy = request => {
+      seen = Some(request)
+      val index = request.target.get._1.head
+      request.widths.updated(index, request.widths(index) + 20)
+    }
+    applyCustom(columns, widths, 640.0, Some((Vector(0), 20.0)), policy) shouldBe Vector(120, 100)
+    seen shouldBe Some(
+      ColumnResizeRequest(
+        Vector(ColumnResizeSpec(40, 300, 100, true), ColumnResizeSpec(40, 200, 100, true)),
+        widths,
+        640.0,
+        Some((Vector(0), 20.0))
+      )
+    )
+  }
+
+  it should "receive every visible leaf of a group as the target, not just one" in {
+    var seen: Option[Vector[Int]] = None
+    val policy: CustomColumnResizePolicy = request => {
+      seen = Some(request.target.get._1)
+      request.widths
+    }
+    applyCustom(Vector(col(), col(), col()), Vector(100.0, 100.0, 100.0), 300.0, Some((Vector(0, 1), 40.0)), policy)
+    seen shouldBe Some(Vector(0, 1))
+  }
+
+  it should "clamp an accepted result and reject one of the wrong length atomically" in {
+    val columns = Vector(col(), col())
+    val widths  = Vector(100.0, 100.0)
+    applyCustom(columns, widths, 800.0, None, _ => Vector(999.0, Double.NaN)) shouldBe Vector(
+      300,
+      100
+    )
+    applyCustom(columns, widths, 800.0, None, _ => Vector(150.0)) shouldBe widths
+    applyCustom(columns, widths, 800.0, None, _ => Vector.empty) shouldBe widths
+  }
+
   it should "preserve the constrained sum and bounds through repeated adjustments" in {
     ColumnResizePolicy.values.filterNot(_ == Unconstrained).foreach { policy =>
       val columns = Vector(col(), col(max = 120), col(resizable = false), col(max = 500))

@@ -66,7 +66,32 @@ Constrained policies fit the viewport and suppress horizontal scrolling; impossi
 leave unused space or clipped columns. Locked columns do not participate in compensation.
 The default is `flex-last-column`, preserving UI's existing fit-to-width layout. Automatic
 viewport fitting uses bounded proportional distribution; policies govern user/API deltas.
-Column groups and custom policy callbacks are not implemented yet.
+
+A group column has no width of its own -- only its visible leaves do -- so it gets a resize
+handle too: dragging it shares the delta across its own children proportionally to their
+current width first, and only whatever they collectively cannot absorb compensates columns
+outside the group, through the same policy as any other resize. `table.resizeColumn` has no
+programmatic way to target a group (`visibleColumnIndex` only addresses leaves); the handle
+itself needs no JavaScript API for this, since it holds the Scala column reference directly.
+
+```ts
+const customResizePolicy: CustomColumnResizePolicy = (request) => {
+  const next = request.widths.map((width, index) =>
+    request.targetIndices?.includes(index) ? width + request.targetDelta! : width);
+  return next.map(width => Math.round(width / 20) * 20); // snap every column to a 20px grid
+};
+const table = tableView(books, columns, { customResizePolicy });
+```
+
+`customResizePolicy` replaces `columnResizePolicy` and all seven built-in strategies at once,
+for both re-layout (`targetIndices`/`targetDelta` absent) and every resize (present; more than
+one index for a group). It must return an array the same length as `request.columns`; anything
+else is rejected atomically and the previous widths are kept, and each accepted width is still
+clamped to its own column's bounds -- a policy cannot violate them by construction. Not
+reactive: set once when the table is created, like `row`/`rowKey`. Scala exposes the same
+contract as `TableView.customResizePolicyProperty: Property[Option[CustomColumnResizePolicy]]`
+and the DSL setter `customResizePolicy = request => ...`; `.set(None)` restores
+`columnResizePolicy`.
 
 User widths are separate from `prefWidth` and survive measurements and hide/show. A Scala
 preferred-width change resets that column's user override; detaching it discards its override.
@@ -120,6 +145,32 @@ Both are reactive and additive: they sit alongside the framework's own `ui-table
 the classes that changed. `cellClass` applies to every data cell of that column, not just the
 first. Scala exposes `headerClassesProperty`/`cellClassesProperty` and the DSL setters
 `headerClasses`/`cellClasses`, taking a `Seq[String]` or a bindable `ReadOnlyProperty[Seq[String]]`.
+
+### Column header content
+
+`headerCell` replaces a column's default header text, and `sortIndicator` replaces its default
+CSS-only sort arrow, with composed content:
+
+```ts
+const titleColumn = valueColumn("Title", book => book.title, {
+  sortable: true, sortKey: "title",
+  headerCell: () => {
+    div(() => { style("display", "flex"); style("gap", "6px"); text("📖"); text("Title"); });
+  },
+  sortIndicator: state => {
+    div(() => {
+      classes("sort-pill");
+      text(state.map(s => s.sorted ? `${s.ascending ? "▲" : "▼"} ${s.priority}` : ""));
+    });
+  },
+});
+```
+
+`sortIndicator` receives a `ReadOnlyProperty<SortIndicatorState>` (`{ sorted, ascending,
+priority }`, one-based) that updates as the column's own remote-sort state changes; nothing else
+about `headerClass`/`cellClass` or the header's built-in classes changes. Omitting `sortIndicator`
+keeps the default arrow even when `headerCell` is set. Scala exposes the same slots as
+`TableColumn.headerCell { ... }` and `TableColumn.sortIndicator { state => ... }` in the column DSL.
 
 ### Remote multi-column sorting
 
@@ -225,7 +276,9 @@ moving an entire group and drag-edge autoscrolling are not implemented yet.
 `columnGroup` nests columns to any depth. Groups render one header row per level and consume
 the combined width of their currently visible leaf columns. Only leaves render cells, appear in
 `columnWidths`, count in `visibleColumnCount`, and participate in index-based table operations.
-Top-level leaves span the remaining header rows.
+Top-level leaves span the remaining header rows. A group's own header still has a resize handle
+(see "Column widths and resizing" above): dragging it resizes every one of its visible leaves
+together.
 
 ```ts
 tableView(books, [

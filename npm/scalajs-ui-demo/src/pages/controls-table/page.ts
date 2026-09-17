@@ -292,6 +292,7 @@ export function controlsTablePage(): void {
           translated("Double-click a column edge to fit its content, or press Enter on the focused grip."),
           translated("Drag a column header to move it. Or focus the header and press Alt+Shift+Left/Right."),
           translated("The note field is bound per book. Its focus and text selection stay in place while neighboring columns change."),
+          translated("Dragging the \"Book\" group's own edge resizes Title and Author together, spilling into Year only once both are at their own limit."),
         ],
         () => {
           button(translated("Toggle author column"), {}, () => {

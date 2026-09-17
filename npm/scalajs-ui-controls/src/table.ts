@@ -289,6 +289,32 @@ export interface TableSort {
 export type ColumnResizePolicy = "unconstrained" | "all-columns" | "last-column" | "next-column"
   | "subsequent-columns" | "flex-next-column" | "flex-last-column";
 
+/** One column's resize bounds, as seen by a {@link CustomColumnResizePolicy}. */
+export interface ColumnResizeSpec {
+  readonly min: number;
+  readonly max: number;
+  readonly preferred: number;
+  readonly resizable: boolean;
+}
+/** The inputs to one custom-policy invocation. `columns`/`widths` describe every currently
+ * visible leaf column, in visible order. `targetIndices`/`targetDelta` are both present for a
+ * user/API resize -- one index for an ordinary column, every visible leaf of a group for a group
+ * resize -- and both absent for a pure re-layout with no specific target (a viewport size change
+ * or a column list change).
+ */
+export interface ColumnResizeRequest {
+  readonly columns: readonly ColumnResizeSpec[];
+  readonly widths: readonly number[];
+  readonly viewport: number;
+  readonly targetIndices?: readonly number[];
+  readonly targetDelta?: number;
+}
+/** A pluggable alternative to the seven built-in {@link ColumnResizePolicy} strategies (C05).
+ * Must return an array the same length as `request.columns`; anything else is rejected and the
+ * previous widths are kept. Not reactive: set once when the table is created.
+ */
+export type CustomColumnResizePolicy = (request: ColumnResizeRequest) => readonly number[];
+
 export interface TableViewOptions<T = unknown> {
   /** Inline layout direction. Mirrors column placement, horizontal navigation, resizing,
    * reordering and menu alignment. Defaults to ltr.
@@ -310,6 +336,10 @@ export interface TableViewOptions<T = unknown> {
   readonly columnMenuText?: Reactive<string>;
   /** Defaults to flex-last-column. Constrained policies fit the viewport and hide horizontal overflow. */
   readonly columnResizePolicy?: Reactive<ColumnResizePolicy>;
+  /** Replaces columnResizePolicy entirely when set, for both layout and every resize -- including
+   * a group column's, which reaches this as every one of its visible leaves at once (C05).
+   */
+  readonly customResizePolicy?: CustomColumnResizePolicy;
   /** Defaults to single selection. Changes to single retain the lead selection. */
   readonly selectionMode?: Reactive<TableSelectionMode>;
   /** Select individual cells instead of whole rows. Existing row selections are projected onto
@@ -520,6 +550,7 @@ export function tableView<T, Q = unknown>(
       tableMenuButtonVisible: options.tableMenuButtonVisible,
       columnMenuText: options.columnMenuText,
       columnResizePolicy: options.columnResizePolicy,
+      customResizePolicy: options.customResizePolicy,
       selectionMode: options.selectionMode,
       cellSelectionEnabled: options.cellSelectionEnabled,
       editable: options.editable,

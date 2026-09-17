@@ -7,6 +7,7 @@ import ui.control.table.TableColumn.*
 import ui.control.table.TableView.*
 import ui.control.table.{
   ColumnResizePolicy,
+  CustomColumnResizePolicy,
   TableColumn,
   TableDirection,
   TableSelectionMode,
@@ -228,6 +229,21 @@ object TableViewPage {
             var authorColumn: TableColumn[Book, String] = null
             var yearColumn: TableColumn[Book, Int]      = null
 
+            // C05: an escape hatch alongside the seven built-in strategies. Applies a resize
+            // delta to its own target first, like any built-in policy would, then snaps every
+            // visible leaf to a 20px grid -- a real-world case (grid-snapping) none of the seven
+            // built-in strategies can express.
+            val snapToGridResizePolicy: CustomColumnResizePolicy = request => {
+              val next = request.target match {
+                case Some((indices, delta)) =>
+                  request.widths.zipWithIndex.map((width, index) =>
+                    if (indices.contains(index)) width + delta else width
+                  )
+                case None => request.widths
+              }
+              next.map(width => math.round(width / 20.0).toDouble * 20.0)
+            }
+
             div {
               classes = Seq("showcase-note")
               div {
@@ -421,7 +437,9 @@ object TableViewPage {
                 i18n"Columns",
                 i18n"Drag a column edge to resize. Focus its grip and use arrow keys for keyboard resizing.",
                 i18n"Drag a column header to move it. Or focus the header and press Alt+Shift+Left/Right.",
-                i18n"The column menu button in the header corner hides and shows individual columns."
+                i18n"The column menu button in the header corner hides and shows individual columns.",
+                i18n"Dragging the \"Book\" group's own edge resizes Title and Author together, spilling into Year only once both are at their own limit.",
+                i18n"The snap-to-grid policy replaces every built-in strategy at once, including how the \"Book\" group's own edge behaves."
               ) {
                 button(i18n"Toggle constrained / free column widths") {
                   onClick { _ =>
@@ -430,6 +448,14 @@ object TableViewPage {
                       if (current == ColumnResizePolicy.Unconstrained)
                         ColumnResizePolicy.FlexLastColumn
                       else ColumnResizePolicy.Unconstrained
+                    )
+                  }
+                }
+                button(i18n"Toggle snap-to-grid resize policy") {
+                  onClick { _ =>
+                    table.customResizePolicyProperty.set(
+                      if (table.customResizePolicyProperty.get.isDefined) None
+                      else Some(snapToGridResizePolicy)
                     )
                   }
                 }
