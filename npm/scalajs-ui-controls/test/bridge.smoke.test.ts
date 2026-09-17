@@ -46,7 +46,7 @@ import {
 import { div, text } from "@anjunar/scalajs-ui-core";
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
 import { carousel, checkBoxColumn, choiceBoxColumn, columnGroup, comboBoxColumn, convertingTextFieldColumn, dataGrid, progressBarColumn, remoteSource, tab, tableView, tabs, textFieldColumn, valueColumn, virtualList } from "../src/index.js";
-import type { ColumnResizePolicy, ColumnResizeRequest, TableDirection, TablePosition, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
+import type { ColumnResizePolicy, ColumnResizeRequest, TableCellContext, TableDirection, TablePosition, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
 
 const linkedArtifact = resolve(process.cwd(), "../scalajs-ui-bridge/dist/fullopt/main.js");
 
@@ -2320,6 +2320,54 @@ describe("table-view", () => {
     } finally { app.dispose(); }
     signal.set(3);
     expect(updates).toBe(2);
+  });
+
+  it("exposes the enclosing cell's own index/selected/focused state to cell and valueCell renderers (D05)", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const source = listProperty(["Ada", "Grace"]);
+    const contexts: TableCellContext[] = [];
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(
+        source,
+        [
+          valueColumn("Name", (row) => row, {
+            cell: (value, row, context) => {
+              contexts.push(context);
+              div(() => {
+                classes("cell-state");
+                attr("data-index", context.index.map(String));
+                attr("data-selected", context.selected.map(String));
+                attr("data-focused", context.focused.map(String));
+                text(String(value.get ?? ""));
+              });
+            },
+          }),
+        ],
+        { cellSelectionEnabled: true }
+      );
+    });
+    try {
+      const cells = root.querySelectorAll<HTMLElement>(".cell-state");
+      expect(cells).toHaveLength(2);
+      expect(cells[0]!.getAttribute("data-index")).toBe("0");
+      expect(cells[1]!.getAttribute("data-index")).toBe("1");
+      expect(cells[0]!.getAttribute("data-selected")).toBe("false");
+      expect(cells[0]!.getAttribute("data-focused")).toBe("false");
+      expect(contexts[0]!.empty.get).toBe(false);
+
+      table.selectCell(0, 0);
+      expect(cells[0]!.getAttribute("data-selected")).toBe("true");
+      expect(cells[1]!.getAttribute("data-selected")).toBe("false");
+
+      table.focusCell(1, 0);
+      expect(cells[1]!.getAttribute("data-focused")).toBe("true");
+      expect(cells[0]!.getAttribute("data-focused")).toBe("false");
+    } finally {
+      app.dispose();
+      root.remove();
+    }
   });
 
   it("hydrates custom row content with DOM identity and refreshes snapshots", async () => {

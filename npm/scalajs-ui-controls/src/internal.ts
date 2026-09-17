@@ -25,9 +25,19 @@ export function itemBody<T>(
   return (item, index) => (scope) => withScope(scope, null, () => render(item, index));
 }
 
-/** Wraps a `(row) => void` column cell into `(row) => ScopeBody`. */
-export function rowBody<T>(render: (row: T) => void): (row: T) => ScopeBody {
-  return (row) => (scope) => withScope(scope, null, () => render(row));
+/** Wraps a `(row, context) => void` column cell into `(row, context) => ScopeBody`. */
+export function rowBody<T, C>(
+  render: (row: T, context: C) => void
+): (row: T, context: C) => ScopeBody {
+  return (row, context) => (scope) => withScope(scope, null, () => render(row, context));
+}
+
+/** Wraps a `(value, row, context) => void` column cell into `(value, row, context) => ScopeBody`. */
+export function valueCellBody<V, T, C>(
+  render: (value: V, row: T, context: C) => void
+): (value: V, row: T, context: C) => ScopeBody {
+  return (value, row, context) => (scope) =>
+    withScope(scope, null, () => render(value, row, context));
 }
 
 /** Wraps a `(state) => void` sort indicator body into `(state) => ScopeBody`. Composed once per

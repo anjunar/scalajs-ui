@@ -230,6 +230,15 @@ object TableCell {
 
   def editing[S, T](using cell: TableCell[S, T]): Boolean = cell.editingProperty.get
 
+  /** The enclosing cell, for a lightweight `cell { item => ... }` renderer body (D05). That body
+    * only receives the item, but the ambient `AbstractComponent` given during it IS the `TableCell`
+    * itself (`compose` calls `renderContent(using this, cursor)`), so this is a safe projection of
+    * already-existing state, not a new channel -- a `cellFactory` subclass already has the same
+    * `index`/`empty`/`selected`/`focused`/`editing` properties directly via `this`.
+    */
+  def enclosingCell(using component: AbstractComponent): TableCell[?, ?] =
+    component.asInstanceOf[TableCell[?, ?]]
+
   def cell[S, T](
       body: TableCell[S, T] ?=> Cursor ?=> Unit
   )(using AbstractComponent, Cursor): TableCell[S, T] =

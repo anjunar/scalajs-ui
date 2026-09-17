@@ -1,7 +1,7 @@
-import { attr, button, classes, div, element, onClick, onInput, property, style, text, when } from "@anjunar/scalajs-ui-core";
+import { attr, button, classes, classIf, div, element, onClick, onInput, property, style, text, when } from "@anjunar/scalajs-ui-core";
 import { column, columnGroup, remoteSource, tableView } from "@anjunar/scalajs-ui-controls";
 import type { Property, ReadOnlyProperty, UiEvent } from "@anjunar/scalajs-ui-core";
-import type { ColumnResizePolicy, RemotePage, RemoteSource, SortSpec, TableDirection, TableSelectionMode, TableViewHandle } from "@anjunar/scalajs-ui-controls";
+import type { ColumnDef, ColumnResizePolicy, RemotePage, RemoteSource, SortSpec, TableCellContext, TableDirection, TableSelectionMode, TableViewHandle } from "@anjunar/scalajs-ui-controls";
 import { translated } from "../../app/i18n.js";
 
 const input = element("input");
@@ -177,12 +177,22 @@ export function controlsTablePage(): void {
             column(translated("Author").get, (book) => text(book.author), { prefWidth: 220, minWidth: 100, maxWidth: 600, sortable: true, sortKey: "author", visible: showAuthors, onVisibilityChange: value => showAuthors.set(value) }),
           ]),
           columnGroup(translated("Details").get, [
-            column(translated("Year").get, (book) => text(String(book.year)), {
+            {
+              text: translated("Year").get,
+              // D05: `context` is this cell's own state -- the same focused/selected a custom
+              // `row` renderer already gets for the whole row, here per cell.
+              cell: (book: Book, context: TableCellContext) => {
+                div(() => {
+                  classIf("table-demo__year-cell--focused", context.focused);
+                  classIf("table-demo__year-cell--selected", context.selected);
+                  text(String(book.year));
+                });
+              },
               prefWidth: 100, minWidth: 70, maxWidth: 300, sortable: true, sortKey: "year",
               // C10: reaches the separately created header/cells, in addition to their own
               // ui-table-header-cell/ui-table-cell classes.
               headerClass: ["table-demo__numeric-header"], cellClass: ["table-demo__numeric-cell"],
-            }),
+            } satisfies ColumnDef<Book>,
             column(translated("Note").get, (book) => {
               const note = noteFor(book);
               input(() => {
@@ -297,6 +307,7 @@ export function controlsTablePage(): void {
           translated("Drag a column header to move it. Or focus the header and press Alt+Shift+Left/Right."),
           translated("The note field is bound per book. Its focus and text selection stay in place while neighboring columns change."),
           translated("Dragging the \"Book\" group's own edge resizes Title and Author together, spilling into Year only once both are at their own limit."),
+          translated("The Year cell highlights itself when it is focused or selected (D05), using the same per-cell state a custom row already gets for the whole row."),
         ],
         () => {
           button(translated("Toggle author column"), {}, () => {

@@ -1276,6 +1276,19 @@
     background: color-mix(in srgb, var(--aj-accent-muted) 45%, transparent);
 }
 
+/* Year cell's own focused/selected highlight (D05): driven by the per-cell context a
+ * cell/valueCell renderer receives, the same state a custom row already had for itself.
+ */
+.table-demo__year-cell--focused {
+    outline: 2px solid var(--aj-accent);
+    outline-offset: -2px;
+    border-radius: calc(var(--radius-surface) - 4px);
+}
+.table-demo__year-cell--selected {
+    font-weight: 700;
+    color: var(--aj-accent-strong);
+}
+
 .table-demo__stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
