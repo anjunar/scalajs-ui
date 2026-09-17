@@ -1,6 +1,6 @@
 {
   "name": "@anjunar/scalajs-ui-controls",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "The TypeScript controls API of Scala JS UI 1.0: tabs, carousel, and the virtualized table / data grid / list, projected onto the ui.control components that run in the Scala.js runtime published as @anjunar/scalajs-ui-bridge.",
   "type": "module",
   "types": "./dist/index.d.ts",
@@ -27,9 +27,9 @@
     "verify": "npm run typecheck && npm run test && npm run test:consumer"
   },
   "peerDependencies": {
-    "@anjunar/scalajs-ui-core": "^1.0.3",
-    "@anjunar/scalajs-ui": "^1.0.3",
-    "@anjunar/scalajs-ui-bridge": "^1.0.3"
+    "@anjunar/scalajs-ui-core": "^1.0.4",
+    "@anjunar/scalajs-ui": "^1.0.4",
+    "@anjunar/scalajs-ui-bridge": "^1.0.4"
   },
   "devDependencies": {
     "@anjunar/scalajs-ui-core": "*",
