@@ -11,6 +11,7 @@ import ui.control.table.{
   TableCell,
   TableColumn,
   TableDirection,
+  TableRow,
   TableSelectionMode,
   TableSort,
   TableView
@@ -18,7 +19,7 @@ import ui.control.table.{
 import ui.core.component.AbstractComponent
 import ui.core.remote.{RemoteListProperty, RemoteLoader, RemotePage, RemoteSort}
 import ui.core.dsl.AttributeDsl.setAttribute
-import ui.core.dsl.ClassDsl.{classIf, classes}
+import ui.core.dsl.ClassDsl.{addClass, classIf, classes}
 import ui.core.dsl.EventDsl.{on, onClick}
 import ui.core.layout.Condition.when
 import ui.viewport.Overlay.overlay
@@ -415,6 +416,36 @@ object TableViewPage {
                 }
 
                 onRowDoubleClick((book: Book) => status.set(s"${book.title} — ${book.author}"))
+
+                // V07: a per-row hover tooltip needs no new "presenter" API -- the same
+                // on/when/overlay recipe already used for C08's column menu and C09's header
+                // context menu, just anchored to a row instead of a header. Binding to
+                // itemProperty (not the item captured when this row was created) keeps the
+                // tooltip correct even if virtualization later rebinds this row to another book.
+                rowFactory = _ =>
+                  new TableRow[Book] {
+                    private val tooltipOpen = Property(false)
+                    override protected def renderContent(using AbstractComponent, Cursor): Unit = {
+                      addClass("book-row")
+                      on("mouseenter") { _ => tooltipOpen.set(true) }
+                      on("mouseleave") { _ => tooltipOpen.set(false) }
+                      when(tooltipOpen) {
+                        overlay(240.0) {
+                          div {
+                            classes = Seq("table-demo__row-tooltip")
+                            setAttribute("role", "tooltip")
+                            text(
+                              itemProperty.map(item =>
+                                Option(item)
+                                  .fold("")(book => s"${book.title} · ${book.author} · ${book.year}")
+                              )
+                            ) {}
+                          }
+                        }
+                      }
+                      renderCells
+                    }
+                  }
               }
             }
 
