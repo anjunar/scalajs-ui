@@ -16,8 +16,11 @@ import ui.control.table.{
 }
 import ui.core.component.AbstractComponent
 import ui.core.remote.{RemoteListProperty, RemoteLoader, RemotePage, RemoteSort}
+import ui.core.dsl.AttributeDsl.setAttribute
 import ui.core.dsl.ClassDsl.classes
-import ui.core.dsl.EventDsl.onClick
+import ui.core.dsl.EventDsl.{on, onClick}
+import ui.core.layout.Condition.when
+import ui.viewport.Overlay.overlay
 // minWidth/maxWidth exist in both DSLs. This page bounds column resizing, not boxes, so the
 // style variants are hidden rather than every column having to qualify its own setters.
 import ui.core.dsl.StyleDsl.{maxWidth as _, minWidth as _, *}
@@ -29,6 +32,7 @@ import ui.core.layout.VBox.vbox
 import ui.core.render.Cursor
 import ui.core.state.{ListProperty, Property, ReadOnlyProperty}
 import ui.core.i18n.{RuntimeMessage, i18n}
+import org.scalajs.dom
 
 import scala.scalajs.js
 
@@ -228,6 +232,13 @@ object TableViewPage {
             var table: TableView[Book]                  = null
             var authorColumn: TableColumn[Book, String] = null
             var yearColumn: TableColumn[Book, Int]      = null
+            var titleColumn: TableColumn[Book, String]  = null
+
+            // C09's remaining "Kontextmenü" piece is deliberately not a second menu API: headerCell
+            // is real composition, so a right-click menu reaches the same public Viewport.overlay
+            // every other overlay uses (ComboBox's dropdown, C08's column-visibility menu), gated
+            // by an ordinary Property the way `when(...)` gates any other conditional content.
+            val titleMenuOpen = Property(false)
 
             // C05: an escape hatch alongside the seven built-in strategies. Applies a resize
             // delta to its own target first, like any built-in policy would, then snaps every
@@ -278,7 +289,7 @@ object TableViewPage {
                 selectionMode = TableSelectionMode.Multiple
 
                 columnGroup[Book]("Book") {
-                  column[Book, String]("Title") {
+                  titleColumn = column[Book, String]("Title") {
                     prefWidth = 280.0
                     minWidth = 140.0
                     maxWidth = 900.0
@@ -286,11 +297,47 @@ object TableViewPage {
                     sortKey = "title"
                     // C09: replaces the default header text with an icon + label, and the
                     // default CSS-only sort arrow with a small pill showing direction/priority.
+                    // The label also opens a right-click context menu (C09's "Kontextmenü"),
+                    // composed with the public headerCell + overlay APIs, not a dedicated one.
                     headerCell {
                       hbox {
                         style { gap = "6px"; alignItems = "center" }
                         text("📖") {}
                         text("Title") {}
+                        on("contextmenu") { event =>
+                          event.preventDefault()
+                          event.stopPropagation()
+                          titleMenuOpen.set(true)
+                        }
+                      }
+                      when(titleMenuOpen) {
+                        overlay(200.0) {
+                          div {
+                            classes = Seq("table-demo__header-menu")
+                            setAttribute("role", "menu")
+                            on("keydown") { event =>
+                              event.raw match {
+                                case key: dom.KeyboardEvent if key.key == "Escape" =>
+                                  titleMenuOpen.set(false)
+                                case _ => ()
+                              }
+                            }
+                            button(i18n"Auto-fit column") {
+                              setAttribute("role", "menuitem")
+                              onClick { _ =>
+                                table.autoFitColumn(titleColumn)
+                                titleMenuOpen.set(false)
+                              }
+                            }
+                            button(i18n"Hide column") {
+                              setAttribute("role", "menuitem")
+                              onClick { _ =>
+                                titleColumn.visible = false
+                                titleMenuOpen.set(false)
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                     sortIndicator { state =>

@@ -1227,6 +1227,35 @@
 }
 .table-demo__sort-pill:empty { display: none; }
 
+/* Header right-click context menu (C09's "Kontextmenü"): composed with the public headerCell +
+ * Overlay.overlay APIs, not a dedicated menu component -- see TableViewPage.scala.
+ */
+.table-demo__header-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--aj-line);
+    border-radius: var(--radius-surface);
+    background: var(--aj-surface-overlay);
+    box-shadow: var(--aj-shadow-float);
+}
+.table-demo__header-menu button {
+    padding: 6px 10px;
+    border: none;
+    border-radius: calc(var(--radius-surface) - 2px);
+    background: transparent;
+    color: var(--aj-ink);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+}
+.table-demo__header-menu button:hover,
+.table-demo__header-menu button:focus-visible {
+    background: var(--aj-accent-muted);
+    outline: none;
+}
+
 .table-demo__note {
     width: 100%;
     min-width: 0;

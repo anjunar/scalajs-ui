@@ -172,6 +172,34 @@ about `headerClass`/`cellClass` or the header's built-in classes changes. Omitti
 keeps the default arrow even when `headerCell` is set. Scala exposes the same slots as
 `TableColumn.headerCell { ... }` and `TableColumn.sortIndicator { state => ... }` in the column DSL.
 
+A header right-click/context menu has no dedicated API either, for the same reason: `headerCell`
+is real composition, so it reaches the same anchor-following `overlay` any other dropdown/popover
+uses (a `ComboBox`'s own dropdown, or the built-in column-visibility menu), gated by an ordinary
+boolean the way `when()` gates any other conditional content -- not a second popup engine.
+
+```ts
+const menuOpen = property(false);
+const titleVisible = property(true);
+column("Title", book => book.title, {
+  visible: titleVisible,
+  headerCell: () => {
+    div(() => {
+      text("Title");
+      on("contextmenu", event => { event.preventDefault(); menuOpen.set(true); });
+    });
+    when(menuOpen, () => {
+      overlay({ widthPx: 200 }, () => {
+        div(() => {
+          classes("header-menu");
+          on("keydown", event => { if (event.key === "Escape") menuOpen.set(false); });
+          button("Hide column", {}, () => onClick(() => { titleVisible.set(false); menuOpen.set(false); }));
+        });
+      });
+    });
+  },
+});
+```
+
 ### Remote multi-column sorting
 
 Click a sortable header to cycle ascending, descending, unsorted. Shift-click keeps other
