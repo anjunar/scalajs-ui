@@ -23,11 +23,20 @@ import { hydratedProperty } from "./app/hydrated.js";
 // the browser head sink leaves server-rendered entries it never managed alone
 // (mirrors `Main.boot`'s note on the same point).
 //
-await hydrate(document, () =>
-  i18nProvider(providerConfig(), () =>
-    appDocument([], () => appShell(appRoutes, routerConfig))
-  )
-);
+try {
+  await hydrate(document, () =>
+    i18nProvider(providerConfig(), () =>
+      appDocument([], () => appShell(appRoutes, routerConfig))
+    )
+  );
+} catch (error: any) {
+  console.error("DEBUG_FULL_ERROR_START");
+  console.error(error?.axd ? String(error.axd) : String(error));
+  const btn = document.querySelector(".locale-choice");
+  console.error("BUTTON_HTML:", btn ? btn.outerHTML : "not found");
+  console.error("DEBUG_FULL_ERROR_END");
+  throw error;
+}
 
 // Only after hydration has fully settled -- see src/app/hydrated.ts (E-7).
 hydratedProperty().set(true);
