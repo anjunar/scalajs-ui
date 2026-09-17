@@ -14,6 +14,7 @@ export const entries: readonly CatalogEntry[] = [
   catalogEntry(i18n`Columns`, { de: "Spalten" }),
   catalogEntry(i18n`Double-click a column edge to fit its content, or press Enter on the focused grip.`, { de: "Doppelklicke auf einen Spaltenrand zur Inhaltsanpassung oder drücke Enter am fokussierten Ziehgriff." }),
   catalogEntry(i18n`Drag a column header to move it. Or focus the header and press Alt+Shift+Left/Right.`, { de: "Ziehe einen Spaltenkopf zum Verschieben. Oder fokussiere ihn und drücke Alt+Shift+Links/Rechts." }),
+  catalogEntry(i18n`Dragging the "Book" group's own edge resizes Title and Author together, spilling into Year only once both are at their own limit.`, { de: "Das Ziehen der eigenen Kante der Gruppe \"Book\" verändert Titel und Autor gemeinsam und greift erst auf Jahr über, wenn beide an ihrer eigenen Grenze angekommen sind." }),
   catalogEntry(i18n`TableView`, { de: "TableView" }),
   catalogEntry(i18n`A virtualized remote catalogue with sortable columns and request-aware SSR ranges.`, { de: "Ein virtualisierter Remote-Katalog mit sortierbaren Spalten und anfragebasierten SSR-Bereichen." }),
   catalogEntry(i18n`tableView(), column(), remoteSource(): a virtualized table over 1,000 rows, with sortable columns and request-aware SSR ranges.`, { de: "tableView(), column(), remoteSource(): eine virtualisierte Tabelle über 1.000 Zeilen mit sortierbaren Spalten und anfragebasierten SSR-Bereichen." }),

@@ -22,22 +22,52 @@ private[table] object TableColumnLayout {
     widths.toVector
   }
 
+  /** A single column's resize, by a pixel delta. */
   def resize(
       columns: Vector[Column],
       widths: Vector[Double],
       index: Int,
       delta: Double,
       policy: ColumnResizePolicy
+  ): Vector[Double] = resizeGroup(columns, widths, Vector(index), delta, policy)
+
+  /** A group's resize: `indices` are every visible leaf the dragged handle actually belongs to --
+    * one column for an ordinary leaf resize (`resize` above), every visible leaf of a group for
+    * an actual group resize (C05). The group's own children share `delta` proportionally to their
+    * current width, exactly as `AllColumns`/`SubsequentColumns` already share a delta across
+    * several recipients; what they collectively cannot absorb is what a single-leaf resize would
+    * call `requested`, and everything past that point -- capacity, `applied`, compensating
+    * recipients outside `indices`, and the final write-back to `indices` themselves -- is
+    * identical to the single-column case, just phrased over a set instead of one index. A
+    * single-index call degenerates to exactly the previous single-column algorithm: water-filling
+    * one recipient converges to its plain clamp in one step. A separate name from `resize`, not an
+    * overload of it: an overload sharing this position with a bare `Int` one made every untyped
+    * `Vector(...)` literal in this file's own tests ambiguous between the two.
+    */
+  def resizeGroup(
+      columns: Vector[Column],
+      widths: Vector[Double],
+      indices: Vector[Int],
+      delta: Double,
+      policy: ColumnResizePolicy
   ): Vector[Double] = {
-    if (index < 0 || index >= columns.size || !delta.isFinite || !columns(index).resizable)
-      return widths
-    val result    = widths.toArray
-    val requested = columns(index).clamp(widths(index) + delta) - widths(index)
-    if (policy == ColumnResizePolicy.Unconstrained) result(index) += requested
+    if (
+      indices.isEmpty || !delta.isFinite ||
+      indices.exists(i => i < 0 || i >= columns.size) ||
+      indices.forall(i => !columns(i).resizable)
+    ) return widths
+    val result = widths.toArray
+    if (policy == ColumnResizePolicy.Unconstrained)
+      distribute(columns, result, indices, delta, proportionalToWidth = true)
     else {
-      val after      = ((index + 1) until columns.size).toVector
+      // Dry run on a scratch copy: how much would `indices` move on their own, unconstrained by
+      // what neighbors can actually give up? That candidate -- not `delta` itself -- is what
+      // neighbors are asked to compensate below.
+      val requested  = distribute(columns, widths.toArray, indices, delta, proportionalToWidth = true)
+      val boundary   = indices.max
+      val after      = ((boundary + 1) until columns.size).toVector
       val recipients = policy match {
-        case ColumnResizePolicy.AllColumns     => columns.indices.filterNot(_ == index).toVector
+        case ColumnResizePolicy.AllColumns     => columns.indices.filterNot(indices.contains).toVector
         case ColumnResizePolicy.NextColumn     => after.take(1)
         case ColumnResizePolicy.LastColumn     => after.takeRight(1)
         case ColumnResizePolicy.FlexLastColumn => after.reverse
@@ -61,9 +91,34 @@ private[table] object TableColumnLayout {
           }
           -applied - remaining
         }
-      result(index) = columns(index).clamp(widths(index) - consumed)
+      // What neighbors actually gave up -- possibly less than `requested` -- is what `indices`
+      // finally get, the same way a single column's result is clamp(widths(index) - consumed).
+      distribute(columns, result, indices, -consumed, proportionalToWidth = true)
     }
     result.toVector
+  }
+
+  /** Runs a [[CustomColumnResizePolicy]] in place of a built-in strategy. A malformed result --
+    * wrong length -- is rejected wholesale, the same atomic-or-nothing contract `resize` already
+    * gives the built-in policies; each accepted width is still clamped to its own column's bounds,
+    * so a policy cannot violate them by construction.
+    */
+  private[table] def applyCustom(
+      columns: Vector[Column],
+      widths: Vector[Double],
+      viewport: Double,
+      target: Option[(Vector[Int], Double)],
+      policy: CustomColumnResizePolicy
+  ): Vector[Double] = {
+    val request = ColumnResizeRequest(
+      columns.map(c => ColumnResizeSpec(c.minimum, c.maximum, c.initial, c.resizable)),
+      widths,
+      viewport,
+      target
+    )
+    val result = policy(request)
+    if (result.size != columns.size) widths
+    else columns.zip(result).map((c, w) => c.clamp(if (w.isFinite) w else c.initial))
   }
 
   /** Water filling: a saturated column leaves the set; no fixed iteration cap or lost remainder. */
