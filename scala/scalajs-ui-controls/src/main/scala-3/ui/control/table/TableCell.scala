@@ -21,6 +21,8 @@ class TableCell[S, T] extends AbstractComponent {
   val focusedProperty: ReadOnlyProperty[Boolean]    = focusedState
   private val selectedState: Property[Boolean]      = Property(false)
   val selectedProperty: ReadOnlyProperty[Boolean]   = selectedState
+  private val disabledState: Property[Boolean]      = Property(false)
+  val disabledProperty: ReadOnlyProperty[Boolean]   = disabledState
   private val indexState: Property[Int]             = Property(-1)
   val indexProperty: ReadOnlyProperty[Int]          = indexState
   private var boundRow: TableRow[S] | Null          = null
@@ -101,9 +103,19 @@ class TableCell[S, T] extends AbstractComponent {
         addDisposable(
           selectedProperty.observe(selected => setAttribute("aria-selected", selected.toString))
         )
+        // V05: a cell inherits its row's disabled state -- there is no independent per-cell
+        // predicate, matching how JavaFX's own Node.disable cascades from a disabled row to its
+        // cells. Stays visible and reachable by keyboard focus; cannot be selected or edited.
+        Option(boundRow).foreach { row =>
+          addDisposable(row.disabledProperty.observe(disabledState.set))
+        }
+        classIf("ui-table-cell-disabled", disabledProperty)
+        addDisposable(
+          disabledProperty.observe(value => setAttribute("aria-disabled", value.toString))
+        )
         onClick { event =>
           event.raw match {
-            case mouse: org.scalajs.dom.MouseEvent if !emptyProperty.get =>
+            case mouse: org.scalajs.dom.MouseEvent if !emptyProperty.get && !disabledProperty.get =>
               val element = host
                 .asInstanceOf[ui.core.render.DomHostElement]
                 .node
@@ -131,7 +143,7 @@ class TableCell[S, T] extends AbstractComponent {
         if (supportsIntegratedEditor)
           onDoubleClick { event =>
             event.raw match {
-              case mouse: org.scalajs.dom.MouseEvent if !emptyProperty.get =>
+              case mouse: org.scalajs.dom.MouseEvent if !emptyProperty.get && !disabledProperty.get =>
                 val element = host
                   .asInstanceOf[ui.core.render.DomHostElement]
                   .node

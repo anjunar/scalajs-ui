@@ -196,6 +196,9 @@ export function controlsTablePage(): void {
         ],
         {
           rowKey: (book) => book.title,
+          // V05: stays visible and keyboard-reachable, just not selectable/editable. Not reactive
+          // like columnResizePolicy above -- set once, the same as row/customResizePolicy.
+          rowDisabled: (book) => book.year < 2000,
           rowHeight: 40,
           tableMenuButtonVisible: true,
           columnMenuText: translated("Columns"),
@@ -273,6 +276,7 @@ export function controlsTablePage(): void {
           translated("Ctrl/Cmd-click toggles rows; Shift-click selects a range."),
           translated("In cell mode, Shift-click and Shift+Arrow select an inclusive rectangle."),
           translated("Focus the table: Up/Down, Home/End and PageUp/PageDown navigate rows; Left/Right enters and moves cell focus. Shift extends row selection; Ctrl/Cmd moves focus only; Space selects."),
+          translated("Books before 2000 are disabled (V05): visible and keyboard-reachable, but not selectable or editable."),
         ],
         () => {
           button(translated("Toggle single / multiple selection"), {}, () => {

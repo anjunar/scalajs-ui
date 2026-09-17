@@ -180,4 +180,30 @@ class TableEditSpec extends AnyFlatSpec with Matchers {
     table.commitEdit("late") shouldBe false
     table.cancelEdit() shouldBe false
   }
+
+  "A disabled row (V05)" should "refuse to start editing and project ui-table-row-disabled/aria-disabled" in {
+    val ada                                = new Person(Property("Ada"))
+    val grace                              = new Person(Property("Grace"))
+    val source                             = ListProperty(js.Array(ada, grace))
+    var name: TableColumn[Person, String]  = null
+    val (root, table, cursor)              = mountTable(source) {
+      summon[TableView[Person]].editableProperty.set(true)
+      summon[TableView[Person]].rowDisabledProperty.set(Some(_.name.get == "Ada"))
+      name = column[Person, String]("Name") { cellValueFactory = _.value.name }
+    }
+
+    table.edit(0, name) shouldBe false
+    table.edit(1, name) shouldBe true
+    table.cancelEdit() shouldBe true
+
+    val html = cursor.collectHtml()
+    html should include("ui-table-row-disabled")
+    html should include("aria-disabled=\"true\"")
+    html should include("aria-disabled=\"false\"")
+
+    table.rowDisabledProperty.set(None)
+    table.edit(0, name) shouldBe true
+
+    Runtime.unmount(root)
+  }
 }

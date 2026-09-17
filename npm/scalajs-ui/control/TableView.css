@@ -225,7 +225,7 @@
   color: var(--aj-ink-soft);
 }
 
-.ui-table-row:not(.ui-table-row-empty):not(.ui-table-row-placeholder):not(.ui-table-row-selected):hover {
+.ui-table-row:not(.ui-table-row-empty):not(.ui-table-row-placeholder):not(.ui-table-row-selected):not(.ui-table-row-disabled):hover {
   background-color: var(--aj-surface-hover);
 }
 
@@ -233,6 +233,17 @@
   background-color: var(--aj-accent-muted);
   color: var(--aj-ink);
   box-shadow: inset 0 0 0 1px var(--aj-accent-ring);
+}
+
+/* V05: stays visible and keyboard-reachable -- disabled is not the same as absent -- but reads
+ * as non-interactive and cannot be selected or edited (TableSelectionModel/TableView guard it). */
+.ui-table-row.ui-table-row-disabled,
+.ui-table-cell.ui-table-cell-disabled {
+  color: var(--aj-ink-soft);
+  cursor: default;
+}
+.ui-table-row.ui-table-row-disabled {
+  background-color: var(--aj-surface-muted);
 }
 
 .ui-table-header-cell-group {

@@ -249,7 +249,7 @@ class TableSelectionModel[S](final val tableView: TableView[S]) {
       )
       return
     }
-    if (table.isDisposed || !valid(index)) return
+    if (table.isDisposed || !valid(index) || table.isRowDisabled(index)) return
     val anchor = if (valid(state.get.anchor)) state.get.anchor else fallbackAnchor
     if (selectionMode == TableSelectionMode.Single) clearAndSelect(index)
     else if (extend && valid(anchor)) {
@@ -270,7 +270,7 @@ class TableSelectionModel[S](final val tableView: TableView[S]) {
       fallbackColumn: TableColumn[S, ?] | Null = null
   ): Unit = {
     if (!cellSelectionEnabled) { click(index, toggle, extend, fallbackRow); return }
-    if (table.isDisposed || !valid(index) || !visible(column)) return
+    if (table.isDisposed || !valid(index) || !visible(column) || table.isRowDisabled(index)) return
     val target = Coordinate(index, column)
     val anchor = state.get.cellAnchor
       .filter(current => valid(current.row) && visible(current.column))

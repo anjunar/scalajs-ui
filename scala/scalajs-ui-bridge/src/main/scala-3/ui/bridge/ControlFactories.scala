@@ -507,6 +507,10 @@ private[bridge] object TableViewFactory extends ComponentFactory {
         val key = callback.asInstanceOf[js.Function1[js.Any, js.Any]]
         TableView.rowKey_=[js.Any](item => key(item))
       }
+      options.get("rowDisabled").foreach { callback =>
+        val predicate = callback.asInstanceOf[js.Function1[js.Any, Boolean]]
+        TableView.rowDisabled_=[js.Any](item => predicate(item))
+      }
       options.get("onScrollTo").foreach { callback =>
         val handler = callback.asInstanceOf[js.Function1[Int, Unit]]
         TableView.onScrollTo[js.Any](index => handler(index))
