@@ -541,6 +541,44 @@ class TableCellSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(root)
   }
 
+  it should "expose the enclosing cell's own index/selected/editing state to a lightweight cell renderer (D05)" in {
+    val source                            = ListProperty(js.Array("Ada", "Grace"))
+    var name: TableColumn[String, String] = null
+    val (root, table, cursor)             = mountTable(source) {
+      editable = true
+      name = column[String, String]("Name") {
+        cellValueFactory = features => Property(features.value)
+        cell { value =>
+          val self = TableCell.enclosingCell
+          text(
+            self.selectedProperty.flatMap(selected =>
+              self.editingProperty.map(editing =>
+                s"${self.indexProperty.get}:$value" +
+                  (if (selected) ":selected" else "") +
+                  (if (editing) ":editing" else "")
+              )
+            )
+          ) {}
+        }
+      }
+    }
+    cursor.collectHtml() should include("0:Ada")
+    cursor.collectHtml() should include("1:Grace")
+    cursor.collectHtml() should not include ":selected"
+    cursor.collectHtml() should not include ":editing"
+
+    table.selectionModel.cellSelectionEnabled = true
+    table.selectionModel.clickCell(0, name, toggle = false, extend = false)
+    cursor.collectHtml() should include("0:Ada:selected")
+
+    table.edit(0, name) shouldBe true
+    cursor.collectHtml() should include("0:Ada:selected:editing")
+    table.commitEdit("Ada")
+    cursor.collectHtml() should not include ":editing"
+
+    Runtime.unmount(root)
+  }
+
   private final class CountingValue(underlying: Property[String]) extends ReadOnlyProperty[String] {
     var listeners                                              = 0
     override def get: String                                   = underlying.get

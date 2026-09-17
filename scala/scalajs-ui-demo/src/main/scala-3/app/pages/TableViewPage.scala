@@ -8,6 +8,7 @@ import ui.control.table.TableView.*
 import ui.control.table.{
   ColumnResizePolicy,
   CustomColumnResizePolicy,
+  TableCell,
   TableColumn,
   TableDirection,
   TableSelectionMode,
@@ -17,7 +18,7 @@ import ui.control.table.{
 import ui.core.component.AbstractComponent
 import ui.core.remote.{RemoteListProperty, RemoteLoader, RemotePage, RemoteSort}
 import ui.core.dsl.AttributeDsl.setAttribute
-import ui.core.dsl.ClassDsl.classes
+import ui.core.dsl.ClassDsl.{classIf, classes}
 import ui.core.dsl.EventDsl.{on, onClick}
 import ui.core.layout.Condition.when
 import ui.viewport.Overlay.overlay
@@ -379,8 +380,16 @@ object TableViewPage {
                     // ui-table-header-cell/ui-table-cell classes.
                     headerClasses = Seq("table-demo__numeric-header")
                     cellClasses = Seq("table-demo__numeric-cell")
+                    // D05: TableCell.enclosingCell projects this cell's own focused/selected state
+                    // into the lightweight `cell { book => ... }` body, the same state a custom row
+                    // already gets for itself via `row.focused`/`row.selected`.
                     cell { book =>
-                      text(book.year.toString) {}
+                      val self = TableCell.enclosingCell
+                      div {
+                        classIf("table-demo__year-cell--focused", self.focusedProperty)
+                        classIf("table-demo__year-cell--selected", self.selectedProperty)
+                        text(book.year.toString) {}
+                      }
                     }
                   }
                 }
@@ -495,7 +504,8 @@ object TableViewPage {
                 i18n"Drag a column header to move it. Or focus the header and press Alt+Shift+Left/Right.",
                 i18n"The column menu button in the header corner hides and shows individual columns.",
                 i18n"Dragging the \"Book\" group's own edge resizes Title and Author together, spilling into Year only once both are at their own limit.",
-                i18n"The snap-to-grid policy replaces every built-in strategy at once, including how the \"Book\" group's own edge behaves."
+                i18n"The snap-to-grid policy replaces every built-in strategy at once, including how the \"Book\" group's own edge behaves.",
+                i18n"The Year cell highlights itself when it is focused or selected (D05), using the same per-cell state a custom row already gets for the whole row."
               ) {
                 button(i18n"Toggle constrained / free column widths") {
                   onClick { _ =>

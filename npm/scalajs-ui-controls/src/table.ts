@@ -9,7 +9,7 @@
  */
 import { component, currentScope, withScope } from "@anjunar/scalajs-ui-core";
 import type { ComponentHandle, ListProperty, Reactive, ReadOnlyProperty, ScopeHandle } from "@anjunar/scalajs-ui-core";
-import { body, defined, rowBody, stateBody } from "./internal.js";
+import { body, defined, rowBody, stateBody, valueCellBody } from "./internal.js";
 import type { Source, SortSpec } from "./data-source.js";
 
 type TableEditHandler<E> = { bivarianceHack(event: E): void }["bivarianceHack"];
@@ -21,6 +21,21 @@ export interface SortIndicatorState {
   readonly sorted: boolean;
   readonly ascending: boolean;
   readonly priority: number;
+}
+
+/** A cell's own state (D05) -- the same properties a `TableCell` subclass's `renderContent`
+ * already has via `this` in Scala, reaching the lighter-weight `cell`/`valueCell` renderers too.
+ */
+export interface TableCellContext {
+  readonly index: ReadOnlyProperty<number>;
+  /** Always false when `cell`/`valueCell` actually run: an unloaded remote placeholder renders
+   * the default loading cell instead, without calling either renderer. Kept for parity with the
+   * row context and a `TableCell` subclass's own `emptyProperty`. */
+  readonly empty: ReadOnlyProperty<boolean>;
+  readonly selected: ReadOnlyProperty<boolean>;
+  /** Logical focus; independent of selection and whether the grid owns DOM focus. */
+  readonly focused: ReadOnlyProperty<boolean>;
+  readonly editing: ReadOnlyProperty<boolean>;
 }
 
 export interface ColumnDef<T> {
@@ -56,12 +71,14 @@ export interface ColumnDef<T> {
    * bind to it declaratively (e.g. `text(state.map(s => s.sorted ? (s.ascending ? "▲" : "▼") : ""))`)
    * rather than expecting this body to be re-invoked on every sort change. */
   readonly sortIndicator?: (state: ReadOnlyProperty<SortIndicatorState>) => void;
-  /** Composes one cell's content for `row`, with the core DSL. */
-  readonly cell?: (row: T) => void;
+  /** Composes one cell's content for `row`, with the core DSL. `context` is this cell's own
+   * index/selected/focused/editing state (D05) -- the same state a custom `row` renderer already
+   * gets for the whole row. */
+  readonly cell?: (row: T, context: TableCellContext) => void;
   /** A snapshot or observed cell value. Used by the default text cell when `cell` is absent. */
   readonly value?: (row: T) => Reactive<unknown>;
   /** Prefer `valueColumn` for a renderer whose observed value retains its concrete type. */
-  readonly valueCell?: (value: ReadOnlyProperty<unknown>, row: T) => void;
+  readonly valueCell?: (value: ReadOnlyProperty<unknown>, row: T, context: TableCellContext) => void;
   readonly onEditStart?: TableEditHandler<TableEditStartEvent<T, unknown>>;
   /** Replaces default write-back through a writable value property. */
   readonly editCommitHandler?: TableEditHandler<TableEditCommitEvent<T, unknown>>;
@@ -73,7 +90,7 @@ export interface ColumnDef<T> {
 export interface ValueColumnOptions<S, V> extends Omit<ColumnDef<S>,
   "text" | "cell" | "value" | "valueCell" | "onEditStart" | "editCommitHandler" |
   "onEditCommit" | "onEditCancel"> {
-  readonly cell?: (value: ReadOnlyProperty<V | null>, row: S) => void;
+  readonly cell?: (value: ReadOnlyProperty<V | null>, row: S, context: TableCellContext) => void;
   readonly onEditStart?: (event: TableEditStartEvent<S, V>) => void;
   readonly editCommitHandler?: (event: TableEditCommitEvent<S, V>) => void;
   readonly onEditCommit?: (event: TableEditCommitEvent<S, V>) => void;
@@ -144,7 +161,11 @@ export function valueColumn<S, V>(
     ...metadata,
   };
   return cell
-    ? { ...result, valueCell: (observed, row) => cell(observed as ReadOnlyProperty<V | null>, row) }
+    ? {
+        ...result,
+        valueCell: (observed, row, context) =>
+          cell(observed as ReadOnlyProperty<V | null>, row, context),
+      }
     : result;
 }
 
@@ -541,9 +562,7 @@ export function tableView<T, Q = unknown>(
     sortIndicator: col.sortIndicator ? stateBody(col.sortIndicator) : undefined,
     cell: col.cell ? rowBody(col.cell) : undefined,
     value: col.value,
-    valueCell: col.valueCell
-      ? (value: ReadOnlyProperty<unknown>, row: T) => body(() => col.valueCell!(value, row))
-      : undefined,
+    valueCell: col.valueCell ? valueCellBody(col.valueCell) : undefined,
     onEditStart: col.onEditStart,
     editCommitHandler: col.editCommitHandler,
     onEditCommit: col.onEditCommit,

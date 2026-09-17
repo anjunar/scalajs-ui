@@ -139,11 +139,21 @@ private[bridge] trait ColumnFacade extends js.Object {
   val standardTextFormatter: js.UndefOr[js.Function1[js.Any, String]] = js.native
   val standardTextParser: js.UndefOr[js.Function1[String, js.Any]]    = js.native
 
-  /** `(row) => (scope) => void` -- the cell body, already wrapped in `withScope` on the TS side. */
-  val cell: js.UndefOr[js.Function1[js.Any, js.Function1[ScopeHandleBridge, Unit]]] = js.native
-  val value: js.UndefOr[js.Function1[js.Any, js.Any]]                               = js.native
+  /** `(row, context) => (scope) => void` -- the cell body, already wrapped in `withScope` on the
+    * TS side. `context` is this cell's own index/empty/selected/focused/editing state (D05).
+    */
+  val cell: js.UndefOr[
+    js.Function2[js.Any, TableCellContextBridge, js.Function1[ScopeHandleBridge, Unit]]
+  ] = js.native
+  val value: js.UndefOr[js.Function1[js.Any, js.Any]] = js.native
+  /** `(value, row, context) => (scope) => void`, same `context` as `cell` above (D05). */
   val valueCell: js.UndefOr[
-    js.Function2[ReadOnlyPropertyHandle[js.Any], js.Any, js.Function1[ScopeHandleBridge, Unit]]
+    js.Function3[
+      ReadOnlyPropertyHandle[js.Any],
+      js.Any,
+      TableCellContextBridge,
+      js.Function1[ScopeHandleBridge, Unit]
+    ]
   ] = js.native
 }
 
@@ -603,9 +613,11 @@ private[bridge] object TableViewFactory extends ComponentFactory {
         }
         col.cell.foreach { renderer =>
           column.setCellRenderer((row: js.Any) =>
-            (_: AbstractComponent) ?=>
-              (_: Cursor) ?=>
-                renderer(row)(new ScopeHandleBridge(summon[AbstractComponent], summon[Cursor]))
+            (cell: AbstractComponent) ?=>
+              (cursor: Cursor) ?=>
+                renderer(row, new TableCellContextBridge(cell.asInstanceOf[TableCell[js.Any, js.Any]]))(
+                  new ScopeHandleBridge(cell, cursor)
+                )
           )
         }
         col.valueCell.foreach { renderer =>
@@ -618,7 +630,8 @@ private[bridge] object TableViewFactory extends ComponentFactory {
                 ): Unit =
                   renderer(
                     new ReadOnlyPropertyHandle(itemProperty),
-                    tableRow.asInstanceOf[ui.control.table.TableRow[js.Any]].itemProperty.get
+                    tableRow.asInstanceOf[ui.control.table.TableRow[js.Any]].itemProperty.get,
+                    new TableCellContextBridge(this)
                   )(new ScopeHandleBridge(parent, cursor))
               }
             )
