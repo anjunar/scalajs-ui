@@ -1,4 +1,5 @@
-import { attr, button, classes, classIf, div, element, onClick, onInput, property, style, text, when } from "@anjunar/scalajs-ui-core";
+import { attr, button, classes, classIf, div, element, on, onClick, onInput, property, style, text, when } from "@anjunar/scalajs-ui-core";
+import { overlay } from "@anjunar/scalajs-ui-viewport";
 import { column, columnGroup, remoteSource, tableView } from "@anjunar/scalajs-ui-controls";
 import type { Property, ReadOnlyProperty, UiEvent } from "@anjunar/scalajs-ui-core";
 import type { ColumnDef, ColumnResizePolicy, RemotePage, RemoteSource, SortSpec, TableCellContext, TableDirection, TableSelectionMode, TableViewHandle } from "@anjunar/scalajs-ui-controls";
@@ -218,9 +219,23 @@ export function controlsTablePage(): void {
           cellSelectionEnabled,
           row: (row) => {
             classes("book-row");
-            const book = row.item.get;
-            if (book !== null) attr("title", `${book.title} · ${book.author} · ${book.year}`);
             style("font-weight", row.selected.map((selected) => selected ? "600" : "400"));
+            // V07: a per-row hover tooltip needs no dedicated "presenter" API -- the same
+            // on/when/overlay recipe used for a column header's own menu, just anchored to a row.
+            // Bound to row.item (not a snapshot), so it stays correct if virtualization later
+            // rebinds this row to another book.
+            const tooltipOpen = property(false);
+            on("mouseenter", () => tooltipOpen.set(true));
+            on("mouseleave", () => tooltipOpen.set(false));
+            when(tooltipOpen, () => {
+              overlay({ widthPx: 240 }, () => {
+                div(() => {
+                  classes("table-demo__row-tooltip");
+                  attr("role", "tooltip");
+                  text(row.item.map((book) => book === null ? "" : `${book.title} · ${book.author} · ${book.year}`));
+                });
+              });
+            });
             row.renderCells();
           },
           crawlable: true,
@@ -287,6 +302,7 @@ export function controlsTablePage(): void {
           translated("In cell mode, Shift-click and Shift+Arrow select an inclusive rectangle."),
           translated("Focus the table: Up/Down, Home/End and PageUp/PageDown navigate rows; Left/Right enters and moves cell focus. Shift extends row selection; Ctrl/Cmd moves focus only; Space selects."),
           translated("Books before 2000 are disabled (V05): visible and keyboard-reachable, but not selectable or editable."),
+          translated("Hover a row for its own tooltip (V07): a plain overlay anchored to the row, the same recipe as a column header's own menu."),
         ],
         () => {
           button(translated("Toggle single / multiple selection"), {}, () => {

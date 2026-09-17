@@ -1289,6 +1289,20 @@
     color: var(--aj-accent-strong);
 }
 
+/* Row hover tooltip (V07): a plain `overlay(...)` anchored to the row, not a dedicated tooltip
+ * component -- see TableViewPage.scala's `rowFactory`.
+ */
+.table-demo__row-tooltip {
+    padding: 6px 10px;
+    border: 1px solid var(--aj-line);
+    border-radius: var(--radius-surface);
+    background: var(--aj-surface-overlay);
+    box-shadow: var(--aj-shadow-float);
+    font-size: 13px;
+    color: var(--aj-ink);
+    pointer-events: none;
+}
+
 .table-demo__stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
