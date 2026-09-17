@@ -1,6 +1,7 @@
 package ui.editor
 
 import ui.core.component.AbstractComponent
+import ui.core.dsl.AttributeDsl
 import ui.core.dsl.AttributeDsl.setAttribute
 import ui.core.dsl.ClassDsl.classes
 import ui.core.dsl.DslLayer
@@ -39,7 +40,11 @@ private object MarkdownRenderer {
   private final case class Quote(blocks: Seq[Block])                               extends Block
   private final case class ListBlock(ordered: Boolean, items: Seq[String])         extends Block
   private final case class CodeBlock(language: String, value: String)              extends Block
-  private final case class TableBlock(header: Seq[String], rows: Seq[Seq[String]]) extends Block
+  private final case class TableBlock(
+      header: Seq[String],
+      alignments: Seq[Option[String]],
+      rows: Seq[Seq[String]]
+  ) extends Block
   private case object HorizontalRule                                               extends Block
 
   private final class Element(tag: String) extends AbstractComponent {
@@ -52,6 +57,17 @@ private object MarkdownRenderer {
   private val fencePattern: Regex          = "^\\s*(`{3,})([A-Za-z0-9_+.-]*)\\s*$".r
   private val horizontalRulePattern: Regex = "^\\s{0,3}((\\*\\s*){3,}|(-\\s*){3,}|(_\\s*){3,})$".r
   private val tableSeparatorCell: Regex    = "^:?-{3,}:?$".r
+
+  /** `left`/`center`/`right` from a separator cell's colons, or `None` for plain `---`. */
+  private def alignmentOf(separator: String): Option[String] = {
+    val trimmed = separator.trim
+    (trimmed.startsWith(":"), trimmed.endsWith(":")) match {
+      case (true, true)  => Some("center")
+      case (true, false) => Some("left")
+      case (false, true) => Some("right")
+      case _             => None
+    }
+  }
 
   private val inlineTokens: Seq[(String, Regex)] = Seq(
     "image"               -> MarkdownImages.regex,
@@ -143,7 +159,8 @@ private object MarkdownRenderer {
             result += ListBlock(ordered = true, items.toSeq)
 
           case _ if isTableStart(lines, index) =>
-            val header = splitTableRow(lines(index))
+            val header     = splitTableRow(lines(index))
+            val alignments = splitTableRow(lines(index + 1)).map(alignmentOf)
             index += 2
             val rows = mutable.ArrayBuffer.empty[Seq[String]]
             while (
@@ -152,7 +169,7 @@ private object MarkdownRenderer {
               rows += splitTableRow(lines(index))
               index += 1
             }
-            result += TableBlock(header, rows.toSeq)
+            result += TableBlock(header, alignments, rows.toSeq)
 
           case _ =>
             val paragraph = mutable.ArrayBuffer.empty[String]
@@ -249,17 +266,26 @@ private object MarkdownRenderer {
             text(value) {}
           }
         }
-      case TableBlock(header, rows) =>
+      case TableBlock(header, alignments, rows) =>
+        // Resolved with the `using AttributeDsl` in scope at each call site (the freshly opened
+        // th/td), not the table's own -- an explicit clause, unlike a captured closure, is looked
+        // up again per call.
+        def align(index: Int)(using AttributeDsl): Unit =
+          alignments.lift(index).flatten.foreach(setAttribute("align", _))
         element("table") {
           element("thead") {
             element("tr") {
-              header.foreach { cell => element("th") { renderInline(cell) } }
+              header.zipWithIndex.foreach { (cell, index) =>
+                element("th") { align(index); renderInline(cell) }
+              }
             }
           }
           element("tbody") {
             rows.foreach { row =>
               element("tr") {
-                row.foreach { cell => element("td") { renderInline(cell) } }
+                row.zipWithIndex.foreach { (cell, index) =>
+                  element("td") { align(index); renderInline(cell) }
+                }
               }
             }
           }

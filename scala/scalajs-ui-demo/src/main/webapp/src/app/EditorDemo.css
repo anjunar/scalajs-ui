@@ -235,6 +235,31 @@
     white-space: pre !important;
 }
 
+.scalajs-ui-editor__surface table {
+    border-collapse: collapse;
+    margin: 0 0 .8em;
+    width: 100%;
+}
+
+.scalajs-ui-editor__surface :is(th, td) {
+    border: 1px solid var(--aj-line-soft);
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.scalajs-ui-editor__surface th {
+    background: var(--aj-surface-muted);
+    font-weight: 600;
+}
+
+/* Read by ember-table's own cell-range highlight stylesheet (TableSelectionView), injected into
+   the document head -- defining the token here just follows this app's theme instead of ember's
+   hardcoded fallback color. */
+.scalajs-ui-editor__surface {
+    --ember-table-selection: var(--aj-accent-muted);
+}
+
 .scalajs-ui-editor__surface:focus {
     box-shadow: inset var(--aj-shadow-focus);
 }

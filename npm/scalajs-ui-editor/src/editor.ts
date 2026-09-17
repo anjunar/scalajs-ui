@@ -2,8 +2,9 @@
  * Native Ember rich-text field in the shared Scala JS UI runtime. Markdown remains
  * the form value. Link and image forms mount directly in a Viewport ancestor.
  * The ribbon provides grouped commands with keyboard navigation; menu/floating
- * use a compact toolbar. The Markdown view preserves documents with features
- * outside the native model (tables, raw HTML, extra text marks).
+ * use a compact toolbar. Tables edit natively, with row/column commands and a
+ * draggable cell-range selection. The Markdown view preserves documents with
+ * features outside the native model (raw HTML, extra text marks).
  */
 import { component, type Property } from "@anjunar/scalajs-ui-core";
 import { defined } from "./internal.js";
@@ -45,8 +46,10 @@ export interface MediaUploadStatus {
 
 /** Toolbar capabilities of a mounted editor -- not extensions; see `createEditor` for those.
  * Empty/omitted uses the standard set.
- * base: bold, italic, inline code; table: opens the Markdown source view.
- * Omitted capabilities do not restrict the document schema.
+ * base: bold, italic, inline code; table: insert a table plus row/column/table commands, shown
+ * only while the caret or selection is inside one.
+ * Omitted capabilities do not restrict the document schema -- tables, like every other node type,
+ * always decode and render; the plugin only gates the toolbar commands that create or edit them.
  */
 export type EditorPluginName =
   | "base"
@@ -82,7 +85,7 @@ export interface EditorOptions {
   readonly readonlyLabel?: string;
   /** Defaults to `"ribbon"`, `ui.editor.Editor`'s own default. */
   readonly toolbarMode?: EditorToolbarMode;
-  /** Defaults to the standard toolbar. The table capability opens Markdown source. */
+  /** Defaults to the standard toolbar. The table capability adds table commands. */
   readonly plugins?: readonly EditorPluginName[];
   /**
    * Receives the live session each time the visual surface mounts one -- in the browser only, and

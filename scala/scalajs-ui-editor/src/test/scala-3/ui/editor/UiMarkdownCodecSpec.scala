@@ -6,7 +6,8 @@ import ember.editor.image.*
 import ember.editor.link.*
 import ember.editor.list.ListExtension
 import ember.editor.code.CodeExtension
-import ember.editor.standard.MarkdownSupports
+import ember.editor.table.{TableExtension, TableNode}
+import ember.editor.standard.{MarkdownSupports, TableSupport}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -20,13 +21,14 @@ final class UiMarkdownCodecSpec extends AnyFlatSpec with Matchers {
         ImageExtension(generator, nativePolicy),
         LinkExtension(generator),
         ListExtension(generator),
-        CodeExtension(generator)
+        CodeExtension(generator),
+        TableExtension(generator)
       )
     )
     .toOption
     .get
   private val codec = new UiMarkdownCodec(
-    MarkdownSupports.everything(media = nativePolicy),
+    MarkdownSupports.everything(media = nativePolicy) ++ TableSupport.markdownRules,
     generator,
     ui.editor.MediaUrlPolicy.internal
   )
@@ -66,8 +68,11 @@ final class UiMarkdownCodecSpec extends AnyFlatSpec with Matchers {
       def resolve(src: String) =
         Some(ui.editor.MediaReference(if (src == "/alias") "/media/cat.webp" else src))
     }
-    val canonical =
-      new UiMarkdownCodec(MarkdownSupports.everything(media = nativePolicy), generator, policy)
+    val canonical = new UiMarkdownCodec(
+      MarkdownSupports.everything(media = nativePolicy) ++ TableSupport.markdownRules,
+      generator,
+      policy
+    )
     val document =
       canonical.decode("![Real](/alias){width=320}", extensions.schema, NodeId("root")).toOption.get
     canonical.encode(document).toOption.get should include("![Real](/media/cat.webp){width=320}")
@@ -76,7 +81,14 @@ final class UiMarkdownCodecSpec extends AnyFlatSpec with Matchers {
     decode("![Image](/media/cat.webp){width=-1}").isLeft shouldBe true
     decode("![Image](https://external.test/cat.webp)").isLeft shouldBe true
   }
-  it should "report tables as source-only before a visual edit can change their meaning" in {
-    decode("| First | Second |\n| --- | --- |\n| A | B |").isLeft shouldBe true
+  it should "decode and re-encode GFM pipe tables through the native table model" in {
+    val document = decode("| First | Second |\n| --- | --- |\n| A | B |").toOption.get
+    document.inDocumentOrder.collect { case table: TableNode => table.header }.toVector shouldBe Vector(
+      true
+    )
+    val written = codec.encode(document).toOption.get
+    written should include("First")
+    written should include("Second")
+    written should include("---")
   }
 }

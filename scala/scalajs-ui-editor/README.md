@@ -34,11 +34,11 @@ editor("body") {
 
 ## Markdown contract
 
-The public value is CommonMark-shaped Markdown with the implemented project extensions: headings, paragraphs, block quotes, ordered and unordered lists, emphasis, strong, strike-through, highlight (`==text==`), inline code, links with optional titles, underline (`++text++`), fenced code blocks, images, horizontal rules, and basic GFM pipe tables. Image width can use `![alt](url){width=320}`.
+The public value is CommonMark-shaped Markdown with the implemented project extensions: headings, paragraphs, block quotes, ordered and unordered lists, emphasis, strong, strike-through, highlight (`==text==`), inline code, links with optional titles, underline (`++text++`), fenced code blocks, images, horizontal rules, and GFM pipe tables with column alignment. Image width can use `![alt](url){width=320}`.
 
 Raw HTML is rendered as text. Images require permanent internal paths beginning with a single `/`;
 external, data and blob URLs are rejected. Links retain their separate HTTP(S), mailto, tel and
-relative URL policy. Table alignment, captions, multiline cells, nested tables, and arbitrary
+relative URL policy. Table captions, multiline cells, nested tables, colspan/rowspan and arbitrary
 HTML are not represented.
 
 ## Media contract

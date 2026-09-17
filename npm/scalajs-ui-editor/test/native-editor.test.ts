@@ -3,18 +3,18 @@ import { installRuntime, mount, property, resetRuntime } from "@anjunar/scalajs-
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
 import { form } from "@anjunar/scalajs-ui-forms";
 import { viewport } from "@anjunar/scalajs-ui-viewport";
-import { editor } from "../src/index.js";
+import { editor, type EditorPluginName } from "../src/index.js";
 
 const disposers: (() => void)[] = [];
 beforeEach(() => { resetRuntime(); installRuntime(bridgeRuntime); });
 afterEach(() => { disposers.splice(0).reverse().forEach(f => f()); document.body.replaceChildren(); });
 
-function setup() {
+function setup(plugins: readonly EditorPluginName[] = ["base", "heading", "list", "link", "image", "code"]) {
   const root = document.createElement("div");
   document.body.append(root);
   const model = { body: property("Hello world") };
   const app = mount(root, () => viewport(() => form(model, {}, () => editor("body", {
-    plugins: ["base", "heading", "list", "link", "image", "code"],
+    plugins,
   }))));
   disposers.push(() => app.dispose());
   const surface = root.querySelector<HTMLElement>(".scalajs-ui-editor__surface")!;
@@ -101,5 +101,46 @@ describe("native Ember in the UI Viewport", () => {
     dialog.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     expect(f.model.body.get).toBe("Replacement");
     expect(dialog.querySelector('[role="alert"]')!.textContent).toContain("nicht mehr gültig");
+  });
+
+  it("inserts a table and edits its rows and columns through the toolbar", () => {
+    const f = setup(["base", "table"]);
+    f.select();
+    f.action("table-insert");
+    expect(f.surface.querySelectorAll("table tr")).toHaveLength(3);
+    expect(f.surface.querySelectorAll("tr")[0]!.querySelectorAll("th")).toHaveLength(3);
+    expect(f.model.body.get).toContain("| --- | --- | --- |");
+
+    const firstCell = f.surface.querySelector("td")!;
+    const range = document.createRange();
+    range.selectNodeContents(firstCell); range.collapse(true);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+
+    expect(f.root.querySelector<HTMLButtonElement>('[data-command="table-row-above"]')!.disabled).toBe(false);
+    f.action("table-row-below");
+    expect(f.surface.querySelectorAll("table tr")).toHaveLength(4);
+
+    f.action("table-column-after");
+    expect(f.surface.querySelectorAll("tr")[0]!.querySelectorAll("th")).toHaveLength(4);
+
+    f.action("table-delete-column");
+    expect(f.surface.querySelectorAll("tr")[0]!.querySelectorAll("th")).toHaveLength(3);
+
+    const remainingCell = f.surface.querySelector("td")!;
+    const cellRange = document.createRange();
+    cellRange.selectNodeContents(remainingCell); cellRange.collapse(true);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(cellRange);
+    document.dispatchEvent(new Event("selectionchange"));
+
+    f.action("table-delete");
+    expect(f.surface.querySelector("table")).toBeNull();
+  });
+
+  it("disables row and column commands outside a table", () => {
+    const f = setup(["base", "table"]);
+    f.select();
+    expect(f.root.querySelector<HTMLButtonElement>('[data-command="table-row-above"]')!.disabled).toBe(true);
+    expect(f.root.querySelector<HTMLButtonElement>('[data-command="table-delete"]')!.disabled).toBe(true);
   });
 });

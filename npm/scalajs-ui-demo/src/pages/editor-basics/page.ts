@@ -6,6 +6,7 @@ import { translated } from "../../app/i18n.js";
 const sampleMarkdown =
   "## Markdown editor\n\nThe public value stays **Markdown**.\n\n" +
   "- Grouped ribbon and native formatting\n- Direct Viewport dialogs\n\n" +
+  "| Plugin | Renders as |\n| --- | --- |\n| Tables | `table` |\n\n" +
   "```scala\nval publicValue = \"Markdown\"\n```\n\n---";
 
 export function editorBasicsPage(): void {
