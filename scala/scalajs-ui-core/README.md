@@ -9,7 +9,7 @@ The core Scala.js runtime and DSL for Scala JS UI 1.0. Use it to compose DOM com
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-core" % "1.0.4"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-core" % "1.0.5"
 ```
 
 Enable the Scala.js sbt plugin in the consuming project. In this repository the module is built with Scala 3.3.8 and sbt 2; `%%` supplies the Scala.js platform suffix in this build.
