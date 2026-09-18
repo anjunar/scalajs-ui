@@ -123,19 +123,6 @@ final class HydratingCursor private (
   def claimText(initial: String): TextNode = {
     val node = take()
     node match {
-      // Two adjacent literal text() calls serialize with nothing between them, so the browser's
-      // HTML parser merges them into one Text node -- there is no way to serialize two sibling
-      // Text nodes without an element or comment between them. Once merged, this node's data
-      // carries this text's own share plus whatever came after it. `splitText` is the standard DOM
-      // way to cut a Text node in place, and it inserts the remainder as the very next sibling, so
-      // the following `text()` call's own `take()` finds it exactly where a second SSR node would
-      // have been.
-      case text: dom.Text if text.data.length > initial.length && text.data.startsWith(initial) =>
-        HostMutationGuard.checkDom(parent, destructive = false)
-        val remainder = text.splitText(initial.length)
-        nextNode = Some(remainder).filter(next => !stopBefore.contains(next))
-        new DomTextNode(text)
-
       case text: dom.Text => new DomTextNode(text)
 
       // An empty text node left an anchor comment behind during SSR, because an empty text
@@ -250,6 +237,12 @@ final class HydratingCursor private (
           expected = "another DOM node before the range end anchor",
           found = Some(node)
         )
+
+      // Stands for no node of its own -- see SsrTextNode.Boundary -- so it is skipped exactly like
+      // inter-element whitespace, never returned as a node any claim call would consume.
+      case Some(comment: dom.Comment) if comment.data == SsrTextNode.BoundaryLabel =>
+        nextNode = Option(comment.nextSibling).filter(next => !stopBefore.contains(next))
+        take()
 
       case Some(node) =>
         nextNode = Option(node.nextSibling).filter(next => !stopBefore.contains(next))
@@ -557,5 +550,6 @@ object HydratingCursor {
   }
 
   private def isIgnorableWhitespace(node: dom.Node): Boolean =
-    node.nodeType == dom.Node.TEXT_NODE && node.textContent.trim.isEmpty
+    (node.nodeType == dom.Node.TEXT_NODE && node.textContent.trim.isEmpty) ||
+      (node.nodeType == dom.Node.COMMENT_NODE && node.textContent == SsrTextNode.BoundaryLabel)
 }
