@@ -9,7 +9,7 @@ This module is independent of the UI component runtime. It handles the browser c
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-webauthn" % "1.0.4"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-webauthn" % "1.0.5"
 ```
 
 ## Quick start

@@ -9,7 +9,7 @@ Model-bound forms and controls for Scala JS UI 1.0, including inputs, validation
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-forms" % "1.0.4"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-forms" % "1.0.5"
 ```
 
 ## Quick start

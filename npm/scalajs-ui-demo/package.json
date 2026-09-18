@@ -1,7 +1,7 @@
 {
   "name": "scalajs-ui-demo",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "A real consumer of @anjunar/scalajs-ui-core + @anjunar/scalajs-ui-router + @anjunar/scalajs-ui-bridge -- Vite dev server, Express SSR, hydration, client-side routing, plus Node runners that render the page bodies against the stub and against the linked Scala.js runtime. The Vite-side counterpart to the repo root's own scalajs-ui-demo/ setup.",
   "type": "module",
   "scripts": {

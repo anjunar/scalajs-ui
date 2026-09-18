@@ -1,6 +1,6 @@
 {
   "name": "@anjunar/scalajs-ui-router",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "The TypeScript routing API of Scala JS UI 1.0: route tables, nested outlets and navigating links, projected onto the ui.router.Router that runs in the Scala.js runtime published as @anjunar/scalajs-ui-bridge.",
   "type": "module",
   "types": "./dist/index.d.ts",
@@ -27,9 +27,9 @@
     "verify": "npm run typecheck && npm run test && npm run test:consumer"
   },
   "peerDependencies": {
-    "@anjunar/scalajs-ui-core": "^1.0.4",
-    "@anjunar/scalajs-ui-bridge": "^1.0.4",
-    "@anjunar/scalajs-ui": "^1.0.4"
+    "@anjunar/scalajs-ui-core": "^1.0.5",
+    "@anjunar/scalajs-ui-bridge": "^1.0.5",
+    "@anjunar/scalajs-ui": "^1.0.5"
   },
   "devDependencies": {
     "@anjunar/scalajs-ui-core": "*",

@@ -1,6 +1,6 @@
 {
   "name": "@anjunar/scalajs-ui-editor",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Native Ember rich-text control with a grouped ribbon, direct Viewport dialogs and Markdown form binding in the shared Scala.js UI runtime.",
   "type": "module",
   "types": "./dist/index.d.ts",
@@ -27,11 +27,11 @@
     "verify": "npm run typecheck && npm run test && npm run test:consumer"
   },
   "peerDependencies": {
-    "@anjunar/scalajs-ui-core": "^1.0.4",
-    "@anjunar/scalajs-ui-forms": "^1.0.4",
-    "@anjunar/scalajs-ui-viewport": "^1.0.4",
-    "@anjunar/scalajs-ui": "^1.0.4",
-    "@anjunar/scalajs-ui-bridge": "^1.0.4"
+    "@anjunar/scalajs-ui-core": "^1.0.5",
+    "@anjunar/scalajs-ui-forms": "^1.0.5",
+    "@anjunar/scalajs-ui-viewport": "^1.0.5",
+    "@anjunar/scalajs-ui": "^1.0.5",
+    "@anjunar/scalajs-ui-bridge": "^1.0.5"
   },
   "devDependencies": {
     "@anjunar/scalajs-ui-core": "*",
