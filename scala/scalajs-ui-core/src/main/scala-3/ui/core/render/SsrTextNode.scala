@@ -24,6 +24,16 @@ object SsrTextNode {
 
   val EmptyAnchor: String = s"<!--$EmptyAnchorLabel-->"
 
+  /** Separates two adjacent literal text nodes in server-rendered HTML. Two `text()` calls next to
+    * each other -- nothing between them but character data -- would otherwise parse back as one
+    * merged Text node, the same reason an empty text node needs [[EmptyAnchor]]: HTML has no way to
+    * serialize two sibling text runs without an element or comment between them. Unlike
+    * `EmptyAnchor`, this stands for no node of its own; [[HydratingCursor]] skips it as it would
+    * skip inter-element whitespace, so it never becomes a hydration fault's "found" node either. */
+  val BoundaryLabel: String = "ui:text-boundary"
+
+  val Boundary: String = s"<!--$BoundaryLabel-->"
+
   /** Escaping for HTML character data.
     *
     * Also used by [[ui.core.document.HeadSink]], which builds its own nodes and therefore has to

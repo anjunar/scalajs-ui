@@ -146,9 +146,25 @@ final class SsrHostElement(val tagName: String) extends HostElement, SsrNode {
     * roots at a nameless host so that a component reconciled away at the very top of the tree -- a
     * route outlet's loading placeholder, a root-level `Foreach` item -- is removed from the output
     * the way it would be under a real element. `renderHtml()` there would wrap everything in `<>`.
+    *
+    * Two adjacent non-empty [[SsrTextNode]] children get [[SsrTextNode.Boundary]] between them:
+    * without it, two sibling text runs with nothing between them parse back as one merged Text
+    * node, and `HydratingCursor` would then run out of nodes for the second `text()` call.
     */
-  def renderChildrenHtml(): String =
-    children.map(_.renderHtml()).mkString
+  def renderChildrenHtml(): String = {
+    val builder          = new mutable.StringBuilder
+    var previousWasText  = false
+    for (child <- children) {
+      val isText = child match {
+        case text: SsrTextNode => text.getText.nonEmpty
+        case _                 => false
+      }
+      if (isText && previousWasText) builder.append(SsrTextNode.Boundary)
+      builder.append(child.renderHtml())
+      previousWasText = isText
+    }
+    builder.toString()
+  }
 
   private def escapeAttr(value: String): String =
     value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;")

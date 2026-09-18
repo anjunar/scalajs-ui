@@ -47,7 +47,9 @@ class HostEditingSpec extends AnyFlatSpec with Matchers {
     parent.insertBefore(a, None)
     parent.insertBefore(b, None)
     parent.insertBefore(b, Some(a))
-    parent.renderHtml() shouldBe "<p>ba</p>"
+    // "b" and "a" are two adjacent non-empty text nodes -- SsrTextNode.Boundary keeps the parser
+    // from merging them back into one Text node ("ba") during hydration.
+    parent.renderHtml() shouldBe "<p>b<!--ui:text-boundary-->a</p>"
     parent.childCount shouldBe 2
     val other = new SsrHostElement("p")
     other.insertBefore(b, None)
@@ -78,7 +80,8 @@ class HostEditingSpec extends AnyFlatSpec with Matchers {
     right.children shouldBe Seq(a, b)
     a.text.setText("updated")
     child(a, new TextComponent("!"))
-    cursor.collectHtml() shouldBe "<div><section></section><article><p>updated!</p><p>b</p></article></div>"
+    // "updated" and "!" are two adjacent non-empty text nodes -- see SsrTextNode.Boundary.
+    cursor.collectHtml() shouldBe "<div><section></section><article><p>updated<!--ui:text-boundary-->!</p><p>b</p></article></div>"
     Runtime.move(a, right, 1)
     right.children shouldBe Seq(b, a)
     Runtime.unmount(a)
