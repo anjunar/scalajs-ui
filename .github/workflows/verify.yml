@@ -54,6 +54,14 @@ jobs:
       - name: Link the core browser test application
         run: sbt --server "scalajs-ui-core-browser-tests/fullLinkJS"
 
+      # Every Scala.js artifact needed before Verify is already linked. Left
+      # running, the resident sbt server (a JVM) would sit through the whole
+      # npm test run competing with it for the runner's CPU and memory, so
+      # shut it down here. It starts fresh again from tools/build-pages.mjs's
+      # own sbt calls below, which is required anyway -- see the note there.
+      - name: Shut down sbt before verify
+        run: sbt --client shutdown
+
       - name: Install test browsers
         run: npm exec --workspace npm/scalajs-ui-core-browser-tests -- playwright install --with-deps chromium firefox webkit
 
@@ -76,10 +84,9 @@ jobs:
 
       # The Pages build runs two Scala.js links with different UI_BASE_PATH
       # values. A shared sbt server keeps the environment from its first
-      # client, so restart it before the first environment-sensitive link.
-      - name: Restart sbt for Pages build
-        run: sbt --client shutdown
-
+      # client, so it needs a fresh one for the first environment-sensitive
+      # link -- guaranteed here since sbt was shut down above and nothing
+      # between there and here starts a new one.
       - name: Build and validate GitHub Pages output
         run: node tools/build-pages.mjs
 
