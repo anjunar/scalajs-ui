@@ -10,5 +10,7 @@ export default defineConfig({
     environment: "jsdom",
     include: ["test/*.test.ts"],
     globals: false,
+    // jsdom has no window.matchMedia; the ribbon toolbar needs it. See test/setup.ts.
+    setupFiles: ["test/setup.ts"],
   },
 });
