@@ -14,6 +14,8 @@ export function editorBasicsPage(): void {
     title: property(translated("Getting started").get),
     body: property(sampleMarkdown),
   };
+  const editable = property(true);
+  const markdownMode = property(false);
   // Lent by the mounted editor in the browser; stays null during SSR.
   let session: EditorSession | null = null;
 
@@ -25,18 +27,30 @@ export function editorBasicsPage(): void {
         inputContainer({ label: translated("Title").get }, () => {
           input("title");
         });
-        editor("body", {
-          placeholder: translated("Write the article...").get,
-          plugins: ["base", "heading", "list", "link", "image", "table", "code", "horizontalRule"],
-          onSession: (lent) => {
-            session = lent;
-          },
+        div(() => {
+          classes("editor-demo__surface");
+          editor("body", {
+            placeholder: translated("Write the article...").get,
+            editable,
+            markdownMode,
+            showModeActions: false,
+            plugins: ["base", "heading", "list", "link", "image", "table", "code", "horizontalRule"],
+            onSession: (lent) => {
+              session = lent;
+            },
+          });
         });
       });
     });
 
     div(() => {
       classes("showcase-action-row");
+      button(translated("Readonly"), {}, () =>
+        onClick(() => editable.set(!editable.get))
+      );
+      button(translated("Markdown"), {}, () =>
+        onClick(() => markdownMode.set(!markdownMode.get))
+      );
       button(translated("Load article"), {}, () => onClick(() => model.body.set(sampleMarkdown)));
       button(translated("Clear editor"), {}, () => onClick(() => model.body.set("")));
       button(translated("Undo last change"), {}, () => onClick(() => session?.dispatch(undo)));

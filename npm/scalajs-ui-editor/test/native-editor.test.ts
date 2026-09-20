@@ -3,19 +3,20 @@ import { installRuntime, mount, property, resetRuntime } from "@anjunar/scalajs-
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
 import { form } from "@anjunar/scalajs-ui-forms";
 import { viewport } from "@anjunar/scalajs-ui-viewport";
-import { editor, type EditorPluginName } from "../src/index.js";
+import { editor, type EditorOptions, type EditorPluginName } from "../src/index.js";
 
 const disposers: (() => void)[] = [];
 beforeEach(() => { resetRuntime(); installRuntime(bridgeRuntime); });
 afterEach(() => { disposers.splice(0).reverse().forEach(f => f()); document.body.replaceChildren(); });
 
-function setup(plugins: readonly EditorPluginName[] = ["base", "heading", "list", "link", "image", "code"]) {
+function setup(
+  plugins: readonly EditorPluginName[] = ["base", "heading", "list", "link", "image", "code"],
+  options: Pick<EditorOptions, "editable" | "markdownMode" | "showModeActions"> = {},
+) {
   const root = document.createElement("div");
   document.body.append(root);
   const model = { body: property("Hello world") };
-  const app = mount(root, () => viewport(() => form(model, {}, () => editor("body", {
-    plugins,
-  }))));
+  const app = mount(root, () => viewport(() => form(model, {}, () => editor("body", { plugins, ...options }))));
   disposers.push(() => app.dispose());
   const surface = root.querySelector<HTMLElement>(".scalajs-ui-editor__surface")!;
   function select() {
@@ -63,6 +64,25 @@ describe("native Ember in the UI Viewport", () => {
     expect(f.root.querySelectorAll('.ember-toolbar button[tabindex="0"]')).toHaveLength(1);
     expect(f.root.querySelector('[data-command="bold"]')?.getAttribute("aria-pressed")).toBe("true");
     expect(f.root.querySelectorAll('.ember-ribbon-group[role="group"]').length).toBeGreaterThan(2);
+    expect(f.root.querySelector('[data-command="bold"]')?.classList).toContain("material-icons");
+    expect(f.root.querySelector('[data-command="bold"]')?.textContent).toBe("format_bold");
+    expect(f.root.querySelector('[data-command="paragraph"]')?.textContent).toBe("notes");
+  });
+
+  it("lets the caller own readonly and Markdown actions outside the editor", () => {
+    const editable = property(true);
+    const markdownMode = property(false);
+    const f = setup(undefined, { editable, markdownMode, showModeActions: false });
+    expect(f.root.querySelector(".scalajs-ui-editor__markdown-actions")).toBeNull();
+    expect(f.surface.getAttribute("contenteditable")).toBe("true");
+
+    markdownMode.set(true);
+    expect(f.surface.style.display).toBe("none");
+    expect(f.root.querySelector<HTMLTextAreaElement>("textarea")!.parentElement!.style.display).not.toBe("none");
+
+    markdownMode.set(false);
+    editable.set(false);
+    expect(f.surface.getAttribute("contenteditable")).toBe("false");
   });
 
   it("opens a Viewport window, validates the URL, and applies the saved selection", () => {

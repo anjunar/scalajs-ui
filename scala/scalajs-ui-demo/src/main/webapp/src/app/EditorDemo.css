@@ -128,7 +128,8 @@
 }
 
 .editor-demo__surface {
-    min-height: 240px;
+    height: 420px;
+    min-height: 0;
 }
 
 .scalajs-ui-editor,
@@ -138,8 +139,8 @@
 }
 
 .scalajs-ui-editor__shell {
-    display: grid;
-    grid-template-rows: auto auto 1fr;
+    display: flex;
+    flex-direction: column;
 }
 
 .scalajs-ui-editor__toolbar {
@@ -212,16 +213,21 @@
 
 .scalajs-ui-editor__surface-wrap {
     position: relative;
-    min-height: 180px;
-    /* scalajs-ui-editor__shell is display:grid; a grid item's default min-width is auto, which
-       lets a long code line's intrinsic width grow this box past its track instead of letting the
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    overflow: auto;
+    /* A flex item's default min-width is auto, which
+       lets a long code line's intrinsic width grow this box past its container instead of letting the
        code block's own overflow: auto scroll. */
     min-width: 0;
 }
 
 .scalajs-ui-editor__surface {
-    min-height: 180px;
+    min-height: 0;
     height: 100%;
+    box-sizing: border-box;
+    overflow: auto;
     padding: 18px;
     color: var(--aj-ink);
     outline: none;

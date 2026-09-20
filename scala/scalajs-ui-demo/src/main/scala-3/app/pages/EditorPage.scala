@@ -4,7 +4,9 @@ import app.components.Showcase
 import ui.core.component.AbstractComponent
 import ui.core.component.AbstractComponent.*
 import ui.core.dsl.ClassDsl.classes
+import ui.core.dsl.EventDsl.onClick
 import ui.core.dsl.StyleDsl.*
+import ui.core.layout.Button.{button, buttonType}
 import ui.core.layout.Div.div
 import ui.core.layout.TextComponent.text
 import ui.core.layout.VBox.vbox
@@ -19,6 +21,8 @@ object EditorPage {
   def render(_context: RouteContext)(using AbstractComponent, Cursor): Unit = {
     val document   = initialDocument()
     val state      = Property(document)
+    val editorEditable = Property(true)
+    val markdownView   = Property(false)
     val editorName = "article"
 
     Showcase.showcasePage(
@@ -28,7 +32,7 @@ object EditorPage {
       Showcase.sectionIntro(
         i18n"Structured content",
         i18n"One Markdown value",
-        i18n"A request-aware SSR host renders Markdown as semantic HTML or a textarea. The static GitHub Pages snapshot starts read-only and changes mode after hydration."
+        i18n"The demo starts writable. Markdown source and readonly presentation are explicit modes outside the editor."
       )
 
       Showcase.componentShowcase(
@@ -42,7 +46,9 @@ object EditorPage {
             classes = Seq("editor-demo__surface")
             placeholder = i18n"Write the article..."
             value = state.get
-            editable = false
+            editable = editorEditable
+            markdownMode = markdownView
+            showModeActions = false
             ribbonToolbar()
 
             basePlugin()
@@ -55,6 +61,18 @@ object EditorPage {
             horizontalRulePlugin()
 
             addDisposable(valueProperty.observe(state.set))
+          }
+
+          div {
+            classes = Seq("showcase-action-row")
+            button(i18n"Readonly") {
+              buttonType("button")
+              onClick { _ => editorEditable.set(!editorEditable.get) }
+            }
+            button(i18n"Markdown") {
+              buttonType("button")
+              onClick { _ => markdownView.set(!markdownView.get) }
+            }
           }
 
           div {

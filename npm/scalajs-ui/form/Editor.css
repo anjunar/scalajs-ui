@@ -41,6 +41,11 @@
     min-height: inherit;
 }
 
+.scalajs-ui-editor__fallback {
+    height: 100%;
+    min-height: 0;
+}
+
 .scalajs-ui-editor__markdown-actions {
     display: flex;
     justify-content: flex-end;
@@ -68,7 +73,8 @@
 .scalajs-ui-editor__markdown-textarea {
     display: block;
     width: 100%;
-    min-height: 220px;
+    min-height: 0;
+    height: 100%;
     box-sizing: border-box;
     resize: vertical;
     border: 0;
@@ -90,8 +96,8 @@
 }
 
 .scalajs-ui-editor__shell {
-    display: grid;
-    grid-template-rows: auto auto 1fr;
+    display: flex;
+    flex-direction: column;
 }
 
 .scalajs-ui-editor__toolbar {
@@ -164,18 +170,22 @@
 
 .scalajs-ui-editor__surface-wrap {
     position: relative;
-    min-height: 180px;
-    height: 100%;
-    /* A grid item's (scalajs-ui-editor__shell is display:grid) default min-width is auto, not 0 --
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    overflow: auto;
+    /* A flex item's default min-width is auto, not 0 --
        without this, a long unbroken code line's intrinsic width grows this box (and the whole
-       editor shell with it) past its grid track instead of staying put so NativeEditor.css's
+       editor shell with it) past its container instead of staying put so NativeEditor.css's
        overflow: auto on the code block's <pre> can ever produce a scrollbar. */
     min-width: 0;
 }
 
 .scalajs-ui-editor__surface {
-    min-height: 180px;
+    min-height: 0;
     height: 100%;
+    box-sizing: border-box;
+    overflow: auto;
     padding: 18px;
     color: var(--aj-ink);
     outline: none;

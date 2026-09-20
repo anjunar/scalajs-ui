@@ -140,14 +140,15 @@ class AppSsrSpec extends AsyncFlatSpec with Matchers {
       }
   }
 
-  it should "render the Markdown editor readonly with an edit URL" in {
+  it should "render the Markdown editor writable with external mode actions" in {
     Runtime
       .renderToStringAsync(cursor => Runtime.mount(documentFor(desktopRequest, "/editor"), cursor))
       .map { html =>
         html should include("data-scalajs-ui-editor-format=\"markdown\"")
-        html should include("href=\"/scalajs-ui/en/editor?article.editor=editable\"")
-        html should include("<strong>Markdown</strong>")
-        html should not include "<textarea"
+        html should include("<textarea class=\"scalajs-ui-editor__markdown-textarea\" name=\"article\"")
+        html should include("Readonly")
+        html should include("Markdown")
+        html should not include "scalajs-ui-editor__markdown-actions"
       }
   }
 
@@ -160,8 +161,7 @@ class AppSsrSpec extends AsyncFlatSpec with Matchers {
         html should include(
           "<textarea class=\"scalajs-ui-editor__markdown-textarea\" name=\"article\""
         )
-        html should not include "href=\"/scalajs-ui/en/editor?article.editor=editable\""
-        html should include("href=\"/scalajs-ui/en/editor?article.editor=readonly\"")
+        html should not include "scalajs-ui-editor__markdown-actions"
       }
   }
 

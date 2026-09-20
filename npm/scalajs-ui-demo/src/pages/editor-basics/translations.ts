@@ -7,6 +7,8 @@ export const entries: readonly CatalogEntry[] = [
   catalogEntry(i18n`An Ember-based rich-text field with Markdown output, a complete toolbar, and live value feedback.`, { de: "Ein Ember-basierter Rich-Text-Editor mit Markdown-Ausgabe, vollständiger Toolbar und Live-Wertanzeige." }),
   catalogEntry(i18n`editor(), plugins: a model-bound Ember editor whose public Markdown value remains observable and replaceable.`, { de: "editor(), plugins: ein modellgebundener Ember-Editor, dessen öffentlicher Markdown-Wert beobachtbar und austauschbar bleibt." }),
   catalogEntry(i18n`Load article`, { de: "Artikel laden" }),
+  catalogEntry(i18n`Readonly`, { de: "Schreibgeschützt" }),
+  catalogEntry(i18n`Markdown`, { de: "Markdown" }),
   catalogEntry(i18n`Clear editor`, { de: "Editor leeren" }),
   catalogEntry(i18n`Undo last change`, { de: "Letzte Änderung rückgängig" }),
   catalogEntry(i18n`Markdown value`, { de: "Markdown-Wert" }),

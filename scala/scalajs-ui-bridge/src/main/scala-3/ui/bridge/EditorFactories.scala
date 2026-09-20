@@ -114,6 +114,16 @@ private[bridge] object EditorFactory extends ComponentFactory {
           )
         case value => self.configureEditable(ControlFactories.bool(value))
       }
+      options.get("markdownMode").foreach {
+        case handle: PropertyHandle[?] =>
+          self.configureMarkdownMode(
+            handle.underlyingProperty.asInstanceOf[CoreProperty[Boolean]]
+          )
+        case value => self.configureMarkdownMode(ControlFactories.bool(value))
+      }
+      options
+        .get("showModeActions")
+        .foreach(value => Editor.showModeActions_=(ControlFactories.bool(value))(using self))
       options
         .get("editUrl")
         .foreach(value => Editor.editUrl_=(ControlFactories.str(value))(using self))

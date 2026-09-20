@@ -352,43 +352,51 @@ private[editor] final class NativeEditorAdapter(
         else Vector.empty
       )
     ).filter(_.actions.nonEmpty)
-    val labels = Map(
-      "undo"                -> "↶",
-      "redo"                -> "↷",
-      "bold"                -> "F",
-      "italic"              -> "K",
-      "inline-code"         -> "</>",
-      "heading-1"           -> "H1",
-      "heading-2"           -> "H2",
-      "heading-3"           -> "H3",
-      "unquote"             -> "Ohne Zitat",
-      "bullet-list"         -> "• Liste",
-      "ordered-list"        -> "1. Liste",
-      "image"               -> "Bild",
-      "code-block"          -> "Code",
-      "table-insert"        -> "Tabelle",
-      "rule"                -> "Linie",
-      "upload-image"        -> "Upload",
-      "table-row-above"     -> "Zeile ↑",
-      "table-row-below"     -> "Zeile ↓",
-      "table-column-before" -> "Spalte ←",
-      "table-column-after"  -> "Spalte →",
-      "table-delete-row"    -> "Zeile −",
-      "table-delete-column" -> "Spalte −",
-      "table-delete"        -> "Tabelle −"
+    // Keep the native ribbon visually and semantically aligned with ember-demo's DemoRibbon.
+    // EditorToolbar puts the full, localised action label in aria-label/title, so icon ligatures
+    // retain an accessible name instead of falling back to abbreviated visible text.
+    val icons = Map(
+      "undo"                -> "undo",
+      "redo"                -> "redo",
+      "bold"                -> "format_bold",
+      "italic"              -> "format_italic",
+      "inline-code"         -> "code",
+      "paragraph"           -> "notes",
+      "heading-1"           -> "looks_one",
+      "heading-2"           -> "looks_two",
+      "heading-3"           -> "looks_3",
+      "quote"               -> "format_quote",
+      "unquote"             -> "format_clear",
+      "bullet-list"         -> "format_list_bulleted",
+      "ordered-list"        -> "format_list_numbered",
+      "indent"              -> "format_indent_increase",
+      "outdent"             -> "format_indent_decrease",
+      "link"                -> "link",
+      "image"               -> "image",
+      "code-block"          -> "code",
+      "table-insert"        -> "table_chart",
+      "upload-image"        -> "upload",
+      "rule"                -> "horizontal_rule",
+      "table-row-above"     -> "arrow_upward",
+      "table-row-below"     -> "arrow_downward",
+      "table-column-before" -> "arrow_back",
+      "table-column-after"  -> "arrow_forward",
+      "table-delete-row"    -> "remove",
+      "table-delete-column" -> "remove",
+      "table-delete"        -> "delete"
     )
-    val labelledGroups = groups.map(group =>
+    val iconGroups = groups.map(group =>
       group.copy(actions =
-        group.actions.map(action => action.copy(shortLabel = labels.get(action.id)))
+        group.actions.map(action => action.copy(icon = icons.get(action.id)))
       )
     )
     val ribbon = toolbarMode == EditorToolbarMode.Ribbon
     bar = new EditorToolbar(
       session,
       selection,
-      labelledGroups.flatMap(_.actions),
+      iconGroups.flatMap(_.actions),
       name = "Text bearbeiten",
-      groups = if (ribbon) labelledGroups else Vector.empty
+      groups = if (ribbon) iconGroups else Vector.empty
     )
     Runtime.mount(bar, DomCursor.root(toolbar))
     toolbar.classList.add(if (ribbon) "scalajs-ui-editor__ribbon" else "scalajs-ui-editor__compact")

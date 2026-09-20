@@ -70,24 +70,32 @@ object Main {
   private def renderClientSide(
       request: RequestContext,
       url: String
-  )(using ec: ExecutionContext): Future[Unit] =
-    Option(dom.document.getElementById("root")) match {
-      case Some(root) =>
-        while (root.firstChild != null) root.removeChild(root.firstChild)
-
-        val async = new AsyncRenderContext()
-        try {
-          Runtime.mount(new App(request, url), DomCursor.root(root, async))
-          async.drain()
-        } catch {
-          case error: Throwable =>
-            async.cancel()
-            Future.failed(error)
-        }
-
-      case None =>
-        Future.failed(new IllegalStateException("Hydration recovery could not find #root."))
+  )(using ec: ExecutionContext): Future[Unit] = {
+    // `<body>` (and the `#root` div inside it) is owned by the mounted AppDocument, not by a
+    // static index.html, so a failed hydration attempt can take it down with the rest of the
+    // document tree (see the note on `hydratedDocument` above). Rebuild the scaffold here instead
+    // of assuming it survived -- an existing `<body>` is reused and cleared, a missing one recreated.
+    val body = Option(dom.document.body).getOrElse {
+      val created = dom.document.createElement("body")
+      dom.document.documentElement.appendChild(created)
+      created
     }
+    while (body.firstChild != null) body.removeChild(body.firstChild)
+
+    val root = dom.document.createElement("div")
+    root.setAttribute("id", "root")
+    body.appendChild(root)
+
+    val async = new AsyncRenderContext()
+    try {
+      Runtime.mount(new App(request, url), DomCursor.root(root, async))
+      async.drain()
+    } catch {
+      case error: Throwable =>
+        async.cancel()
+        Future.failed(error)
+    }
+  }
 
   /** Renders the complete document for `path`.
     *

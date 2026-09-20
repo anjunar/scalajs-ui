@@ -13,8 +13,8 @@ object EditorPageTranslations {
     de(i18n"Structured content", "Strukturierte Inhalte"),
     de(i18n"One Markdown value", "Ein Markdown-Wert"),
     de(
-      i18n"A request-aware SSR host renders Markdown as semantic HTML or a textarea. The static GitHub Pages snapshot starts read-only and changes mode after hydration.",
-      "Ein anfragebasierter SSR-Host rendert Markdown als semantisches HTML oder Textarea. Der statische GitHub-Pages-Snapshot startet schreibgeschützt und wechselt den Modus nach der Hydration."
+      i18n"The demo starts writable. Markdown source and readonly presentation are explicit modes outside the editor.",
+      "Die Demo startet schreibbar. Markdown-Quelle und schreibgeschützte Darstellung sind explizite Modi außerhalb des Editors."
     ),
     de(i18n"Full editor", "Vollständiger Editor"),
     de(
@@ -22,6 +22,8 @@ object EditorPageTranslations {
       "Formatierung, Überschriften, Listen, Links, Bilder, Tabellen, Code und Trennlinien sind unabhängige Plugins."
     ),
     de(i18n"Write the article...", "Artikel schreiben …"),
+    de(i18n"Readonly", "Schreibgeschützt"),
+    de(i18n"Markdown", "Markdown"),
     de(i18n"Readonly SSR preview", "Schreibgeschützte SSR-Vorschau"),
     de(
       i18n"The same Markdown value remains meaningful before JavaScript starts and when editing is disabled.",
