@@ -113,6 +113,26 @@ final class EditorSpec extends AnyFlatSpec with Matchers {
     editableHtml should include("scalajs-ui-editor__readonly-link")
   }
 
+  it should "let callers place mode actions outside the editor" in {
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new EditorRoot {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            editor("article", standalone = true) {
+              Editor.value = "# Source mode"
+              editable = true
+              markdownMode = true
+              showModeActions = false
+            }
+        },
+        cursor
+      )
+    }
+
+    html should include("<textarea")
+    html should not include "scalajs-ui-editor__markdown-actions"
+  }
+
   it should "derive its mode from UrlScope and preserve the remaining route URL" in {
     val readonly = Runtime.renderToString { cursor =>
       Runtime.mount(

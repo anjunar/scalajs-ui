@@ -75,6 +75,10 @@ export interface EditorOptions {
   readonly placeholder?: string;
   /** Whether the field is editable. A Property keeps external controls and the editor in sync. */
   readonly editable?: boolean | Property<boolean>;
+  /** Whether to show the Markdown source textarea. A Property keeps external controls in sync. */
+  readonly markdownMode?: boolean | Property<boolean>;
+  /** Renders the built-in Markdown and readonly mode actions. Defaults to `true`. */
+  readonly showModeActions?: boolean;
   /** Optional override for the Edit link; defaults to `?${name}.editor=editable`. */
   readonly editUrl?: string;
   /** Label for `editUrl`; defaults to `"Edit"`. */
