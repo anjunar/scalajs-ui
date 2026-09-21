@@ -1,6 +1,6 @@
 {
   "name": "@anjunar/scalajs-ui-webauthn",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "The browser-side WebAuthn and passkey API for Scala JS UI 1.0, with strict JSON codecs and JSON-safe credential payloads.",
   "type": "module",
   "types": "./dist/index.d.ts",

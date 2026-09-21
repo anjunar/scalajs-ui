@@ -52,7 +52,7 @@ Add Scala JS UI 1.0 in `build.sbt` (sbt 2 uses `%%` for the Scala.js platform su
 enablePlugins(ScalaJSPlugin)
 scalaVersion := "3.3.8"
 scalaJSUseMainModuleInitializer := true
-libraryDependencies += "com.anjunar" %% "scalajs-ui-core" % "1.0.5"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-core" % "1.0.6"
 ```
 
 Add a host element to `index.html`:
@@ -184,7 +184,7 @@ npm run verify --workspace npm/scalajs-ui-core
 
 ## Project status and license
 
-The repository is on the `1.0.5` release line and under active development. The complete Scala suite and every npm workspace verification run in CI for pushes and pull requests. Source, releases, and issue tracking live in the [GitHub repository](https://github.com/anjunar/scalajs-ui).
+The repository is on the `1.0.6` release line and under active development. The complete Scala suite and every npm workspace verification run in CI for pushes and pull requests. Source, releases, and issue tracking live in the [GitHub repository](https://github.com/anjunar/scalajs-ui).
 
 Scala JS UI 1.0 is available under the [MIT License](LICENSE).
 

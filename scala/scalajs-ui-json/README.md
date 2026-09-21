@@ -9,7 +9,7 @@ Schema-driven JSON mapping for reflected Scala models and UI properties. The map
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-json" % "1.0.5"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-json" % "1.0.6"
 ```
 
 ## Quick start
