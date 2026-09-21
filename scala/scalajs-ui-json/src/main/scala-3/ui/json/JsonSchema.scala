@@ -21,12 +21,34 @@ final class JsonSchema[T] private[json] (
 
 object JsonSchema {
 
+  inline given derived[T]: JsonSchema[T] = ${ JsonSchemaDerivation.derive[T] }
+
   def fromDescriptor[T](
       descriptor: ClassDescriptor,
       dependencies: Seq[JsonSchema[?]] = Seq.empty,
       subtypes: Seq[JsonSchema[?]] = Seq.empty
   ): JsonSchema[T] =
     new JsonSchema(descriptor, dependencies.toVector, subtypes.toVector)
+
+  def fromDerivedDescriptors[T](
+      descriptors: Seq[ClassDescriptor],
+      subtypeNames: Map[String, Seq[String]]
+  ): JsonSchema[T] = {
+    val basic = descriptors.map(descriptor =>
+      descriptor.typeName -> fromDescriptor[Any](descriptor)
+    ).toMap
+    val schemas = descriptors.map { descriptor =>
+      fromDescriptor[Any](
+        descriptor,
+        subtypes = subtypeNames.getOrElse(descriptor.typeName, Seq.empty).map(basic)
+      )
+    }
+    fromDescriptor[T](
+      schemas.head.descriptor,
+      dependencies = schemas.tail,
+      subtypes = schemas.head.subtypes
+    )
+  }
 
   inline def apply[T](inline factory: () => T)(using classTag: ClassTag[T]): JsonSchema[T] = {
     val descriptor = ReflectMacros.reflectWithAccessors[T]

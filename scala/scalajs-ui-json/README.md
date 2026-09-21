@@ -1,10 +1,10 @@
 # scalajs-ui-json
 
-Schema-driven JSON mapping for reflected Scala models and UI properties. The mapper converts models to native JavaScript JSON values and back without a global descriptor registry.
+JSON mapping for reflected Scala models and UI properties. The mapper converts models to native JavaScript JSON values and back without a global descriptor registry.
 
 ## Overview
 
-`scalajs-ui-json` uses an explicit `JsonSchema` for factories, reflected accessors, dependencies, and polymorphic subtypes. `JsonMapper` is stateless; schema resolution is local to the mapper and the schema graph. It supports plain fields, `Property`, `ListProperty`, options, maps, Scala collections, arrays, `js.Array`, primitives, parameterized models, and polymorphic models.
+`scalajs-ui-json` derives reflected accessors, nested models, and default-constructor factories at compile time. `JsonMapper` is stateless; schema resolution is local to each mapping operation. An explicit `JsonSchema` remains available for models that need a custom factory or dependency graph. The mapper supports plain fields, `Property`, `ListProperty`, options, maps, Scala collections, arrays, `js.Array`, primitives, parameterized models, and polymorphic models.
 
 ## Installation
 
@@ -16,14 +16,12 @@ libraryDependencies += "com.anjunar" %% "scalajs-ui-json" % "1.0.6"
 
 ```scala
 import ui.core.state.Property
-import ui.json.{JsonMapper, JsonSchema}
+import ui.json.JsonMapper
 
 final case class Account(
     id: Property[String] = Property(""),
     name: Property[String] = Property("")
 )
-
-given JsonSchema[Account] = JsonSchema(() => Account())
 
 val account = Account()
 account.id.set("a-1")
@@ -35,18 +33,21 @@ val restored = JsonMapper.deserialize[Account](json)
 
 ## Usage
 
-Attach nested schemas explicitly and declare polymorphic subtype sets locally:
+Nested models follow their field types automatically. Declare permitted polymorphic subtypes on the abstract class:
 
 ```scala
-val addressSchema = JsonSchema(() => Address())
-given JsonSchema[Account] =
-  JsonSchema(() => Account()).withDependencies(addressSchema)
+import ui.json.{JsonSubType, JsonSubTypes, JsonType}
 
-val circleSchema = JsonSchema(() => Circle())
-given JsonSchema[Shape] = JsonSchema.abstractType[Shape](circleSchema)
+@JsonSubTypes(new JsonSubType(classOf[Circle]))
+sealed abstract class Shape
+
+@JsonType("circle")
+final class Circle(var radius: Int = 0) extends Shape
+
+val shape = JsonMapper.deserialize[Shape](json)
 ```
 
-`JsonProperty` changes the JSON field name. `JsonIgnore` controls serialization and deserialization independently. `JsonId` retains a stable identifier when dirty-payload serialization omits unchanged properties. `JsonType` supplies the `@type` discriminator for polymorphic models.
+`JsonProperty` changes the JSON field name and can take a model class, for example `@(JsonProperty @field)(classOf[Circle])` on a field declared as `Shape`. `JsonIgnore` controls serialization and deserialization independently. `JsonId` retains a stable identifier when dirty-payload serialization omits unchanged properties. `JsonType` supplies the `@type` discriminator for polymorphic models. Models without default constructor arguments require an explicit `JsonSchema` factory.
 
 ## Core concepts
 
@@ -55,8 +56,8 @@ The mapper treats `Property` and `ListProperty` values as state-bearing fields. 
 ## API overview
 
 - `JsonMapper` — serialize and deserialize models and arrays.
-- `JsonSchema` — factories, field metadata, dependencies, and subtypes.
-- `JsonProperty`, `JsonIgnore`, `JsonId`, `JsonType` — mapping annotations.
+- `JsonSchema` — optional custom factories, field metadata, dependencies, and subtypes.
+- `JsonProperty`, `JsonIgnore`, `JsonId`, `JsonType`, `JsonSubTypes` — mapping annotations.
 - `JsonSerializer`, `JsonDeserializer`, `JsonValueCodec` — mapping internals used by the facade.
 
 ## Related modules
