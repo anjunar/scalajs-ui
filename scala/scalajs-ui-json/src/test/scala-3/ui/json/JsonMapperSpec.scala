@@ -10,6 +10,8 @@ import scala.annotation.meta.field
 import scala.collection.immutable.ListMap
 import scala.scalajs.js
 import scala.scalajs.js.Dynamic.literal
+import scala.scalajs.reflect.Reflect
+import scala.scalajs.reflect.annotation.EnableReflectiveInstantiation
 
 class JsonMapperSpec extends AnyFlatSpec with Matchers {
 
@@ -63,6 +65,16 @@ class JsonMapperSpec extends AnyFlatSpec with Matchers {
     restored.id.get shouldBe "profile-1"
     restored.info.get.id.get shouldBe "info-1"
     restored.info.get.firstName.get shouldBe "Nested"
+  }
+
+  it should "derive nested models without an explicit schema" in {
+    val restored = JsonMapper.deserialize[Profile](
+      literal(id = "profile-2", info = literal(id = "info-2", firstName = "Derived"))
+    )
+
+    restored.id.get shouldBe "profile-2"
+    restored.info.get.id.get shouldBe "info-2"
+    restored.info.get.firstName.get shouldBe "Derived"
   }
 
   it should "ignore JsonIgnore properties in both directions by default" in {
@@ -122,6 +134,26 @@ class JsonMapperSpec extends AnyFlatSpec with Matchers {
 
     restored shouldBe a[Circle]
     restored.asInstanceOf[Circle].radius.get shouldBe 9
+  }
+
+  it should "derive annotated subtypes without an explicit schema" in {
+    val restored = JsonMapper.deserialize[Shape](literal(`@type` = "circle", radius = 7))
+
+    restored shouldBe a[Circle]
+    restored.asInstanceOf[Circle].radius.get shouldBe 7
+
+    val dot = JsonMapper.deserialize[Shape](literal(`@type` = "dot"))
+    dot shouldBe a[Dot]
+    Reflect.lookupInstantiatableClass("ui.json.Dot").flatMap(_.getConstructor()).nonEmpty shouldBe true
+  }
+
+  it should "accept a model class from JsonProperty" in {
+    val restored = JsonMapper.deserialize[ShapeHolder](
+      literal(shape = literal(`@type` = "plainCircle", radius = 5))
+    )
+
+    restored.shape shouldBe a[PlainCircle]
+    restored.shape.asInstanceOf[PlainCircle].radius.get shouldBe 5
   }
 
   it should "reject unknown and missing types for abstract models" in {
@@ -338,12 +370,27 @@ final class DirectionalIgnore(
     var writeOnly: Property[String] = Property("")
 )
 
+@EnableReflectiveInstantiation
+@JsonSubTypes(new JsonSubType(classOf[Circle]), new JsonSubType(classOf[Dot]))
 sealed abstract class Shape
 
 @JsonType("circle")
 final class Circle(
     var radius: Property[Int] = Property(0)
 ) extends Shape
+
+@JsonType("dot")
+final class Dot extends Shape
+
+sealed abstract class PlainShape
+
+@JsonType("plainCircle")
+final class PlainCircle(var radius: Property[Int] = Property(0)) extends PlainShape
+
+final class ShapeHolder(
+    @(JsonProperty @field)(classOf[PlainCircle])
+    var shape: PlainShape = new PlainCircle()
+)
 
 final class Reply(
     var text: Property[String] = Property("")
