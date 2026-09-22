@@ -100,12 +100,8 @@ private[json] object JsonMetadata {
         }
     } else {
       jsonType match {
-        case Some(typeName) =>
-          byType.getOrElse {
-            throw new IllegalArgumentException(
-              s"Unknown @type '$typeName' for ${declared.typeName}"
-            )
-          }
+        case Some(_) =>
+          byType.getOrElse(declared)
         case None =>
           declared
       }

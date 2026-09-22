@@ -77,6 +77,15 @@ class JsonMapperSpec extends AnyFlatSpec with Matchers {
     restored.info.get.firstName.get shouldBe "Derived"
   }
 
+  it should "read foreign type metadata into a concrete model" in {
+    val restored = JsonMapper.deserialize[AnnotatedPerson](
+      literal(`@type` = "foreign-person", fullName = "Grace", age = 41)
+    )
+
+    restored.name.get shouldBe "Grace"
+    restored.age.get shouldBe 41
+  }
+
   it should "ignore JsonIgnore properties in both directions by default" in {
     val mapper = JsonMapperSpec.mapper
     val user   = IgnoredSecret()

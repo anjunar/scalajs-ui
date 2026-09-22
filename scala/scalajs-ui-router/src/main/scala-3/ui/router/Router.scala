@@ -23,6 +23,7 @@ class Router(
     extends AbstractCustomComponent {
 
   private var renderToken        = 0
+  private var routeAbortController = Option.empty[dom.AbortController]
   private var asyncCursorContext = Option.empty[ui.core.async.AsyncRenderContext]
   private var browserEnabled     = false
   private var currentBrowserUrl  = () => initialUrl
@@ -77,6 +78,7 @@ class Router(
     }
 
     installPopStateListener()
+    addDisposable(() => routeAbortController.foreach(_.abort()))
   }
 
   def hrefFor(path: String): String = {
@@ -129,6 +131,8 @@ class Router(
     resolveCurrentRoute(hydrating = false)
 
   private def resolveCurrentRoute(hydrating: Boolean): Unit = {
+    routeAbortController.foreach(_.abort())
+    routeAbortController = Option.when(browserEnabled)(new dom.AbortController())
     renderToken += 1
 
     val token = renderToken
@@ -259,7 +263,8 @@ class Router(
       state = renderContext.state,
       routeMatch = routeMatch,
       locale = renderContext.state.locale,
-      failure = renderContext.failure
+      failure = renderContext.failure,
+      signal = routeAbortController.map(_.signal)
     )
   }
 
