@@ -16,5 +16,6 @@ final case class RouteContext(
       * its situation from the context rather than from a separate context type. `path` and
       * `browserPath` are still the visitor's, `fullPath` and `routeMatch` are the error route's.
       */
-    failure: Option[RouteFailure] = None
+    failure: Option[RouteFailure] = None,
+    signal: Option[org.scalajs.dom.AbortSignal] = None
 )
