@@ -44,6 +44,7 @@ final class ImageCropper private (
   override val tagName: String = "div"
 
   override val valueProperty: Property[Media]       = Property(null)
+  val committedValueProperty: Property[Media]       = Property(null)
   val sourceProperty: Property[Media]               = Property(null)
   val fileProperty: Property[File]                  = Property(null)
   val imageValidators: ListProperty[ImageValidator] = ListProperty()
@@ -117,7 +118,7 @@ final class ImageCropper private (
             }
           }
           onClick { _ =>
-            if (editableProperty.get) currentSource().foreach(openCropWindow)
+            if (editableProperty.get) currentSource().foreach(source => openCropWindow(source))
           }
         }
 
@@ -239,7 +240,7 @@ final class ImageCropper private (
 
   def openEditor(): Option[Viewport.WindowConf] =
     if (!editableProperty.get) None
-    else currentSource().map(openCropWindow)
+    else currentSource().map(source => openCropWindow(source))
 
   def clear(): Unit = {
     Option(activeSession).foreach(cancelCropSession)
@@ -247,6 +248,7 @@ final class ImageCropper private (
     fileProperty.set(null)
     sourceProperty.set(null)
     valueProperty.set(null)
+    committedValueProperty.setAlways(null)
   }
 
   private def onFileChange(): Unit = {
@@ -263,11 +265,13 @@ final class ImageCropper private (
             .map(_.toString.trim)
             .filter(_.nonEmpty)
             .foreach { encoded =>
+              val previousValue = valueProperty.get
+              val previousDirty = dirtyProperty.get
               val media = mediaFromFile(selectedFile, encoded)
               dirtyProperty.set(true)
               sourceProperty.set(media)
               valueProperty.set(media)
-              openCropWindow(media)
+              openCropWindow(media, previousValue, previousDirty)
             }
         }
 
@@ -285,15 +289,15 @@ final class ImageCropper private (
       .orElse(Option(valueProperty.get))
       .filter(hasImageData)
 
-  private def openCropWindow(source: Media): Viewport.WindowConf = {
+  private def openCropWindow(source: Media, initialValue: Media = valueProperty.get, initialDirty: Boolean = dirtyProperty.get): Viewport.WindowConf = {
     Option(activeSession).filterNot(_.closed) match {
       case Some(current) =>
         Viewport.touchWindow(current.windowConf)
         current.windowConf
       case None =>
         val session = ImageCropperDialog.Session(
-          initialValue = valueProperty.get,
-          initialDirty = dirtyProperty.get
+          initialValue = initialValue,
+          initialDirty = initialDirty
         )
         val width  = max(520, positive(previewMaxWidthValue, 480) + 40)
         val height = max(460, positive(previewMaxHeightValue, 360) + 100)
@@ -322,6 +326,7 @@ final class ImageCropper private (
       activeSession = null
       dirtyProperty.set(true)
       valueProperty.set(media)
+      committedValueProperty.set(media)
       closeCropWindow(session)
     }
 
