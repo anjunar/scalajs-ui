@@ -101,9 +101,35 @@ private[editor] final class NativeEditorAdapter(
     surface.ownerDocument.createElement("input").asInstanceOf[dom.HTMLInputElement]
 
   private def decode(source: String): Document = {
-    markdownCodec
+    val document = markdownCodec
       .decode(source, resolved.schema, NodeId("document"))
       .fold(error => throw new IllegalArgumentException(error.message), identity)
+    if (hasBlocks(document)) document else editableEmpty(document.rootId)
+  }
+
+  private def hasBlocks(document: Document): Boolean =
+    document.node(document.rootId).exists {
+      case root: RootNode => root.children.nonEmpty
+      case _              => true
+    }
+
+  // Empty Markdown decodes to a bare root, which has no caret position: typing into it does
+  // nothing. The rich-text profile asks for one empty paragraph instead (RichText.emptyDocument),
+  // kept under this editor's root id.
+  private def editableEmpty(rootId: NodeId): Document = {
+    val paragraphId = generator.next(_ == rootId)
+    val textId      = generator.next(id => id == rootId || id == paragraphId)
+    Document
+      .build(
+        resolved.schema,
+        rootId,
+        Vector(
+          RootNode(rootId, Vector(paragraphId)),
+          ParagraphNode(paragraphId, Vector(textId)),
+          TextNode(textId, "")
+        )
+      )
+      .fold(violations => throw new IllegalArgumentException(violations.map(_.render).mkString("; ")), identity)
   }
 
   def mount(markdown: String, editable: Boolean): Unit = {
