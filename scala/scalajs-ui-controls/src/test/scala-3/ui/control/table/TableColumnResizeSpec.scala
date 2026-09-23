@@ -92,9 +92,9 @@ class TableColumnResizeSpec extends AnyFlatSpec with Matchers {
           TableColumn[String, String]
       ) => Unit
   ): Unit = {
-    var table: TableView[String]           = null
-    var group: TableColumn[String, Any]    = null
-    var first: TableColumn[String, String] = null
+    var table: TableView[String]            = null
+    var group: TableColumn[String, Any]     = null
+    var first: TableColumn[String, String]  = null
     var second: TableColumn[String, String] = null
     var third: TableColumn[String, String]  = null
     val root                                = Runtime.mount(
@@ -169,7 +169,9 @@ class TableColumnResizeSpec extends AnyFlatSpec with Matchers {
       val policy: CustomColumnResizePolicy = request =>
         request.target match {
           case Some((indices, delta)) =>
-            request.widths.zipWithIndex.map((w, i) => if (indices.contains(i)) w + delta else w - delta * 2)
+            request.widths.zipWithIndex.map((w, i) =>
+              if (indices.contains(i)) w + delta else w - delta * 2
+            )
           case None => request.widths
         }
       table.customResizePolicyProperty.set(Some(policy))
@@ -178,12 +180,13 @@ class TableColumnResizeSpec extends AnyFlatSpec with Matchers {
       table.renderedWidthsProperty.get shouldBe Vector(230, 140)
   }
 
-  it should "reject a malformed result and keep the previous widths" in mounted { (table, first, _) =>
-    table.applyViewportSize(400, 200)
-    val before = table.renderedWidthsProperty.get
-    table.customResizePolicyProperty.set(Some(_ => Vector(1.0)))
-    table.resizeColumn(first, 30) shouldBe false
-    table.renderedWidthsProperty.get shouldBe before
+  it should "reject a malformed result and keep the previous widths" in mounted {
+    (table, first, _) =>
+      table.applyViewportSize(400, 200)
+      val before = table.renderedWidthsProperty.get
+      table.customResizePolicyProperty.set(Some(_ => Vector(1.0)))
+      table.resizeColumn(first, 30) shouldBe false
+      table.renderedWidthsProperty.get shouldBe before
   }
 
   it should "fall back to the built-in strategy once cleared" in mounted { (table, first, second) =>

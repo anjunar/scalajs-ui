@@ -182,11 +182,11 @@ class TableEditSpec extends AnyFlatSpec with Matchers {
   }
 
   "A disabled row (V05)" should "refuse to start editing and project ui-table-row-disabled/aria-disabled" in {
-    val ada                                = new Person(Property("Ada"))
-    val grace                              = new Person(Property("Grace"))
-    val source                             = ListProperty(js.Array(ada, grace))
-    var name: TableColumn[Person, String]  = null
-    val (root, table, cursor)              = mountTable(source) {
+    val ada                               = new Person(Property("Ada"))
+    val grace                             = new Person(Property("Grace"))
+    val source                            = ListProperty(js.Array(ada, grace))
+    var name: TableColumn[Person, String] = null
+    val (root, table, cursor)             = mountTable(source) {
       summon[TableView[Person]].editableProperty.set(true)
       summon[TableView[Person]].rowDisabledProperty.set(Some(_.name.get == "Ada"))
       name = column[Person, String]("Name") { cellValueFactory = _.value.name }

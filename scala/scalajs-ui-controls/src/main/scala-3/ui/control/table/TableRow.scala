@@ -6,7 +6,7 @@ import ui.core.dsl.DslLayer
 import ui.core.dsl.EventDsl.{onClick, onDoubleClick}
 import ui.core.dsl.StyleDsl.*
 import ui.core.render.{Cursor, DomHostElement}
-import ui.core.state.{Property, ReadOnlyProperty}
+import ui.core.state.{Disposable, Property, ReadOnlyProperty}
 import ui.core.statement.DynamicComponentRenderer.dynamic
 import org.scalajs.dom
 
@@ -17,18 +17,18 @@ class TableRow[S] private[control] (
 
   override val tagName: String = "div"
 
-  private val itemState                            = Property[S | Null](null)
-  private val indexState                           = Property(-1)
-  private val emptyState                           = Property(true)
-  private val selectedState                        = Property(false)
-  private val focusedState                         = Property(false)
-  private val disabledState                        = Property(false)
-  val focusedProperty: ReadOnlyProperty[Boolean]   = focusedState
-  val itemProperty: ReadOnlyProperty[S | Null]     = itemState
-  val indexProperty: ReadOnlyProperty[Int]         = indexState
-  val emptyProperty: ReadOnlyProperty[Boolean]     = emptyState
-  val selectedProperty: ReadOnlyProperty[Boolean]  = selectedState
-  val disabledProperty: ReadOnlyProperty[Boolean]  = disabledState
+  private val itemState                           = Property[S | Null](null)
+  private val indexState                          = Property(-1)
+  private val emptyState                          = Property(true)
+  private val selectedState                       = Property(false)
+  private val focusedState                        = Property(false)
+  private val disabledState                       = Property(false)
+  val focusedProperty: ReadOnlyProperty[Boolean]  = focusedState
+  val itemProperty: ReadOnlyProperty[S | Null]    = itemState
+  val indexProperty: ReadOnlyProperty[Int]        = indexState
+  val emptyProperty: ReadOnlyProperty[Boolean]    = emptyState
+  val selectedProperty: ReadOnlyProperty[Boolean] = selectedState
+  val disabledProperty: ReadOnlyProperty[Boolean] = disabledState
 
   private var ownerTable: TableView[S] | Null = null
   def tableView: TableView[S] | Null          = ownerTable
@@ -82,7 +82,9 @@ class TableRow[S] private[control] (
       style {
         display = "flex"
         width = "100%"
-        height = "100%"
+        height = owner.variableRowHeightProperty.map(variable => if (variable) "auto" else "100%")
+        minHeight = owner.rowHeightProperty.map(value => s"${math.max(1.0, value)}px")
+        boxSizing = "border-box"
       }
 
       if (placeholder) {
@@ -109,16 +111,18 @@ class TableRow[S] private[control] (
         // for a disabled index too (TableSelectionModel.click/clickCell, TableView.canStartEdit),
         // so this is a defense-in-depth short-circuit, not the only guard.
         addDisposable(
-          table.rowDisabledProperty.flatMap { predicate =>
-            itemProperty.map { item =>
-              predicate.exists { pred =>
-                item match {
-                  case value: S @unchecked => pred(value)
-                  case null                => false
+          table.rowDisabledProperty
+            .flatMap { predicate =>
+              itemProperty.map { item =>
+                predicate.exists { pred =>
+                  item match {
+                    case value: S @unchecked => pred(value)
+                    case null                => false
+                  }
                 }
               }
             }
-          }.observe(disabledState.set)
+            .observe(disabledState.set)
         )
         classIf("ui-table-row-disabled", disabledProperty)
         addDisposable(
@@ -152,6 +156,53 @@ class TableRow[S] private[control] (
       renderContent(using this, cursor)
     }
   }
+
+  override def afterCompose(cursor: Cursor): Unit =
+    if (cursor.isBrowser) cursor.afterHydration { () =>
+      if (!isDisposed) {
+        var measurement: Disposable = Disposable.empty
+        addDisposable(requireTableView().variableRowHeightProperty.observe { enabled =>
+          measurement.dispose()
+          measurement = if (enabled) observeHeight() else Disposable.empty
+        })
+        addDisposable(Disposable(measurement.dispose()))
+      }
+    }
+
+  private def observeHeight(): Disposable =
+    domElement.fold[Disposable](Disposable.empty) { element =>
+      var active  = true
+      val measure =
+        () => if (active) requireTableView().handleMeasuredRowHeight(this, heightOf(element))
+      val frame    = dom.window.requestAnimationFrame(_ => measure())
+      val observer = new dom.ResizeObserver((_, _) => measure())
+      observer.observe(element)
+      Disposable {
+        active = false
+        dom.window.cancelAnimationFrame(frame)
+        observer.disconnect()
+      }
+    }
+
+  private[table] def measuredHeight: Option[Double] =
+    domElement.map(heightOf).filter(_ > 0)
+
+  private def heightOf(element: dom.html.Element): Double = {
+    val fractional = element.getBoundingClientRect().height
+    if (fractional > 0) fractional else element.offsetHeight.toDouble
+  }
+
+  private def domElement: Option[dom.html.Element] =
+    if (!isBound || isDisposed) None
+    else
+      host match {
+        case domHost: DomHostElement =>
+          domHost.node match {
+            case element: dom.html.Element => Some(element)
+            case _                         => None
+          }
+        case _ => None
+      }
 
   /** Customize contents while retaining table-owned selection, binding and disposal. */
   protected def renderContent(using AbstractComponent, Cursor): Unit = renderCells

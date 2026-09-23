@@ -39,6 +39,8 @@ export const entries: readonly CatalogEntry[] = [
   catalogEntry(i18n`Drag a column edge to resize. Focus its grip and use arrow keys for keyboard resizing.`, { de: "Ziehe am Spaltenrand, um die Breite zu ändern. Fokussiere den Ziehgriff und nutze die Pfeiltasten für die Tastaturbedienung." }),
   catalogEntry(i18n`Toggle constrained / free column widths`, { de: "Angepasste/freie Spaltenbreiten umschalten" }),
   catalogEntry(i18n`Toggle left-to-right / right-to-left`, { de: "Links-nach-rechts/Rechts-nach-links umschalten" }),
+  catalogEntry(i18n`Toggle fixed / variable row heights`, { de: "Feste/variable Zeilenhöhen umschalten" }),
+  catalogEntry(i18n`A longer catalogue description that wraps in narrow columns.`, { de: "Eine längere Katalogbeschreibung, die in schmalen Spalten umbricht." }),
   catalogEntry(i18n`Go to row 500`, { de: "Zu Zeile 500 springen" }),
   catalogEntry(i18n`Go to first row`, { de: "Zur ersten Zeile springen" }),
   catalogEntry(i18n`Show selected row`, { de: "Ausgewählte Zeile anzeigen" }),

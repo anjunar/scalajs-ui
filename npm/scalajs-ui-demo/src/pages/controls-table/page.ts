@@ -112,6 +112,7 @@ export function controlsTablePage(): void {
   const cellSelectionEnabled = property(false);
   const resizePolicy = property<ColumnResizePolicy>("flex-last-column");
   const direction = property<TableDirection>("ltr");
+  const variableRows = property(false);
   const notes = new Map<string, Property<string>>();
   const noteFor = (book: Book): Property<string> => {
     let note = notes.get(book.title);
@@ -155,7 +156,19 @@ export function controlsTablePage(): void {
         source,
         [
           columnGroup(translated("Book").get, [
-            column(translated("Title").get, (book) => text(book.title), {
+            column(translated("Title").get, (book) => {
+              div(() => {
+                style("white-space", "normal");
+                text(book.title);
+                if (book.year % 5 === 0) when(variableRows, () => {
+                  div(() => {
+                    style("font-size", "12px");
+                    style("line-height", "1.35");
+                    text(translated("A longer catalogue description that wraps in narrow columns."));
+                  });
+                });
+              });
+            }, {
               prefWidth: 280, minWidth: 140, maxWidth: 900, sortable: true, sortKey: "title",
               // C09: replaces the default header text with an icon + label, and the default
               // CSS-only sort arrow with a small pill showing direction/priority.
@@ -211,6 +224,7 @@ export function controlsTablePage(): void {
           // like columnResizePolicy above -- set once, the same as row/customResizePolicy.
           rowDisabled: (book) => book.year < 2000,
           rowHeight: 40,
+          variableRowHeight: variableRows,
           tableMenuButtonVisible: true,
           columnMenuText: translated("Columns"),
           columnResizePolicy: resizePolicy,
@@ -333,6 +347,8 @@ export function controlsTablePage(): void {
             resizePolicy.set(resizePolicy.get === "unconstrained" ? "flex-last-column" : "unconstrained")));
           button(translated("Toggle left-to-right / right-to-left"), {}, () => onClick(() =>
             direction.set(direction.get === "ltr" ? "rtl" : "ltr")));
+          button(translated("Toggle fixed / variable row heights"), {}, () => onClick(() =>
+            variableRows.set(!variableRows.get)));
         },
       );
 

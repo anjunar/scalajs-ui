@@ -842,6 +842,81 @@ describe("table-view", () => {
     return viewport;
   }
 
+  it("measures variable table rows, anchors scrolling and switches back to fixed height", async () => {
+    const originalObserver = globalThis.ResizeObserver;
+    const resize = new Map<Element, () => void>();
+    globalThis.ResizeObserver = class {
+      private readonly observed = new Set<Element>();
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe(element: Element): void {
+        this.observed.add(element);
+        resize.set(element, () => this.callback([], this as unknown as ResizeObserver));
+      }
+      unobserve(element: Element): void { this.observed.delete(element); resize.delete(element); }
+      disconnect(): void { for (const element of this.observed) resize.delete(element); this.observed.clear(); }
+    } as unknown as typeof ResizeObserver;
+    const variable = property(true);
+    const root = document.createElement("div");
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(Array.from({ length: 30 }, (_, index) => index)),
+        [valueColumn("ID", row => row)],
+        { paging: false, rowHeight: 20, variableRowHeight: variable, showHeader: false });
+    });
+    try {
+      const viewport = measureTable(root);
+      const row = (index: number): HTMLElement => root.querySelector<HTMLElement>(
+        `.ui-table-row-slot .ui-table-row[aria-rowindex="${index + 1}"]`)!;
+      const slot = (index: number): HTMLElement => row(index).parentElement!;
+      const heights = new Map([[0, 30], [1, 50]]);
+      for (const index of [0, 1])
+        Object.defineProperty(row(index), "offsetHeight", { configurable: true, get: () => heights.get(index)! });
+      window.dispatchEvent(new Event("resize"));
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(slot(1).style.top).toBe("30px");
+      expect(slot(2).style.top).toBe("80px");
+      expect(root.querySelector<HTMLElement>(".ui-table-rows-surface")!.style.height).toBe("640px");
+      const thirdRow = row(2);
+
+      viewport.scrollTop = 90;
+      viewport.dispatchEvent(new Event("scroll"));
+      heights.set(0, 50);
+      resize.get(row(0))!();
+      expect(viewport.scrollTop).toBe(110);
+      expect(slot(2).style.top).toBe("100px");
+      expect(row(2)).toBe(thirdRow);
+
+      table.scrollToIndex(10);
+      expect(viewport.scrollTop).toBe(180);
+      variable.set(false);
+      expect(viewport.scrollTop).toBe(120);
+      table.scrollToIndex(0);
+      expect(slot(2).style.top).toBe("40px");
+      expect(root.querySelector<HTMLElement>(".ui-table-rows-surface")!.style.height).toBe("600px");
+    } finally {
+      app.dispose();
+      globalThis.ResizeObserver = originalObserver;
+    }
+  });
+
+  it("hydrates variable-height rows before starting browser measurement", async () => {
+    const build = (): void => {
+      tableView(listProperty(["Short", "Longer content"]),
+        [valueColumn("Text", row => row)],
+        { paging: true, rowHeight: 28, variableRowHeight: true });
+    };
+    const rendered = await renderToString(build);
+    const root = document.createElement("div"); root.innerHTML = rendered.html;
+    const firstRow = root.querySelector(".ui-table-row");
+    expect(firstRow).not.toBeNull();
+    expect(root.querySelector<HTMLElement>(".ui-table-row-slot")!.style.height).toBe("auto");
+    const app = await hydrate(root, build);
+    try {
+      expect(root.querySelector(".ui-table-row")).toBe(firstRow);
+      expect(root.querySelector<HTMLElement>(".ui-table-row-slot")!.style.minHeight).toBe("28px");
+    } finally { app.dispose(); }
+  });
+
   it("keeps logical focus independent and navigates/selects rows with keyboard modifiers", async () => {
     const root = document.createElement("div"); document.body.appendChild(root);
     let table!: TableViewHandle<number>;

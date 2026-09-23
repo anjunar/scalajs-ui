@@ -143,7 +143,8 @@ class TableCell[S, T] extends AbstractComponent {
         if (supportsIntegratedEditor)
           onDoubleClick { event =>
             event.raw match {
-              case mouse: org.scalajs.dom.MouseEvent if !emptyProperty.get && !disabledProperty.get =>
+              case mouse: org.scalajs.dom.MouseEvent
+                  if !emptyProperty.get && !disabledProperty.get =>
                 val element = host
                   .asInstanceOf[ui.core.render.DomHostElement]
                   .node

@@ -154,6 +154,19 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
     html should include regex "min-height: 80(?:\\.0)?px"
   }
 
+  it should "render variable row slots with a deterministic minimum before browser measurement" in {
+    val html = renderTable(Seq("Alice", "Bob")) {
+      rowHeight = 40
+      variableRowHeight = true
+    }
+
+    html should include("ui-table-row-slot")
+    html should include("height: auto")
+    html should include regex "min-height: 40(?:\\.0)?px"
+    html should include("Alice")
+    html should include("Bob")
+  }
+
   it should "restore the page from the route URL" in {
     val members = (0 until 25).map(index => s"Member $index")
     val html    = Runtime.renderToString { cursor =>
@@ -318,10 +331,10 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
 
   "TableColumn header/cell classes" should "reach the separately created header and every data cell" in {
     var nameColumn: TableColumn[String, String] = null
-    val cursor                                   = new SsrCursor()
-    val root = Runtime.mount(
+    val cursor                                  = new SsrCursor()
+    val root                                    = Runtime.mount(
       new AbstractComponent {
-        override val tagName: String = "main"
+        override val tagName: String               = "main"
         override def compose(cursor: Cursor): Unit =
           DslLayer.render(this, cursor) {
             tableView[String](ListProperty(js.Array("Ada", "Cara"))) {
@@ -357,11 +370,11 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
 
   "TableColumn headerCell/sortIndicator" should "replace the default header text and sort arrow with composed content" in {
     var nameColumn: TableColumn[String, String] = null
-    val remote                                    = remoteMembers(pageSize = 5)
-    val cursor                                    = new SsrCursor()
-    val root = Runtime.mount(
+    val remote                                  = remoteMembers(pageSize = 5)
+    val cursor                                  = new SsrCursor()
+    val root                                    = Runtime.mount(
       new AbstractComponent {
-        override val tagName: String = "main"
+        override val tagName: String               = "main"
         override def compose(cursor: Cursor): Unit =
           DslLayer.render(this, cursor) {
             tableView[String](remote) {
@@ -375,7 +388,11 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
                   div {
                     classes = Seq("custom-sort-icon")
                     text(
-                      state.map(s => if (!s.sorted) "none" else if (s.ascending) s"up${s.priority}" else s"down${s.priority}")
+                      state.map(s =>
+                        if (!s.sorted) "none"
+                        else if (s.ascending) s"up${s.priority}"
+                        else s"down${s.priority}"
+                      )
                     ) {}
                   }
                 }

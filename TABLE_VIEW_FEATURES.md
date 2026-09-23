@@ -1,6 +1,6 @@
 # TableView: Feature-Stand und Implementierungsplan
 
-Stand: 17.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltenbaum/Gruppenheader, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, stabile Zeilenschlüssel, RowFactory, Mehrfach- und Zell-/Rechteckauswahl, austauschbare Selection-/FocusModels, Zeilen-/Spaltennavigation samt Ereignissen und RTL, Spalten-Resizing samt Gruppen-Resize und eigenen Policy-Callbacks (C05), Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung, Standardzellen, Remote-Mehrspaltensortierung, Spaltenklassen (C10), Header-Grafik/Sortierdarstellung (C09), deaktivierte Zeilen (V05), vollständige Zellkontext-Projektion (D05), angepasste Darstellung, Menüs und Tooltips (V07) sowie das im echten Browser geprüfte ARIA-Grid-/Tastaturvertrag-Audit (S05/V06) · Referenz: JavaFX 26.
+Stand: 23.09.2026 · Ausgangsanalyse: `7295d92` · einschließlich Grundlagenpaket, Spaltenbaum/Gruppenheader, Spaltensichtbarkeit, Auswahl-/Remote-Vertrag, stabile Zeilenschlüssel, RowFactory, Mehrfach- und Zell-/Rechteckauswahl, austauschbare Selection-/FocusModels, Zeilen-/Spaltennavigation samt Ereignissen und RTL, fester und gemessener Zeilenhöhen, Spalten-Resizing samt Gruppen-Resize und eigenen Policy-Callbacks (C05), Drag-Reordering, Auto-Fit, Spaltenmenü, Zeilenfokus/Tastaturbedienung, Standardzellen, Remote-Mehrspaltensortierung, Spaltenklassen (C10), Header-Grafik/Sortierdarstellung (C09), deaktivierte Zeilen (V05), vollständige Zellkontext-Projektion (D05), angepasste Darstellung, Menüs und Tooltips (V07) sowie das im echten Browser geprüfte ARIA-Grid-/Tastaturvertrag-Audit (S05/V06) · Referenz: JavaFX 26.
 
 Dieses Dokument beschreibt, welche Funktionen unsere TableView bereits unterstützt und wie wir die fehlenden Fähigkeiten der JavaFX-TableView ergänzen. Es ist ein Implementierungsplan; als **geplant** bezeichnete Modelle, Methoden und Dateien existieren noch nicht.
 
@@ -12,7 +12,7 @@ Ziel ist funktionale Parität für Datenbindung, Zellen und Zeilen, Auswahl, Fok
 
 **Vereinbarte Abgrenzung:** Das bei `tableView(source)` übergebene Quellenobjekt bleibt für die Lebensdauer der Tabelle fest. Ein Austausch des gesamten lokalen/Remote-Quellenobjekts über `itemsProperty` ist nicht erforderlich. Änderungen, Resets, Reloads und Remote-Abfragewechsel innerhalb dieser Quelle bleiben vollständig im Umfang; die Tabelle übernimmt oder entsorgt eine vom Aufrufer gelieferte Quelle nicht.
 
-**Vereinbarte Abgrenzung:** `TableView` verwendet ausschließlich eine feste Zeilenhöhe. Variable beziehungsweise gemessene Zeilenhöhen gehören zu `VirtualListView` und sind kein Ziel der Tabellen-API; `fixedCellSize` bleibt in der Tabelle ein Alias für die feste `rowHeight`.
+**Zeilenhöhe:** Standardmäßig verwendet `TableView` weiterhin eine feste `rowHeight`. Mit `variableRowHeight` misst sie die sichtbaren Zeilen im Browser; `rowHeight` ist dann Mindesthöhe und Schätzwert für noch nicht gemessene Zeilen. `fixedCellSize` bleibt ein Alias für `rowHeight`.
 
 Die öffentliche [TableView-API von JavaFX 26](https://openui.io/javadoc/26/javafx.controls/javafx/scene/control/TableView.html) bildet den Referenzumfang. Zell- und Spaltenverträge werden zusätzlich gegen deren eigene APIs geprüft. Geerbte Darstellungsfunktionen werden auf DOM, Komponenten-Slots und Web-CSS abgebildet.
 
@@ -113,6 +113,15 @@ Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Er
 
 **Abnahme am 09.09.2026:** Vollständiges Scala-Gate (`Test/testOnly *`), Bridge-Full-Link und Scala-Demo-Fast-Link grün. npm-Gates Controls (60 Integrationstests + 3 Paket-Consumer), Core (114 + 8) und Demo (Client/SSR, Eine-Runtime-Nachweis, 31 Routen) grün. Ein neuer Scala-SSR-Test und sieben neue Integrationstestfälle prüfen Navigation, aktuelle Breiten/Reihenfolge, versteckte Spalten, Editor-/Auswahlerhalt, leere/headerlose Tabellen, native Begrenzung, kein Remote-Nachladen, unabhängige Zeilennavigation, Hydration, verdecktes Layout und Disposal. Im echten Browser: 1.000 px breite Tabelle in 846 px Viewport, Sprünge zwischen horizontal 0 und 154 px, identische Header-/Zellpositionen und bei Zeile 500 unverändert vertikal 19.783 px; keine Browserfehler.
 
+### Implementiert: gemessene Tabellenzeilen
+
+- `variableRowHeight` schaltet zwischen dem bisherigen festen Layout und browserseitig gemessenen Zeilen um. Die Option ist in Scala und TypeScript reaktiv; ein Wechsel erhält die sichtbare Zeilenposition. `rowHeight` ist im Messmodus Mindesthöhe und Schätzwert für ungemessene Zeilen.
+- Die TableView verwendet dieselbe `MeasuredRowGeometry` wie VirtualListView. Sichtbare Zeilen melden ihre tatsächliche Höhe über `ResizeObserver`; Änderungen an Inhalt oder Spaltenbreiten verschieben nachfolgende Zeilen und die virtuelle Gesamtfläche. Messkorrekturen oberhalb des Sichtfensters halten den Scrollanker stabil.
+- SSR und Hydration verwenden zunächst deterministische Mindesthöhen. Messung startet erst nach Hydration. Lokale Strukturänderungen sowie Remote-Resets verwerfen Messwerte und messen gemountete Zeilen erneut; überlappende Zeilen bleiben erhalten.
+- Die TypeScript-Demo bietet einen Schalter und zusätzliche mehrzeilige Titelinhalte als sichtbares Beispiel.
+
+**Browserabnahme am 23.09.2026:** In Chromium wurden feste 40-px-Zeilen auf variable Höhen umgeschaltet. Mehrzeilige Inhalte ergaben unter anderem 57,4 px und 45 px; die gemessenen Folgeslots lagen ohne Überlappung darunter. Der Sprung zu Zeile 500 blieb funktionsfähig, ohne Browserfehler. Die Bridge-Integration prüft zusätzlich spätere Höhenänderungen mit stabilem Scrollanker, Umschalten zurück zur festen Höhe und Hydration mit erhaltener DOM-Identität.
+
 ## 2. Bestandsaufnahme im Repository
 
 ### Implementiert: eigene Tabellenzeilen
@@ -124,7 +133,7 @@ Paging, SSR, Hydration, Crawl-Zustand und Remote-Nachladen sind vorhandene UI-Er
 - Überlappende unveränderte Scrollslots erhalten ihre RowFactory-Instanzen. Ohne sichtbare Spalten wird keine Zeile erzeugt. `refresh()` baut nun die gesamten sichtbaren Zeileninhalte einschließlich eigener Snapshot-Inhalte neu auf; eine Auswahl bleibt dabei erhalten.
 - Die Demo `/controls/table` verwendet eigene Zeilen mit Buch-Tooltip und reaktiver Schriftstärke für die Auswahl. Das Rendering bleibt vollständig in derselben Scala.js-Runtime.
 
-**Migration:** Eigene Scala-Row-Unterklassen überschreiben `renderContent`, nicht mehr `compose`. `TableRow.itemProperty` und `indexProperty` sind jetzt nur lesbar. Bestehende `tableRow`-/Bindungshelfer bleiben verfügbar; Factories verwenden jedoch `new TableRow[S]`, nicht den bereits mountenden DSL-Builder. `renderCells()` darf in TypeScript nur synchron im Row-Callback bzw. einem synchron komponierten Kindelement und höchstens einmal aufgerufen werden. Neue Factory/Refresh/Datensatzersatz können lokale Editorentwürfe zurücksetzen. Variable Zeilenhöhen sind bewusst `VirtualListView` vorbehalten; außerdem gibt es keine automatische Zellverschmelzung oder Erhaltung von Row-Instanzen über Datenverschiebungen.
+**Migration:** Eigene Scala-Row-Unterklassen überschreiben `renderContent`, nicht mehr `compose`. `TableRow.itemProperty` und `indexProperty` sind jetzt nur lesbar. Bestehende `tableRow`-/Bindungshelfer bleiben verfügbar; Factories verwenden jedoch `new TableRow[S]`, nicht den bereits mountenden DSL-Builder. `renderCells()` darf in TypeScript nur synchron im Row-Callback bzw. einem synchron komponierten Kindelement und höchstens einmal aufgerufen werden. Neue Factory/Refresh/Datensatzersatz können lokale Editorentwürfe zurücksetzen. Es gibt keine automatische Zellverschmelzung oder Erhaltung von Row-Instanzen über Datenverschiebungen.
 
 Scala-Beispiel innerhalb einer `TableView[Person]` mit den üblichen DSL-Imports:
 
@@ -144,13 +153,13 @@ Für eigene Inhalte `renderCells` ersetzen oder ergänzen. TypeScript-Beispiel u
 
 | Baustein | Heutige Verantwortung und Befund |
 | --- | --- |
-| [TableView.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableView.scala) | Spaltenliste, feste Zeilenhöhe, Zeilenfenster, aktive austauschbare Auswahl-/Fokusmodelle, Remote-Header-Sortierung und automatische Breitenverteilung. |
+| [TableView.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableView.scala) | Spaltenliste, feste oder gemessene Zeilenhöhe, Zeilenfenster, aktive austauschbare Auswahl-/Fokusmodelle, Remote-Header-Sortierung und automatische Breitenverteilung. |
 | [TableColumn.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableColumn.scala) | Text, bevorzugte Breite, bestehender Zeilenrenderer, beobachtbare Zellwerte, Zellfactory, Tabellenzuordnung, `sortable` und `sortKey`. [TableColumnList.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableColumnList.scala) validiert Listenänderungen vor ihrer Veröffentlichung. |
 | [TableRow.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableRow.scala) | Integrierte RowFactory, lesbarer Zeilenkontext und überschreibbares `renderContent`; optionale Standardzellen reagieren auf Spalten-/Rendereränderungen. Auswahl/Klick, Doppelklick und Lifecycle bleiben zentral. |
 | [TableCell.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableCell.scala) | Integrierter Zellkontext, beobachteter Wert, Default-Text oder eigener Inhalt über `renderContent`, Breitenbindung und Disposal. |
 | [VirtualizedCollection.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/virtualized/VirtualizedCollection.scala) | Gemeinsame Paging-/Scroll-, URL-, Viewport- und Remote-Logik für TableView, DataGrid und VirtualListView. |
 | [CrawlableCollection.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/virtualized/CrawlableCollection.scala) | Crawl-Cookies und Wiederherstellung rund um SSR/Hydration. |
-| [ItemGeometry.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/virtualized/ItemGeometry.scala) | Gemeinsame Geometrieabstraktion: `TableView` verwendet `FixedRowGeometry`, `VirtualListView` verwendet `MeasuredRowGeometry`. |
+| [ItemGeometry.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/virtualized/ItemGeometry.scala) | Gemeinsame Geometrieabstraktion: `TableView` verwendet je nach Modus `FixedRowGeometry` oder `MeasuredRowGeometry`; `VirtualListView` verwendet `MeasuredRowGeometry`. |
 | [ListDataSource.scala](scala/scalajs-ui-core/src/main/scala-3/ui/core/state/ListDataSource.scala), [ListProperty.scala](scala/scalajs-ui-core/src/main/scala-3/ui/core/state/ListProperty.scala) | Lesender Datenquellenvertrag und veränderbare lokale Liste. |
 | [RemoteListProperty.scala](scala/scalajs-ui-core/src/main/scala-3/ui/core/remote/RemoteListProperty.scala) | Lückenhaft geladene Daten, Bereichsabfragen, Sortierdeskriptoren und Schutz vor veralteten Ladeantworten. |
 | [TableSelectionModel.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableSelectionModel.scala), [TableFocusModel.scala](scala/scalajs-ui-controls/src/main/scala-3/ui/control/table/TableFocusModel.scala) | Austauschbare und erweiterbare Modelle für Einzel-/Mehrfach-/Zellauswahl sowie unabhängigen Zeilen-/Zellfokus; alle zur Tabelle gehörenden Instanzen folgen Daten- und Spaltenänderungen. |
@@ -243,7 +252,7 @@ Referenzen: [Cell-Editierablauf](https://openui.io/javadoc/26/javafx.controls/ja
 
 | ID | Funktion | Stand | Umsetzung |
 | --- | --- | --- | --- |
-| V01 | Virtuelle Zeilen mit fester Höhe | Vorhanden | Überlappende absolute Slots mit derselben Item-Instanz bleiben erhalten. Datensatzbewegungen sind nicht Bestandteil dieses Vertrags. M1. |
+| V01 | Virtuelle Zeilen mit fester oder gemessener Höhe | Vorhanden | Überlappende absolute Slots mit derselben Item-Instanz bleiben erhalten. Optional werden sichtbare Zeilen gemessen; ungemessene Zeilen verwenden `rowHeight` als Mindesthöhe/Schätzwert, Höhenänderungen korrigieren den Scrollanker. Datensatzbewegungen sind nicht Bestandteil des Identitätsvertrags. M1/M6. |
 | V03 | `scrollTo(index/item)`, `onScrollTo` | Vorhanden | Zeilennavigation und Ausführungsbenachrichtigung in Scala/TypeScript, bekannte ungeladene Remote-Positionen, Paging, Header und Hydration vorhanden. M2. |
 | V04 | Horizontales Scrollen und Spaltennavigation | Vorhanden | Header-Synchronisation, Policy-abhängiges overflow, Navigation, Ausführungsbenachrichtigung und reaktive RTL-Spiegelung in Scala/TypeScript vorhanden. M2/M5/M6. |
 | V05 | Zeilen-/Zellzustände und CSS-Anpassung | Vorhanden | selected/odd/even/loading, Zeilen-/Zell-focused, Zell-selected/editing sowie `rowDisabled` (`ui-table-row-disabled`/`ui-table-cell-disabled`, blockiert Auswahl/Edit zentral in `TableSelectionModel`/`canStartEdit`) vorhanden. Ein spaltenweites Stil-Attribut über die Klassenliste hinaus ist dieselbe bewusste Abgrenzung wie bei C10, keine separate Lücke. M2/M4/M6. |
@@ -558,7 +567,7 @@ Abnahme am 17.09.2026: vollständiges Scala-Gate (`Test/testOnly *`, **473 Tests
 
 ### 4.8 SSR und Zugänglichkeit
 
-Die Tabelle behält eine feste positive Zeilenhöhe; `fixedCellSize` und `rowHeight` bezeichnen denselben Wert. Inhalte mit individuellen, browserseitig gemessenen Höhen werden mit `VirtualListView` umgesetzt. Alte Defaults für Breiten und Sortierbarkeit sind ausdrücklich zu dokumentieren, bevor eine Änderung veröffentlicht wird.
+Die Tabelle verwendet standardmäßig eine feste positive `rowHeight`. Bei `variableRowHeight` ist dieser Wert Mindesthöhe und Schätzwert; sichtbare Zeilen werden nach Hydration gemessen und später per `ResizeObserver` aktualisiert. SSR verwendet die Mindesthöhe ohne Browsermessung. `fixedCellSize` und `rowHeight` bezeichnen weiterhin denselben Wert. Alte Defaults für Breiten und Sortierbarkeit sind ausdrücklich zu dokumentieren, bevor eine Änderung veröffentlicht wird.
 
 SSR und Hydration verwenden dieselben anfänglichen Spalten, Zelltypen, Werte und Zustände. Browsermessung und automatische Mode-Wechsel erfolgen nach der bestehenden Hydration-Grenze. IDs für Header, Zellen und Fokusreferenzen müssen deterministisch und tabellenlokal sein.
 
@@ -632,6 +641,8 @@ Die Größen S/M/L bezeichnen relative Komplexität, keine Zeitversprechen. M0 i
 - [x] M5/M6: Angepasste Darstellung, Menüs und Tooltips (V07) – Zeilen-/Header-Slots sind die bestehende `rowFactory`/`headerCell`-Komposition, kein neuer Baustein; ein Zeilen-Tooltip nutzt denselben `on`/`when`/`overlay`-Vertrag wie C08/C09, real verdrahtet und reaktiv an `itemProperty` statt an einen Schnappschusswert gebunden.
 
 ## 6. Verifikation
+
+Abnahme gemessener Tabellenzeilen am 23.09.2026: vollständiges Scala-Gate (`Test/testOnly *`), Bridge-Full-Link sowie npm-Gates für Controls (92 Integrationstests + 3 Paket-Consumer) und Demo (Typecheck, Client-/SSR-Build, Eine-Runtime-Nachweis und 31 Routen) grün. Scala-SSR und Bridge-Integration prüfen Mindesthöhe, Hydration mit DOM-Identität, gemessene Folgeslots, nachträgliche Höhenänderungen, Scrollanker, `scrollToIndex` und das reaktive Umschalten mit erhaltener Zeilenposition. Die echte Chromium-Demo zeigte unterschiedliche Höhen ohne Überlappung und eine funktionierende Navigation zu Zeile 500; keine Browserfehler.
 
 Abnahme deaktivierter Zeilen (V05) am 17.09.2026: vollständiges Scala-Gate mit **475 Tests**, Bridge-Full-Link und `verify.mjs` grün. npm-Gate Controls (89 Integrationstests + 3 Paket-Consumer) und Demo (Typecheck, Client-/SSR-Build, `verify:pages`) grün. Zwei neue Scala-Fälle prüfen Auswahl-/Zellauswahl-Ablehnung samt reaktiver Wiederherstellung nach Löschen des Prädikats sowie Edit-Ablehnung mit SSR-Projektion von `ui-table-row-disabled`/`aria-disabled`. Der neue Bridge-Test prüft dieselbe Ablehnung über echte Klick-/Doppelklick-Events gegen die TypeScript-Fassade, einschließlich `row.disabled` im `TableRowContext`. Beide Demos deaktivieren Bücher vor 2000; im echten Browser (Scala-Demo) bestätigt: Klick auf eine deaktivierte Zeile wählt sie nicht aus, eine normale Zeile bleibt auswählbar, `aria-disabled`/`ui-table-row-disabled` korrekt gesetzt und gedimmt dargestellt, keine Browserfehler.
 
