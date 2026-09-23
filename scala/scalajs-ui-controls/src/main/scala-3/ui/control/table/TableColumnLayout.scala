@@ -32,17 +32,17 @@ private[table] object TableColumnLayout {
   ): Vector[Double] = resizeGroup(columns, widths, Vector(index), delta, policy)
 
   /** A group's resize: `indices` are every visible leaf the dragged handle actually belongs to --
-    * one column for an ordinary leaf resize (`resize` above), every visible leaf of a group for
-    * an actual group resize (C05). The group's own children share `delta` proportionally to their
+    * one column for an ordinary leaf resize (`resize` above), every visible leaf of a group for an
+    * actual group resize (C05). The group's own children share `delta` proportionally to their
     * current width, exactly as `AllColumns`/`SubsequentColumns` already share a delta across
     * several recipients; what they collectively cannot absorb is what a single-leaf resize would
     * call `requested`, and everything past that point -- capacity, `applied`, compensating
-    * recipients outside `indices`, and the final write-back to `indices` themselves -- is
-    * identical to the single-column case, just phrased over a set instead of one index. A
-    * single-index call degenerates to exactly the previous single-column algorithm: water-filling
-    * one recipient converges to its plain clamp in one step. A separate name from `resize`, not an
-    * overload of it: an overload sharing this position with a bare `Int` one made every untyped
-    * `Vector(...)` literal in this file's own tests ambiguous between the two.
+    * recipients outside `indices`, and the final write-back to `indices` themselves -- is identical
+    * to the single-column case, just phrased over a set instead of one index. A single-index call
+    * degenerates to exactly the previous single-column algorithm: water-filling one recipient
+    * converges to its plain clamp in one step. A separate name from `resize`, not an overload of
+    * it: an overload sharing this position with a bare `Int` one made every untyped `Vector(...)`
+    * literal in this file's own tests ambiguous between the two.
     */
   def resizeGroup(
       columns: Vector[Column],
@@ -63,13 +63,14 @@ private[table] object TableColumnLayout {
       // Dry run on a scratch copy: how much would `indices` move on their own, unconstrained by
       // what neighbors can actually give up? That candidate -- not `delta` itself -- is what
       // neighbors are asked to compensate below.
-      val requested  = distribute(columns, widths.toArray, indices, delta, proportionalToWidth = true)
+      val requested =
+        distribute(columns, widths.toArray, indices, delta, proportionalToWidth = true)
       val boundary   = indices.max
       val after      = ((boundary + 1) until columns.size).toVector
       val recipients = policy match {
-        case ColumnResizePolicy.AllColumns     => columns.indices.filterNot(indices.contains).toVector
-        case ColumnResizePolicy.NextColumn     => after.take(1)
-        case ColumnResizePolicy.LastColumn     => after.takeRight(1)
+        case ColumnResizePolicy.AllColumns => columns.indices.filterNot(indices.contains).toVector
+        case ColumnResizePolicy.NextColumn => after.take(1)
+        case ColumnResizePolicy.LastColumn => after.takeRight(1)
         case ColumnResizePolicy.FlexLastColumn => after.reverse
         case _                                 => after
       }

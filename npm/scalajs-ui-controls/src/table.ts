@@ -378,6 +378,10 @@ export interface TableViewOptions<T = unknown> {
   /** Replaces row content. Styles/events apply to the row; call row.renderCells() for standard columns. */
   readonly row?: (row: TableRowContext<T>) => void;
   readonly rowHeight?: number;
+  /** Measure rendered row content. rowHeight becomes the minimum height and estimate for
+   * unmeasured rows. Defaults to false; may change reactively.
+   */
+  readonly variableRowHeight?: Reactive<boolean>;
   readonly showHeader?: boolean;
   readonly showFooter?: boolean;
   /** Keep paging after hydration. Omit or set to false to use browser scrolling. */
@@ -596,6 +600,7 @@ export function tableView<T, Q = unknown>(
       receiveHandle: (value: TableViewHandle<T>) => { handle = value; },
       columns: columns.map(bridgeColumn),
       rowHeight: options.rowHeight,
+      variableRowHeight: options.variableRowHeight,
       showHeader: options.showHeader,
       showFooter: options.showFooter,
       paging: options.paging,

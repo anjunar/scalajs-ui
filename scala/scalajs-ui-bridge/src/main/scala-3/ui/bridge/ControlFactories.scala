@@ -102,29 +102,31 @@ private[bridge] trait TabFacade extends js.Object {
 
 @js.native
 private[bridge] trait ColumnFacade extends js.Object {
-  val text: String                                                    = js.native
-  val columns: js.UndefOr[js.Array[ColumnFacade]]                     = js.native
-  val prefWidth: js.UndefOr[Double]                                   = js.native
-  val minWidth: js.UndefOr[Double]                                    = js.native
-  val maxWidth: js.UndefOr[Double]                                    = js.native
-  val resizable: js.UndefOr[js.Any]                                   = js.native
-  val reorderable: js.UndefOr[js.Any]                                 = js.native
-  val editable: js.UndefOr[js.Any]                                    = js.native
-  val sortable: js.UndefOr[Boolean]                                   = js.native
-  val sortKey: js.UndefOr[String]                                     = js.native
-  val headerClass: js.UndefOr[js.Any]                                 = js.native
-  val cellClass: js.UndefOr[js.Any]                                   = js.native
+  val text: String                                = js.native
+  val columns: js.UndefOr[js.Array[ColumnFacade]] = js.native
+  val prefWidth: js.UndefOr[Double]               = js.native
+  val minWidth: js.UndefOr[Double]                = js.native
+  val maxWidth: js.UndefOr[Double]                = js.native
+  val resizable: js.UndefOr[js.Any]               = js.native
+  val reorderable: js.UndefOr[js.Any]             = js.native
+  val editable: js.UndefOr[js.Any]                = js.native
+  val sortable: js.UndefOr[Boolean]               = js.native
+  val sortKey: js.UndefOr[String]                 = js.native
+  val headerClass: js.UndefOr[js.Any]             = js.native
+  val cellClass: js.UndefOr[js.Any]               = js.native
+
   /** `() => void`, run through the same ambient-scope DSL as `cell`. Replaces the default header
     * text entirely (C09) -- an icon next to the label, a badge, or a `contextmenu` trigger for the
     * app's own viewport overlay all fall out of this being real composition, not a narrow property.
     */
   val headerCell: js.UndefOr[js.Function1[ScopeHandleBridge, Unit]] = js.native
+
   /** `(state) => void` where `state` is a live `ReadOnlyProperty<TableSortIndicatorState>`.
     * Replaces the default CSS-only sort arrow for a leaf, sortable column (C09).
     */
   val sortIndicator: js.UndefOr[
     js.Function1[ReadOnlyPropertyHandle[js.Any], js.Function1[ScopeHandleBridge, Unit]]
-  ] = js.native
+  ]                                                                   = js.native
   val visible: js.UndefOr[js.Any]                                     = js.native
   val onVisibilityChange: js.UndefOr[js.Function1[Boolean, Unit]]     = js.native
   val onEditStart: js.UndefOr[js.Function1[js.Object, Unit]]          = js.native
@@ -139,13 +141,14 @@ private[bridge] trait ColumnFacade extends js.Object {
   val standardTextFormatter: js.UndefOr[js.Function1[js.Any, String]] = js.native
   val standardTextParser: js.UndefOr[js.Function1[String, js.Any]]    = js.native
 
-  /** `(row, context) => (scope) => void` -- the cell body, already wrapped in `withScope` on the
-    * TS side. `context` is this cell's own index/empty/selected/focused/editing state (D05).
+  /** `(row, context) => (scope) => void` -- the cell body, already wrapped in `withScope` on the TS
+    * side. `context` is this cell's own index/empty/selected/focused/editing state (D05).
     */
   val cell: js.UndefOr[
     js.Function2[js.Any, TableCellContextBridge, js.Function1[ScopeHandleBridge, Unit]]
-  ] = js.native
+  ]                                                   = js.native
   val value: js.UndefOr[js.Function1[js.Any, js.Any]] = js.native
+
   /** `(value, row, context) => (scope) => void`, same `context` as `cell` above (D05). */
   val valueCell: js.UndefOr[
     js.Function3[
@@ -388,6 +391,12 @@ private[bridge] object TableViewFactory extends ComponentFactory {
 
     val table = TableView.tableView[js.Any](src) {
       options.get("rowHeight").foreach(value => TableView.rowHeight = ControlFactories.dbl(value))
+      options.get("variableRowHeight").foreach { value =>
+        val table = summon[TableView[js.Any]]
+        table.addDisposable(
+          ReactiveBridge.asProperty[Boolean](value).observe(table.variableRowHeightProperty.set)
+        )
+      }
       options.get("direction").foreach { value =>
         val table = summon[TableView[js.Any]]
         table.addDisposable(
@@ -615,7 +624,10 @@ private[bridge] object TableViewFactory extends ComponentFactory {
           column.setCellRenderer((row: js.Any) =>
             (cell: AbstractComponent) ?=>
               (cursor: Cursor) ?=>
-                renderer(row, new TableCellContextBridge(cell.asInstanceOf[TableCell[js.Any, js.Any]]))(
+                renderer(
+                  row,
+                  new TableCellContextBridge(cell.asInstanceOf[TableCell[js.Any, js.Any]])
+                )(
                   new ScopeHandleBridge(cell, cursor)
                 )
           )

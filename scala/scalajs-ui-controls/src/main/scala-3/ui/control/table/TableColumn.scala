@@ -7,23 +7,23 @@ import ui.core.state.{Disposable, ListProperty, Property, ReadOnlyProperty}
 class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponent {
   import TableColumn.{CellFactory, CellRenderer, CellValueFactory}
 
-  val textProperty: Property[String]                                     = Property(initialText)
-  val visibleProperty: Property[Boolean]                                 = Property(true)
-  val prefWidthProperty: Property[Double]                                = Property(160.0)
-  val minWidthProperty: Property[Double]                                 = Property(40.0)
-  val maxWidthProperty: Property[Double]                                 = Property(Double.MaxValue)
-  val resizableProperty: Property[Boolean]                               = Property(true)
-  val reorderableProperty: Property[Boolean]                             = Property(true)
-  val editableProperty: Property[Boolean]                                = Property(true)
-  val cellRenderer: Property[Option[CellRenderer[S]]]                    = Property(None)
-  val sortableProperty: Property[Boolean]                                = Property(false)
-  val sortKeyProperty: Property[Option[String]]                          = Property(None)
+  val textProperty: Property[String]                  = Property(initialText)
+  val visibleProperty: Property[Boolean]              = Property(true)
+  val prefWidthProperty: Property[Double]             = Property(160.0)
+  val minWidthProperty: Property[Double]              = Property(40.0)
+  val maxWidthProperty: Property[Double]              = Property(Double.MaxValue)
+  val resizableProperty: Property[Boolean]            = Property(true)
+  val reorderableProperty: Property[Boolean]          = Property(true)
+  val editableProperty: Property[Boolean]             = Property(true)
+  val cellRenderer: Property[Option[CellRenderer[S]]] = Property(None)
+  val sortableProperty: Property[Boolean]             = Property(false)
+  val sortKeyProperty: Property[Option[String]]       = Property(None)
   // C10: the header is a separately created component (TableView.HeaderSlot), so a column's own
   // inherited AbstractComponent classes never reach it -- these are the explicit hook instead.
   // cellClasses apply to every TableCell of this column, in addition to the framework's own
   // ui-table-cell-* classes; they do not replace those.
-  val headerClassesProperty: Property[Seq[String]]                       = Property(Seq.empty)
-  val cellClassesProperty: Property[Seq[String]]                         = Property(Seq.empty)
+  val headerClassesProperty: Property[Seq[String]] = Property(Seq.empty)
+  val cellClassesProperty: Property[Seq[String]]   = Property(Seq.empty)
   // C09: composed once, like TableView's own header/placeholder slots -- not reactive bodies
   // themselves, since reactivity belongs inside the body (text(...), classIf(...), ...), the same
   // way `cell { book => text(book.title) {} }` already works.
@@ -152,10 +152,10 @@ class TableColumn[S, T](initialText: String = "") extends AbstractCustomComponen
   def editable_=(value: Boolean): Unit       = editableProperty.set(value)
   def parentColumn: TableColumn[S, ?] | Null = parentColumnProperty.get
 
-  def headerClasses: Seq[String]                      = headerClassesProperty.get
-  def headerClasses_=(value: Seq[String]): Unit       = headerClassesProperty.set(value)
-  def cellClasses: Seq[String]                        = cellClassesProperty.get
-  def cellClasses_=(value: Seq[String]): Unit         = cellClassesProperty.set(value)
+  def headerClasses: Seq[String]                = headerClassesProperty.get
+  def headerClasses_=(value: Seq[String]): Unit = headerClassesProperty.set(value)
+  def cellClasses: Seq[String]                  = cellClassesProperty.get
+  def cellClasses_=(value: Seq[String]): Unit   = cellClassesProperty.set(value)
 
   /** Instance-level twins of the companion `headerCell`/`sortIndicator` DSL functions (C09), for
     * callers -- the bridge -- that hold a `TableColumn` value directly instead of composing inside
@@ -241,10 +241,11 @@ object TableColumn {
   )(using column: TableColumn[S, T]): Unit =
     column.headerCellBody = Some(body)
 
-  /** Replaces the header's default CSS-only sort arrow (`::after` on `ui-table-header-cell-sorted-*`)
-    * with composed content, for a leaf, sortable column. `state` is reactive, mirroring the same
-    * requested-sort snapshot the default decoration and `aria-description` already read; bind to it
-    * declaratively (`text(state.map(...))`) rather than re-invoking this body on every change.
+  /** Replaces the header's default CSS-only sort arrow (`::after` on
+    * `ui-table-header-cell-sorted-*`) with composed content, for a leaf, sortable column. `state`
+    * is reactive, mirroring the same requested-sort snapshot the default decoration and
+    * `aria-description` already read; bind to it declaratively (`text(state.map(...))`) rather than
+    * re-invoking this body on every change.
     */
   def sortIndicator[S, T](
       body: ReadOnlyProperty[TableSortIndicatorState] => AbstractComponent ?=> Cursor ?=> Unit

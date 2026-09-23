@@ -619,8 +619,18 @@ a nested element built by that callback. Give custom wrappers the appropriate la
 The callback does not rerun on selection changes: use the supplied reactive properties.
 It does run for newly materialized rows and on `refresh()`. Refresh now recreates whole
 visible rows, including custom snapshot content; it may discard local editor state.
-Overlapping scroll slots with unchanged items retain their row instances. Fixed row
-height still applies; this is not automatic cell spanning or a variable-height layout.
+Overlapping scroll slots with unchanged items retain their row instances. Rows are fixed at
+`rowHeight` by default. Set `variableRowHeight: true` to let visible rows grow with their content:
+
+```ts
+tableView(books, columns, { rowHeight: 32, variableRowHeight: true });
+```
+
+In this mode, `rowHeight` is the minimum height and the estimate for rows not measured yet.
+The browser measures mounted rows after hydration and observes later content or width changes.
+Measurements above the viewport adjust scroll position so the visible row stays anchored.
+The option accepts a reactive boolean; switching modes retains the visible row position. On the
+server rows start from the same deterministic minimum. This does not imply automatic cell spanning.
 
 ### Other controls
 

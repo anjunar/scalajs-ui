@@ -106,7 +106,7 @@ class TableColumnLayoutSpec extends AnyFlatSpec with Matchers {
     var seen: Option[ColumnResizeRequest] = None
     val columns                           = Vector(col(), col(max = 200))
     val widths                            = Vector(100.0, 100.0)
-    val policy: CustomColumnResizePolicy = request => {
+    val policy: CustomColumnResizePolicy  = request => {
       seen = Some(request)
       val index = request.target.get._1.head
       request.widths.updated(index, request.widths(index) + 20)
@@ -123,12 +123,18 @@ class TableColumnLayoutSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "receive every visible leaf of a group as the target, not just one" in {
-    var seen: Option[Vector[Int]] = None
+    var seen: Option[Vector[Int]]        = None
     val policy: CustomColumnResizePolicy = request => {
       seen = Some(request.target.get._1)
       request.widths
     }
-    applyCustom(Vector(col(), col(), col()), Vector(100.0, 100.0, 100.0), 300.0, Some((Vector(0, 1), 40.0)), policy)
+    applyCustom(
+      Vector(col(), col(), col()),
+      Vector(100.0, 100.0, 100.0),
+      300.0,
+      Some((Vector(0, 1), 40.0)),
+      policy
+    )
     seen shouldBe Some(Vector(0, 1))
   }
 

@@ -4,6 +4,8 @@ import ui.control.virtualized.{
   CollectionDisplayMode,
   CrawlableCollection,
   FixedRowGeometry,
+  ItemGeometry,
+  MeasuredRowGeometry,
   VirtualizedCollection
 }
 import ui.core.component.AbstractComponent
@@ -76,8 +78,8 @@ final class TableView[S] private (
 
   private[table] def isRowDisabled(index: Int): Boolean =
     rowDisabledProperty.get.exists(predicate => items.itemAt(index).exists(predicate))
-  private val rowRendererRevisionProperty        = Property(0)
-  private[table] val visibleColumns              = ListProperty[TableColumn[S, ?]]()
+  private val rowRendererRevisionProperty = Property(0)
+  private[table] val visibleColumns       = ListProperty[TableColumn[S, ?]]()
   val visibleLeafColumns: ReadOnlyProperty[Vector[TableColumn[S, ?]]] =
     visibleColumns.map(_.toVector)
   private val placeholderVisibleProperty                = Property(true)
@@ -86,8 +88,11 @@ final class TableView[S] private (
   val columnMenuTextProperty: Property[String]          = Property("Columns")
   val showFooterProperty: Property[Boolean]             = Property(true)
   val rowHeightProperty: Property[Double]               = Property(32.0)
-  val prefWidthProperty: Property[Option[Double]]       = Property(None)
-  val fixedHeightProperty: Property[Option[Double]]     = Property(None)
+
+  /** When enabled, rowHeight is the minimum and estimate until a row has been measured. */
+  val variableRowHeightProperty: Property[Boolean]  = Property(false)
+  val prefWidthProperty: Property[Option[Double]]   = Property(None)
+  val fixedHeightProperty: Property[Option[Double]] = Property(None)
 
   /** Horizontal offset from the inline start: left in LTR, right in RTL. */
   val scrollLeftProperty: Property[Double]        = Property(0.0)
@@ -326,8 +331,13 @@ final class TableView[S] private (
             val sorting = currentRemoteSorting
             currentSortFor(typedColumn) match {
               case Some(term) =>
-                val priority = sortKeyOf(column).fold(0)(key => sorting.indexWhere(_.field == key) + 1)
-                TableSortIndicatorState(sorted = true, ascending = term.ascending, priority = priority)
+                val priority =
+                  sortKeyOf(column).fold(0)(key => sorting.indexWhere(_.field == key) + 1)
+                TableSortIndicatorState(
+                  sorted = true,
+                  ascending = term.ascending,
+                  priority = priority
+                )
               case None => TableSortIndicatorState(sorted = false, ascending = true, priority = 0)
             }
           }
@@ -692,11 +702,11 @@ final class TableView[S] private (
             applyViewportSize(viewport.clientWidth.toDouble, viewport.clientHeight.toDouble)
             if (isPaging) pageIndexProperty.set(pageIndexForOffset(index))
             val next = TableScrollPosition.reveal(
-              topForIndex(layoutIndex(index)),
-              math.max(1.0, rowHeightProperty.get),
+              geometry.headerOffset + rowTopInSurface(index),
+              rowHeightFor(index),
               scrollTopProperty.get,
               viewportHeightProperty.get,
-              geometry.headerOffset + geometry.contentHeight(layoutCount(displayItemCount))
+              geometry.headerOffset + rowsSurfaceHeight
             )
             scrollTopProperty.set(next)
             recomputeVisible() // Also loads a missing range when the offset did not change.
@@ -713,15 +723,41 @@ final class TableView[S] private (
     flushColumnScrollRequest()
   }
 
-  /** Fixed row height, one column. This is all that distinguishes TableView from DataGrid and
-    * VirtualListView -- column widths are a presentation concern, not a virtualization concern.
-    */
-  override protected val geometry: FixedRowGeometry =
+  private val fixedRowGeometry =
     new FixedRowGeometry(
       rowHeight = () => rowHeightProperty.get,
       headerHeightValue = () => contentHeaderHeight,
       overscanRows = TableView.overscanRows
     )
+
+  private val measuredRowGeometry =
+    new MeasuredRowGeometry(
+      estimateHeight = () => math.max(1.0, rowHeightProperty.get),
+      headerHeightValue = () => contentHeaderHeight,
+      overscanPx = () => math.max(1.0, rowHeightProperty.get) * TableView.overscanRows
+    )
+
+  override protected def geometry: ItemGeometry =
+    if (variableRowHeightProperty.get) measuredRowGeometry else fixedRowGeometry
+
+  private def rowOffset(index: Int): Double =
+    if (variableRowHeightProperty.get) {
+      measuredRowGeometry.rebuildPrefixIfDirty()
+      measuredRowGeometry.offsetFor(math.max(0, index))
+    } else math.max(0, index) * math.max(1.0, rowHeightProperty.get)
+
+  private def rowTopInSurface(index: Int): Double =
+    rowOffset(index) - (if (pagedVisibleRange) rowOffset(pageStart) else 0.0)
+
+  private def rowHeightFor(index: Int): Double =
+    if (variableRowHeightProperty.get) measuredRowGeometry.heightFor(index)
+    else math.max(1.0, rowHeightProperty.get)
+
+  private def rowsSurfaceHeight: Double =
+    if (pagedVisibleRange) {
+      val (start, end) = pageRange(displayItemCount)
+      rowOffset(end) - rowOffset(start)
+    } else geometry.contentHeight(displayItemCount)
 
   override protected def crawlControlName: String = "TableView"
   override protected def crawlDefaultLimit: Int   = TableView.defaultLimit
@@ -729,10 +765,56 @@ final class TableView[S] private (
 
   override protected def renderableCount: Int = math.max(0, dataSource.totalLength)
 
-  /** TableView recomputes on every change -- with fixed row height, every insertion shifts all
-    * following rows.
-    */
+  override protected def resetMeasurements(): Unit = {
+    measuredRowGeometry.clear()
+    scheduleMountedRowMeasure()
+  }
+
+  private var mountedRowMeasureFrame = 0
+
+  private def scheduleMountedRowMeasure(): Unit =
+    if (browserRendering && variableRowHeightProperty.get && mountedRowMeasureFrame == 0) {
+      mountedRowMeasureFrame = dom.window.requestAnimationFrame { _ =>
+        mountedRowMeasureFrame = 0
+        if (!isDisposed && !hydrating)
+          applyRowMeasurements(mountedRows.toVector.flatMap { (index, row) =>
+            row.measuredHeight.map(height => (index, row, height))
+          })
+      }
+    }
+
+  private[table] def handleMeasuredRowHeight(row: TableRow[S], height: Double): Unit =
+    applyRowMeasurements(Vector((row.indexProperty.get, row, height)))
+
+  private def applyRowMeasurements(measurements: Seq[(Int, TableRow[S], Double)]): Unit =
+    if (!isDisposed && !hydrating && variableRowHeightProperty.get) {
+      measuredRowGeometry.rebuildPrefixIfDirty()
+      val anchor = measuredRowGeometry.indexForOffset(
+        math.max(0.0, scrollTopProperty.get - geometry.headerOffset)
+      )
+      var anchorDelta = 0.0
+      var changed     = false
+      measurements.foreach { (index, row, height) =>
+        if (height > 0 && mountedRows.get(index).contains(row))
+          measuredRowGeometry.updateHeight(index, height).foreach { delta =>
+            changed = true
+            if (!isPaging && index < anchor) anchorDelta += delta
+          }
+      }
+      if (changed) {
+        measuredRowGeometry.rebuildPrefixIfDirty()
+        bumpItemState()
+        if (anchorDelta != 0.0) {
+          val adjusted = math.max(0.0, scrollTopProperty.get + anchorDelta)
+          scrollTopProperty.set(adjusted)
+          domElement(viewportComponent).foreach(_.scrollTop = adjusted)
+        } else recomputeVisible()
+      }
+    }
+
+  /** Structural changes invalidate absolute-index measurements; mounted rows are remeasured. */
   override protected def handleLocalItemsChange(change: ListProperty.Change[S]): Unit = {
+    resetMeasurements()
     editModel.reconcile(change)
     editModel.beginItemRefresh()
     try {
@@ -787,7 +869,8 @@ final class TableView[S] private (
         customResizePolicyProperty.get match {
           case Some(policy) =>
             TableColumnLayout.applyCustom(specs, specs.map(_.initial), viewportWidth, None, policy)
-          case None => TableColumnLayout.layout(specs, viewportWidth, columnResizePolicyProperty.get)
+          case None =>
+            TableColumnLayout.layout(specs, viewportWidth, columnResizePolicyProperty.get)
         }
       }
     }
@@ -797,8 +880,8 @@ final class TableView[S] private (
       column.widthSpec(userColumnWidths.getOrElse(column, column.prefWidth))
     )
 
-  /** A resize of exactly `indices` (one leaf, or every visible leaf of a group -- C05), through
-    * the active custom policy if one is set, the built-in strategy otherwise.
+  /** A resize of exactly `indices` (one leaf, or every visible leaf of a group -- C05), through the
+    * active custom policy if one is set, the built-in strategy otherwise.
     */
   private def resizeAt(
       specs: Vector[TableColumnLayout.Column],
@@ -808,7 +891,13 @@ final class TableView[S] private (
   ): Vector[Double] =
     customResizePolicyProperty.get match {
       case Some(policy) =>
-        TableColumnLayout.applyCustom(specs, widths, viewportWidthProperty.get, Some((indices, delta)), policy)
+        TableColumnLayout.applyCustom(
+          specs,
+          widths,
+          viewportWidthProperty.get,
+          Some((indices, delta)),
+          policy
+        )
       case None =>
         TableColumnLayout.resizeGroup(specs, widths, indices, delta, columnResizePolicyProperty.get)
     }
@@ -817,8 +906,8 @@ final class TableView[S] private (
     * only its visible leaf descendants do (`TableColumn.widthProperty` sums them) -- so resizing
     * one means resizing all of them together: they share `delta` proportionally to their current
     * width, and whatever they collectively cannot absorb compensates columns outside the group
-    * through the same active policy as any other resize (`TableColumnLayout.resize`). True when
-    * any part of the request was applied.
+    * through the same active policy as any other resize (`TableColumnLayout.resize`). True when any
+    * part of the request was applied.
     */
   def resizeColumn(column: TableColumn[S, ?], delta: Double): Boolean = {
     if (isDisposed || column == null || !delta.isFinite || !column.resizable) return false
@@ -1032,10 +1121,20 @@ final class TableView[S] private (
           event.raw match {
             case key: dom.KeyboardEvent
                 if domElement(this).exists(_ == key.target) && scrollNavigationMounted =>
-              val pageRows = math.max(
-                1,
-                (viewportHeightProperty.get / math.max(1.0, rowHeightProperty.get)).toInt - 1
-              )
+              val pageRows =
+                if (variableRowHeightProperty.get) {
+                  measuredRowGeometry.rebuildPrefixIfDirty()
+                  val start = math.max(0.0, scrollTopProperty.get - geometry.headerOffset)
+                  math.max(
+                    1,
+                    measuredRowGeometry.indexForOffset(start + viewportHeightProperty.get) -
+                      measuredRowGeometry.indexForOffset(start) - 1
+                  )
+                } else
+                  math.max(
+                    1,
+                    (viewportHeightProperty.get / math.max(1.0, rowHeightProperty.get)).toInt - 1
+                  )
               TableRowKeyboard.handle(this, key, pageRows)
             case _ => ()
           }
@@ -1240,11 +1339,14 @@ final class TableView[S] private (
                   style {
                     position = "absolute"
                     top = itemStateRevisionProperty.map(_ =>
-                      s"${layoutIndex(rowDefinition.index) * rowHeightProperty.get}px"
+                      s"${rowTopInSurface(rowDefinition.index)}px"
                     )
                     left = "0"
                     width = totalColumnWidthProperty.map(value => s"${value}px")
-                    height = rowHeightProperty.map(value => s"${value}px")
+                    height = variableRowHeightProperty.flatMap(variable =>
+                      rowHeightProperty.map(value => if (variable) "auto" else s"${value}px")
+                    )
+                    minHeight = rowHeightProperty.map(value => s"${math.max(1.0, value)}px")
                     display = "flex"
                   }
 
@@ -1315,6 +1417,10 @@ final class TableView[S] private (
     }
 
   private def installObservers(): Unit = {
+    addDisposable(Disposable {
+      if (mountedRowMeasureFrame != 0) dom.window.cancelAnimationFrame(mountedRowMeasureFrame)
+      mountedRowMeasureFrame = 0
+    })
     syncColumns()
     addDisposable(Disposable(editModel.dispose()))
     addDisposable(editableProperty.observeWithoutInitial(_ => editModel.tableEditableChanged()))
@@ -1357,7 +1463,34 @@ final class TableView[S] private (
     addDisposable(viewportWidthProperty.observeWithoutInitial(_ => recomputeVisible()))
     addDisposable(columns.observeChanges(_ => syncColumns()))
     addDisposable(rowFactoryProperty.observeWithoutInitial(_ => invalidateRows()))
-    addDisposable(rowHeightProperty.observeWithoutInitial(_ => refreshItemState()))
+    addDisposable(rowHeightProperty.observeWithoutInitial { _ =>
+      if (variableRowHeightProperty.get) resetMeasurements()
+      refreshItemState()
+    })
+    var previousVariableRowHeight = variableRowHeightProperty.get
+    addDisposable(variableRowHeightProperty.observeWithoutInitial { enabled =>
+      val oldGeometry =
+        if (previousVariableRowHeight) measuredRowGeometry else fixedRowGeometry
+      measuredRowGeometry.rebuildPrefixIfDirty()
+      val oldOffset = math.max(0.0, scrollTopProperty.get - oldGeometry.headerOffset)
+      val index     =
+        if (renderableCount == 0) 0
+        else math.min(renderableCount - 1, oldGeometry.indexForOffset(oldOffset))
+      val withinRow =
+        math.max(0.0, oldOffset - oldGeometry.topForIndex(index) + oldGeometry.headerOffset)
+      previousVariableRowHeight = enabled
+      resetMeasurements()
+      refreshItemState()
+      if (!isPaging && browserRendering && scrollNavigationMounted) {
+        val target = geometry.headerOffset + rowOffset(index) +
+          math.min(withinRow, math.max(0.0, rowHeightFor(index) - 1.0))
+        scrollTopProperty.set(target)
+        domElement(viewportComponent).foreach { viewport =>
+          viewport.scrollTop = target
+          scrollTopProperty.set(viewport.scrollTop)
+        }
+      }
+    })
     addDisposable(headerRowsProperty.observeWithoutInitial(_ => refreshItemState()))
     addDisposable(crawlableProperty.observeWithoutInitial(_ => refreshConfiguredCrawlState()))
     addDisposable(crawlIdProperty.observeWithoutInitial(_ => refreshConfiguredCrawlState()))
@@ -1366,6 +1499,7 @@ final class TableView[S] private (
   }
 
   override protected def recomputeVisible(): Unit = {
+    if (variableRowHeightProperty.get) measuredRowGeometry.rebuildPrefixIfDirty()
     val total = displayItemCount
     if (total == 0 || visibleColumns.isEmpty) visibleRowsProperty.clear()
     else {
@@ -1429,9 +1563,7 @@ final class TableView[S] private (
   }
 
   private def contentHeightProperty: ReadOnlyProperty[String] =
-    itemStateRevisionProperty.flatMap(_ =>
-      rowHeightProperty.map(rowHeight => s"${layoutCount(displayItemCount) * rowHeight}px")
-    )
+    itemStateRevisionProperty.map(_ => s"${rowsSurfaceHeight}px")
 
   private def declaredContentHeaderHeight: Double =
     if (contentHeaderBody.nonEmpty && headerRowsProperty.get > 0)
@@ -1615,6 +1747,13 @@ object TableView {
   def rowHeight(using table: TableView[?]): Double                = table.rowHeightProperty.get
   def rowHeight_=(value: Double)(using table: TableView[?]): Unit =
     table.rowHeightProperty.set(value)
+
+  def variableRowHeight(using table: TableView[?]): Boolean =
+    table.variableRowHeightProperty.get
+  def variableRowHeight_=(value: Boolean)(using table: TableView[?]): Unit =
+    table.variableRowHeightProperty.set(value)
+  def variableRowHeight_=(value: ReadOnlyProperty[Boolean])(using table: TableView[?]): Unit =
+    table.addDisposable(value.observe(table.variableRowHeightProperty.set))
 
   def fixedCellSize(using table: TableView[?]): Double                = table.rowHeightProperty.get
   def fixedCellSize_=(value: Double)(using table: TableView[?]): Unit =

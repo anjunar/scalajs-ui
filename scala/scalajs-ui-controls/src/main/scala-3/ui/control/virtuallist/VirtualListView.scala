@@ -43,8 +43,8 @@ final class VirtualListView[T] private (
   private val visibleSlotsProperty = ListProperty[VirtualListView.VisibleSlot[T]]()
   private val headerHeightProperty = Property(0.0)
 
-  /** Measured heights, one column. Everything distinguishing VirtualListView from TableView and
-    * DataGrid lives here -- the rest comes from VirtualizedCollection and CrawlableCollection.
+  /** Measured heights, one column. The same geometry can serve TableView's optional variable-row
+    * mode; shared scrolling and loading remain in VirtualizedCollection and CrawlableCollection.
     */
   override protected val geometry: MeasuredRowGeometry =
     new MeasuredRowGeometry(

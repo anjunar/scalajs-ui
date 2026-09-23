@@ -10,7 +10,7 @@ package ui.control.virtualized
   *
   * {{{
   *                    Height               Columns   Overscan
-  *   TableView        fixed (rowHeight)    1         overscanRows (constant)
+  *   TableView        fixed or measured    1         overscanRows / estimated pixels
   *   DataGrid         fixed (itemHeight+gap) N       overscanRows (Property)
   *   VirtualListView  measured             1         overscanPx   (Property)
   * }}}
@@ -44,7 +44,7 @@ trait ItemGeometry {
   def visibleRange(total: Int, scrollTop: Double, viewportHeight: Double): (Int, Int)
 }
 
-/** Fixed row height, one column -- the TableView model.
+/** Fixed row height, one column -- the default TableView model.
   *
   * Overscan is expressed in rows.
   */
@@ -142,7 +142,7 @@ final class GridGeometry(
   }
 }
 
-/** Measured heights, one column -- the VirtualListView model.
+/** Measured heights, one column -- used by VirtualListView and optionally TableView.
   *
   * Holds measured heights and their prefix sums. What is not yet measured uses the estimate;
   * `prefixDirtyFrom` records where sums must be rebuilt so one measurement does not recalculate the
