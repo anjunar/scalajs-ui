@@ -35,6 +35,12 @@ final class Image extends AbstractComponent {
   def loading_=(value: ReadOnlyProperty[String]): Unit =
     bindStringAttribute("loading", value)
 
+  def decoding_=(value: String): Unit =
+    setStringAttribute("decoding", value)
+
+  def fetchPriority_=(value: String): Unit =
+    setStringAttribute("fetchpriority", value)
+
   def srcset: String =
     attribute("srcset").getOrElse("")
 
@@ -122,6 +128,12 @@ object Image {
 
   def loading(using image: Image): String =
     image.loading
+
+  def decoding_=(value: String)(using image: Image): Unit =
+    image.decoding_=(value)
+
+  def fetchPriority_=(value: String)(using image: Image): Unit =
+    image.fetchPriority_=(value)
 
   def srcset_=(value: String)(using image: Image): Unit =
     image.srcset_=(value)

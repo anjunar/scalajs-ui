@@ -14,7 +14,7 @@ import scala.scalajs.js
 
 class Input(val name: String, val standalone: Boolean = false)
     extends AbstractComponent,
-      Control[String],
+      ValueControl[String],
       Placeholder {
 
   val tagName                         = "input"
