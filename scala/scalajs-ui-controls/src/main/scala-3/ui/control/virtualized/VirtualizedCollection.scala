@@ -486,8 +486,11 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
 
         remoteItemsObserver = composite
 
+        // A known empty result is already loaded. Only bootstrap sources that may still have
+        // items; otherwise mounting a preloaded empty page repeats the route's request.
         if (
           browserRendering && remote.loadedLength == 0 &&
+          !remote.totalCountProperty.get.contains(0) &&
           !remote.loadingProperty.get && remote.errorProperty.get.isEmpty
         ) discardResult(remote.reload())
     }
