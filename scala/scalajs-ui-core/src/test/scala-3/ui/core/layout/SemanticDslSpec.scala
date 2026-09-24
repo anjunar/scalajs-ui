@@ -3,6 +3,7 @@ package ui.core.layout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import ui.core.component.{AbstractComponent, Runtime}
+import ui.core.dsl.AttributeDsl
 import ui.core.dsl.DslLayer.render
 import ui.core.layout.FigCaption.figcaption
 import ui.core.layout.Figure.figure
@@ -28,7 +29,7 @@ class SemanticDslSpec extends AnyFlatSpec with Matchers {
           render(this, cursor) {
             header {
               nav {
-                summon[Nav].setAttribute("aria-label", "Primary")
+                AttributeDsl.ariaLabel_=("Primary")
                 ul {
                   li { text("Home") {} }
                 }
@@ -38,11 +39,19 @@ class SemanticDslSpec extends AnyFlatSpec with Matchers {
               section {
                 figure {
                   image {
-                    summon[Image].src = "/cover.jpg"
-                    summon[Image].alt = "Cover"
+                    Image.src_=("/cover.jpg")
+                    Image.alt_=("Cover")
+                    Image.intrinsicWidth_=(354)
+                    Image.intrinsicHeight_=(354)
+                    Image.decoding_=("async")
                   }
                   figcaption { text("Cover art") {} }
                 }
+              }
+              Iframe.iframe {
+                Iframe.src_=("https://example.com/player")
+                AttributeDsl.title_=("Player")
+                Iframe.allowFullscreen_=(true)
               }
             }
             footer { text("End") {} }
@@ -53,8 +62,9 @@ class SemanticDslSpec extends AnyFlatSpec with Matchers {
 
     val html = cursor.collectHtml()
     html should include("<header><nav aria-label=\"Primary\"><ul><li>Home</li></ul></nav></header>")
-    html should include("<main><section><figure><img src=\"/cover.jpg\" alt=\"Cover\">")
-    html should include("<figcaption>Cover art</figcaption></figure></section></main>")
+    html should include("<main><section><figure><img src=\"/cover.jpg\" alt=\"Cover\" width=\"354\" height=\"354\" decoding=\"async\">")
+    html should include("<figcaption>Cover art</figcaption></figure></section>")
+    html should include("<iframe src=\"https://example.com/player\" title=\"Player\" allowfullscreen=\"true\"></iframe>")
     html should endWith("<footer>End</footer></div>")
 
     Runtime.unmount(root)

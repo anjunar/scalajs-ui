@@ -6,6 +6,7 @@ import ui.core.dsl.DslLayer
 import ui.core.dsl.DslLayer.{child, render}
 import ui.core.dsl.EventDsl.on
 import ui.core.layout.TextComponent.text
+import ui.core.layout.OptionElement
 import ui.core.render.Cursor
 import ui.core.state.{Property, ReadOnlyProperty}
 import ui.forms.Form.FormContext
@@ -28,15 +29,10 @@ final class SelectInput(
     render(this, cursor) {
       setAttribute("name", name)
       options.foreach { choice =>
-        val option = new AbstractComponent { val tagName = "option" }
-        child(option) {
-          option.setAttribute("value", choice.value)
-          option.addDisposable(valueProperty.observe { value =>
-            if (value == choice.value) option.setAttribute("selected", "selected")
-            else option.removeAttribute("selected")
-          })
+        val option = OptionElement.option(choice.value, valueProperty.get == choice.value) {
           text(choice.label) {}
         }
+        option.addDisposable(valueProperty.observe(value => option.selected_=(value == choice.value)))
       }
 
       def read(): Unit = {

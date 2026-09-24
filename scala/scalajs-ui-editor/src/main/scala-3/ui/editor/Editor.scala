@@ -464,6 +464,12 @@ object Editor {
   def mediaStatusProperty(using editor: Editor): Property[MediaUploadStatus] =
     editor.mediaStatusProperty
 
+  def onMediaStatus_=(callback: MediaUploadStatus => Unit)(using editor: Editor): Unit =
+    editor.onMediaStatus = callback
+
+  def onMediaStatus(using editor: Editor): MediaUploadStatus => Unit =
+    editor.onMediaStatus
+
   def value(using editor: Editor): String = editor.valueProperty.get
 
   def value_=(nextValue: String)(using editor: Editor): Unit =
