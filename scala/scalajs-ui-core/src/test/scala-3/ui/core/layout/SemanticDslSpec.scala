@@ -3,13 +3,14 @@ package ui.core.layout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import ui.core.component.{AbstractComponent, Runtime}
-import ui.core.dsl.AttributeDsl
+import ui.core.dsl.AttributeDsl.{ariaLabel, ariaLabel_=, title, title_=}
 import ui.core.dsl.DslLayer.render
 import ui.core.layout.FigCaption.figcaption
 import ui.core.layout.Figure.figure
 import ui.core.layout.Footer.footer
 import ui.core.layout.Header.header
-import ui.core.layout.Image.image
+import ui.core.layout.Image.*
+import ui.core.layout.Iframe.{iframe, src as frameSrc, src_= as frameSrc_=, allowFullscreen, allowFullscreen_=}
 import ui.core.layout.Li.li
 import ui.core.layout.Main.main
 import ui.core.layout.Nav.nav
@@ -29,7 +30,7 @@ class SemanticDslSpec extends AnyFlatSpec with Matchers {
           render(this, cursor) {
             header {
               nav {
-                AttributeDsl.ariaLabel_=("Primary")
+                ariaLabel = "Primary"
                 ul {
                   li { text("Home") {} }
                 }
@@ -39,19 +40,19 @@ class SemanticDslSpec extends AnyFlatSpec with Matchers {
               section {
                 figure {
                   image {
-                    Image.src_=("/cover.jpg")
-                    Image.alt_=("Cover")
-                    Image.intrinsicWidth_=(354)
-                    Image.intrinsicHeight_=(354)
-                    Image.decoding_=("async")
+                    src = "/cover.jpg"
+                    alt = "Cover"
+                    intrinsicWidth = 354
+                    intrinsicHeight = 354
+                    decoding = "async"
                   }
                   figcaption { text("Cover art") {} }
                 }
               }
-              Iframe.iframe {
-                Iframe.src_=("https://example.com/player")
-                AttributeDsl.title_=("Player")
-                Iframe.allowFullscreen_=(true)
+              iframe {
+                frameSrc = "https://example.com/player"
+                title = "Player"
+                allowFullscreen = true
               }
             }
             footer { text("End") {} }
