@@ -37,7 +37,11 @@ object AttributeDsl {
   def ariaControls_=(value: String)(using AttributeDsl): Unit = put("aria-controls", value)
   def ariaHidden_=(value: Boolean)(using AttributeDsl): Unit = put("aria-hidden", value.toString)
   def ariaExpanded_=(value: Boolean)(using AttributeDsl): Unit = put("aria-expanded", value.toString)
+  def ariaExpanded_=(value: ReadOnlyProperty[Boolean])(using component: AbstractComponent): Unit =
+    component.addDisposable(value.observe(next => component.setAttribute("aria-expanded", next.toString)))
   def ariaPressed_=(value: Boolean)(using AttributeDsl): Unit = put("aria-pressed", value.toString)
+  def ariaPressed_=(value: ReadOnlyProperty[Boolean])(using component: AbstractComponent): Unit =
+    component.addDisposable(value.observe(next => component.setAttribute("aria-pressed", next.toString)))
 
   def setAttribute(name: String, value: String)(using component: AttributeDsl): Unit =
     component.setAttribute(name, value)
