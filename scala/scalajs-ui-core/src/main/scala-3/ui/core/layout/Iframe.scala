@@ -7,7 +7,10 @@ import ui.core.render.Cursor
 final class Iframe extends AbstractComponent {
   val tagName = "iframe"
 
+  def src: String = attribute("src").getOrElse("")
   def src_=(value: String): Unit = setAttribute("src", value)
+
+  def allowFullscreen: Boolean = attribute("allowfullscreen").isDefined
 
   def allowFullscreen_=(value: Boolean): Unit =
     if (value) setAttribute("allowfullscreen", "true")
@@ -20,8 +23,10 @@ object Iframe {
       body
     }
 
+  def src(using iframe: Iframe): String = iframe.src
   def src_=(value: String)(using iframe: Iframe): Unit = iframe.src_=(value)
 
+  def allowFullscreen(using iframe: Iframe): Boolean = iframe.allowFullscreen
   def allowFullscreen_=(value: Boolean)(using iframe: Iframe): Unit =
     iframe.allowFullscreen_=(value)
 }
