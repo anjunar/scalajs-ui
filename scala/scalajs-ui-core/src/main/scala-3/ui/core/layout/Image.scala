@@ -38,8 +38,14 @@ final class Image extends AbstractComponent {
   def decoding_=(value: String): Unit =
     setStringAttribute("decoding", value)
 
+  def decoding: String =
+    attribute("decoding").getOrElse("")
+
   def fetchPriority_=(value: String): Unit =
     setStringAttribute("fetchpriority", value)
+
+  def fetchPriority: String =
+    attribute("fetchpriority").getOrElse("")
 
   def srcset: String =
     attribute("srcset").getOrElse("")
@@ -132,8 +138,14 @@ object Image {
   def decoding_=(value: String)(using image: Image): Unit =
     image.decoding_=(value)
 
+  def decoding(using image: Image): String =
+    image.decoding
+
   def fetchPriority_=(value: String)(using image: Image): Unit =
     image.fetchPriority_=(value)
+
+  def fetchPriority(using image: Image): String =
+    image.fetchPriority
 
   def srcset_=(value: String)(using image: Image): Unit =
     image.srcset_=(value)
