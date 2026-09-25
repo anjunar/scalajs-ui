@@ -39,6 +39,7 @@ await runNpm(["run", "build"], resolve(projectRoot, "npm/scalajs-ui-landing"), p
 await copyDirectory(resolve(projectRoot, "npm/scalajs-ui-landing/dist/static"), pagesDir);
 await writeFile(resolve(pagesDir, "404.html"), notFoundPage(), "utf8");
 await writeFile(resolve(pagesDir, ".nojekyll"), "", "utf8");
+await generatePagesMetadata();
 await validatePages();
 await run(process.execPath, ["npm/scalajs-ui-landing/scripts/verify.mjs", pagesDir, "--pages"], { cwd: projectRoot, env: process.env });
 
@@ -94,11 +95,40 @@ async function copyDirectory(source, destination) {
   await cp(source, destination, { recursive: true });
 }
 
+async function generatePagesMetadata() {
+  const urls = new Set();
+  for (const file of await filesUnder(pagesDir)) {
+    const path = relative(pagesDir, file).replaceAll("\\", "/");
+    if (path !== "index.html" && !path.endsWith("/index.html")) continue;
+    const html = await readFile(file, "utf8");
+    if (/<meta\b[^>]*\bname="robots"[^>]*\bcontent="[^"]*noindex/i.test(html)) continue;
+    const canonical = html.match(/<link\b[^>]*\brel="canonical"[^>]*\bhref="([^"]+)"/i)?.[1];
+    const url = new URL(canonical ?? path.replace(/index\.html$/, ""), `${siteUrl}/`);
+    if (url.origin !== new URL(siteUrl).origin || !url.pathname.startsWith("/scalajs-ui/")) {
+      throw new Error(`Pages HTML has an invalid canonical URL: ${file} -> ${url.href}`);
+    }
+    urls.add(url.href);
+  }
+  const sorted = [...urls].sort();
+  const sitemap = entries => `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    entries.map(url => `  <url><loc>${url.replaceAll("&", "&amp;")}</loc></url>`).join("\n") +
+    `\n</urlset>\n`;
+  await writeFile(resolve(pagesDir, "sitemap.xml"), sitemap(sorted), "utf8");
+  // Keep the existing Scala sitemap URL valid, but replace its stale root URLs.
+  await writeFile(resolve(pagesDir, "scala/sitemap.xml"),
+    sitemap(sorted.filter(url => url.startsWith(`${siteUrl}/scala/`))), "utf8");
+  await writeFile(resolve(pagesDir, "robots.txt"),
+    `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`, "utf8");
+}
+
 async function validatePages() {
   const requiredFiles = [
     "index.html",
     "404.html",
     ".nojekyll",
+    "robots.txt",
+    "sitemap.xml",
     "scala/index.html",
     "scala/404.html",
     "scala/router/user/42/index.html",
@@ -125,6 +155,13 @@ async function validatePages() {
   }
   if (missing.length > 0) {
     throw new Error(`Pages build is incomplete. Missing: ${missing.join(", ")}`);
+  }
+
+  const sitemap = await readFile(resolve(pagesDir, "sitemap.xml"), "utf8");
+  for (const url of [`${siteUrl}/`, `${siteUrl}/de/`, `${siteUrl}/scala/en/`, `${siteUrl}/typescript/`]) {
+    if (!sitemap.includes(`<loc>${url}</loc>`)) {
+      throw new Error(`Pages sitemap is missing ${url}`);
+    }
   }
 
   const assetDirectories = ["scala/assets", "typescript/assets"];
