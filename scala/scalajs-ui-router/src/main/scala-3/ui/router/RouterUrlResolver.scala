@@ -19,6 +19,10 @@ private[router] final case class ResolvedRouterUrl(
 
 private[router] object RouterUrlResolver {
 
+  // Compiled once: String.split compiles its regex on every call.
+  private val SlashPattern     = "/".r
+  private val AmpersandPattern = "&".r
+
   def resolve(
       rawUrl: String,
       config: RouterConfig,
@@ -138,9 +142,8 @@ private[router] object RouterUrlResolver {
     if (!search.startsWith("?")) {
       QueryParams.empty
     } else {
-      val entries = search
-        .drop(1)
-        .split("&")
+      val entries = AmpersandPattern
+        .split(search.drop(1))
         .iterator
         .filter(_.nonEmpty)
         .map { part =>
@@ -166,7 +169,7 @@ private[router] object RouterUrlResolver {
 
   private[router] def segments(path: String): Vector[String] =
     if (path == "/") Vector.empty
-    else path.stripPrefix("/").split("/").iterator.filter(_.nonEmpty).toVector
+    else SlashPattern.split(path.stripPrefix("/")).iterator.filter(_.nonEmpty).toVector
 
   private[router] def normalizePath(path: String): String =
     if (path == null || path.isEmpty || path == "/") {

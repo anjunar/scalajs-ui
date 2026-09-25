@@ -40,5 +40,7 @@ object SsrTextNode {
     * escape text itself.
     */
   def escape(value: String): String =
-    value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    // Most text needs no escaping; the replacements would still build three new strings.
+    if (value.indexOf('&') < 0 && value.indexOf('<') < 0 && value.indexOf('>') < 0) value
+    else value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 }

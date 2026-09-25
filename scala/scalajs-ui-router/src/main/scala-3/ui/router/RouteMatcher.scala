@@ -4,6 +4,9 @@ import scala.scalajs.js
 
 object RouteMatcher {
 
+  // Compiled once: String.split compiles its regex on every call, and matching splits every route's path.
+  private val SlashPattern = "/".r
+
   def resolve(routes: Seq[Route], path: String): List[RouteMatch] = {
     val normalized = normalize(path)
 
@@ -129,7 +132,7 @@ object RouteMatcher {
 
   private def segments(path: String): Vector[String] =
     if (path == "/") Vector.empty
-    else path.stripPrefix("/").split("/").iterator.filter(_.nonEmpty).toVector
+    else SlashPattern.split(path.stripPrefix("/")).iterator.filter(_.nonEmpty).toVector
 
   private def decode(value: String): String =
     try js.URIUtils.decodeURIComponent(value)

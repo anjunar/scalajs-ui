@@ -2,6 +2,10 @@ package ui.core.i18n
 
 private[i18n] object I18nUrlResolver {
 
+  // Compiled once: String.replaceFirst and String.split compile their regex on every call.
+  private val OriginPattern = "^https?://[^/]+".r
+  private val SlashPattern  = "/".r
+
   def resolveLocale(
       rawUrl: String,
       config: I18nConfig,
@@ -11,7 +15,7 @@ private[i18n] object I18nUrlResolver {
       Option(rawUrl).filter(_.nonEmpty).getOrElse("/")
 
     val withoutOrigin =
-      safeUrl.replaceFirst("^https?://[^/]+", "")
+      OriginPattern.replaceFirstIn(safeUrl, "")
 
     val pathname =
       withoutOrigin.takeWhile(ch => ch != '?' && ch != '#')
@@ -42,7 +46,7 @@ private[i18n] object I18nUrlResolver {
 
   private def segments(path: String): Vector[String] =
     if (path == "/") Vector.empty
-    else path.stripPrefix("/").split("/").iterator.filter(_.nonEmpty).toVector
+    else SlashPattern.split(path.stripPrefix("/")).iterator.filter(_.nonEmpty).toVector
 
   private def normalizePath(path: String): String =
     if (path == null || path.isEmpty || path == "/") {

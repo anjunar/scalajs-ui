@@ -14,6 +14,9 @@ private[json] object JsonMetadata {
   private val JsonIgnoreAnnotation = "ui.json.JsonIgnore"
   private val JsonIdAnnotation     = "ui.json.JsonId"
 
+  // Compiled once: String.split compiles its regex on every call, and every typed value is matched by name.
+  private val TypeNameSeparatorPattern = "[/#:]".r
+
   def serializationProperties(descriptor: ClassDescriptor): Array[PropertyDescriptor] =
     descriptor.properties
       .filter(isPublicJsonProperty)
@@ -148,8 +151,8 @@ private[json] object JsonMetadata {
     if (value == null || value.isBlank) Set.empty
     else {
       val normalized = value.trim
-      val localName  = normalized
-        .split("[/#:]")
+      val localName  = TypeNameSeparatorPattern
+        .split(normalized)
         .iterator
         .filter(_.nonEmpty)
         .toSeq
