@@ -1,5 +1,8 @@
 # Scala JS UI 1.0
 
+Website: [English](https://anjunar.com/en/scalajs-ui) · [Deutsch](https://anjunar.com/de/scalajs-ui)
+Documentation: [English](https://docs.anjunar.com/en/scalajs-ui) · [Deutsch](https://docs.anjunar.com/de/scalajs-ui)
+
 Scala JS UI 1.0 is a Scala 3 and Scala.js UI library for server-rendered applications. It combines a component DSL, synchronous reactive state, lifecycle-aware rendering, typed forms, routing, controls, and browser integrations in one Scala.js runtime.
 
 ## Overview
