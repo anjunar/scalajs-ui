@@ -9,7 +9,7 @@ JSON mapping for reflected Scala models and UI properties. The mapper converts m
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-json" % "1.0.6"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-json" % "1.0.7"
 ```
 
 ## Quick start

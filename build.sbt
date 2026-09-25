@@ -27,7 +27,7 @@ val siteConfigUrlOverride = settingKey[Option[String]](
 // 3. Slash-Syntax ist Pflicht, 0.13-Syntax ist entfernt. War hier schon so.
 // ---------------------------------------------------------------------------
 
-version              := "1.0.6"
+version              := "1.0.7"
 organization         := "com.anjunar"
 organizationName     := "Anjunar"
 organizationHomepage := Some(url("https://github.com/anjunar"))
@@ -90,8 +90,8 @@ publishTo := {
 // dann `Files.move`. Ergebnis war reproduzierbar
 //
 //   java.nio.file.AccessDeniedException:
-//     ...\scalajs-ui-core_sjs1_3-1.0.6.jar.151b4332.tmp
-//       -> ...\scalajs-ui-core_sjs1_3-1.0.6.jar
+//     ...\scalajs-ui-core_sjs1_3-1.0.7.jar.151b4332.tmp
+//       -> ...\scalajs-ui-core_sjs1_3-1.0.7.jar
 //
 // bei *jedem* Lauf nach dem ersten im selben Server -- auch ohne Quelltext-
 // aenderung, weil packageBin jedes Mal laeuft. Nur ein Serverneustart half.
@@ -170,7 +170,7 @@ lazy val uiCore = Project(id = "scalajs-ui-core", base = file("scala/scalajs-ui-
   .settings(
     name                                 := "scalajs-ui-core",
     moduleName                           := "scalajs-ui-core",
-    libraryDependencies += "com.anjunar" %% "scala-reflect" % "1.1.3"
+    libraryDependencies += "com.anjunar" %% "scala-reflect" % "1.1.4"
   )
   .settings(commonLibrarySettings)
   .settings(commonJsSettings)
@@ -201,7 +201,7 @@ lazy val uiJson = Project(id = "scalajs-ui-json", base = file("scala/scalajs-ui-
   .settings(
     name                                 := "scalajs-ui-json",
     moduleName                           := "scalajs-ui-json",
-    libraryDependencies += "com.anjunar" %% "scala-reflect" % "1.1.3"
+    libraryDependencies += "com.anjunar" %% "scala-reflect" % "1.1.4"
   )
   .settings(commonLibrarySettings)
   .settings(commonJsSettings)
@@ -286,14 +286,14 @@ lazy val uiEditor = Project(id = "scalajs-ui-editor", base = file("scala/scalajs
     name                                 := "scalajs-ui-editor",
     moduleName                           := "scalajs-ui-editor",
     libraryDependencies ++= Seq(
-      "com.anjunar" %% "scalajs-ember-browser-support" % "1.0.2",
-      "com.anjunar" %% "scalajs-ember-standard" % "1.0.2",
-      "com.anjunar" %% "scalajs-ember-toolbar" % "1.0.2",
-      "com.anjunar" %% "scalajs-ember-forms" % "1.0.2",
-      "com.anjunar" %% "scalajs-ember-table" % "1.0.2",
+      "com.anjunar" %% "scalajs-ember-browser-support" % "1.0.3",
+      "com.anjunar" %% "scalajs-ember-standard" % "1.0.3",
+      "com.anjunar" %% "scalajs-ember-toolbar" % "1.0.3",
+      "com.anjunar" %% "scalajs-ember-forms" % "1.0.3",
+      "com.anjunar" %% "scalajs-ember-table" % "1.0.3",
       // Syntax highlighting for code blocks (ember X02) -- optional in ember, but
       // NativeEditorAdapter.scala always attaches it, so it is not optional here.
-      "com.anjunar" %% "scalajs-ember-code-highlighting" % "1.0.2"
+      "com.anjunar" %% "scalajs-ember-code-highlighting" % "1.0.3"
     )
   )
   .settings(commonLibrarySettings)
