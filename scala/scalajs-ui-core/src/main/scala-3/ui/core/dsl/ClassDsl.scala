@@ -16,6 +16,9 @@ trait ClassDsl {
 
 object ClassDsl {
 
+  // Compiled once: String.split compiles its regex on every call, and nearly every element sets classes.
+  private val WhitespacePattern = "\\s+".r
+
   def addClass(name: String)(using component: ClassDsl): Unit =
     component.addClass(name)
 
@@ -26,7 +29,7 @@ object ClassDsl {
     component.setClasses(value)
 
   def classes_=(value: String)(using component: ClassDsl): Unit =
-    component.setClasses(value.split("\\s+").filter(_.nonEmpty).toSeq)
+    component.setClasses(WhitespacePattern.split(value).filter(_.nonEmpty).toSeq)
 
   def classIf(name: String, condition: ReadOnlyProperty[Boolean])(using component: ClassDsl): Unit =
     component.classCondition(name, condition)

@@ -167,5 +167,7 @@ final class SsrHostElement(val tagName: String) extends HostElement, SsrNode {
   }
 
   private def escapeAttr(value: String): String =
-    value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;")
+    // Most values need no escaping; the replacements would still build three new strings.
+    if (value.indexOf('&') < 0 && value.indexOf('"') < 0 && value.indexOf('<') < 0) value
+    else value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;")
 }

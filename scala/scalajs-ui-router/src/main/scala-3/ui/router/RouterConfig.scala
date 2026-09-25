@@ -109,8 +109,11 @@ object RouterConfig {
       else normalized
     }
 
+  // Compiled once: String.replaceFirst compiles its regex on every call, and every navigation strips the origin.
+  private val OriginPattern = "^https?://[^/]+".r
+
   private[router] def stripOrigin(value: String): String =
-    value.replaceFirst("^https?://[^/]+", "")
+    OriginPattern.replaceFirstIn(value, "")
 
   private[router] def decode(value: String): String =
     try js.URIUtils.decodeURIComponent(value)

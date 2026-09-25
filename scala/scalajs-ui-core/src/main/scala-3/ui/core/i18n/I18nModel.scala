@@ -124,18 +124,21 @@ final class I18nResolver(catalog: MessageCatalog) {
   ): ReadOnlyProperty[String] =
     locale.map(resolve(message, _))
 
-  private def interpolate(pattern: String, args: Vector[MessageArg]): String = {
-    val values = args.iterator.map(arg => arg.name -> String.valueOf(arg.value)).toMap
+  /** Runs for every translated text; most have no placeholder and are returned as they are. */
+  private def interpolate(pattern: String, args: Vector[MessageArg]): String =
+    if (args.isEmpty || pattern.indexOf('{') < 0) pattern
+    else {
+      val values = args.iterator.map(arg => arg.name -> String.valueOf(arg.value)).toMap
 
-    "\\{([A-Za-z][A-Za-z0-9_]*)\\}".r.replaceAllIn(
-      pattern,
-      matched =>
-        values
-          .get(matched.group(1))
-          .map(Matcher.quoteReplacement)
-          .getOrElse(matched.matched)
-    )
-  }
+      I18n.PlaceholderPattern.replaceAllIn(
+        pattern,
+        matched =>
+          values
+            .get(matched.group(1))
+            .map(Matcher.quoteReplacement)
+            .getOrElse(matched.matched)
+      )
+    }
 }
 
 final case class NamedPlaceholder(name: String, value: Any)
@@ -223,8 +226,12 @@ final case class I18nConfig(
 }
 
 object I18n {
+  // Compiled once: a Regex compiles its pattern when it is constructed.
+  private[i18n] val PlaceholderPattern = "\\{([A-Za-z][A-Za-z0-9_]*)\\}".r
+  private val PlaceholderNamePattern   = "[A-Za-z][A-Za-z0-9_]*".r
+
   def named(name: String, value: Any): NamedPlaceholder = {
-    require(name.matches("[A-Za-z][A-Za-z0-9_]*"), s"Invalid placeholder name '$name'")
+    require(PlaceholderNamePattern.matches(name), s"Invalid placeholder name '$name'")
     NamedPlaceholder(name, value)
   }
 
