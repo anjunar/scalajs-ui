@@ -188,10 +188,8 @@ async function updateScalaReadmes(nextVersion) {
       `$1${nextVersion}$2`
     );
     if (path === candidates[0]) {
-      next = next.replace(
-        /(The repository is on the `)[^`]+(` release line)/,
-        `$1${nextVersion}$2`
-      );
+      // The facts row under the title: `| 1.0.7 | Scala.js | 3.3 | MIT |`.
+      next = next.replace(/^(\| )\d+\.\d+\.\d+[^ |]*( \|)/m, `$1${nextVersion}$2`);
     }
     await record(path, current, next);
   }
