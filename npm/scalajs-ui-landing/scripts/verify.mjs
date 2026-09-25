@@ -1,12 +1,20 @@
 import { fileURLToPath } from "node:url";
 import { verifyThemeBootstrap } from "../../../tools/verify-theme.mjs";
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
+import { access, readdir, readFile } from "node:fs/promises";
+import { resolve, dirname, relative } from "node:path";
 import { JSDOM } from "jsdom";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const output = resolve(process.argv[2] ?? resolve(packageRoot, "dist/static"));
+const publicDir = resolve(packageRoot, "public");
+for (const entry of await readdir(publicDir, { recursive: true, withFileTypes: true })) {
+  if (!entry.isFile()) continue;
+  const sourcePath = resolve(entry.parentPath, entry.name);
+  const path = relative(publicDir, sourcePath);
+  assert.deepEqual(await readFile(resolve(output, path)), await readFile(sourcePath),
+    `Public file must be published unchanged: ${path}`);
+}
 const html = await readFile(resolve(output, "index.html"), "utf8");
 const document = new JSDOM(html, { url: "https://anjunar.github.io/scalajs-ui/" }).window.document;
 const source = name => readFile(resolve(output, "starters", name), "utf8");

@@ -4,15 +4,17 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { productionAssets } from "./assets.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const output = resolve(root, "dist/static");
+const client = resolve(root, "dist/client");
 const { renderPage } = await import(pathToFileURL(resolve(root, "dist/server/page.js")).href);
-const assets = await productionAssets(resolve(root, "dist/client"));
+const assets = await productionAssets(client);
 // This package exclusively owns dist/static. Never clean a caller-supplied path.
 if (output !== resolve(root, "dist/static")) throw Error("Unexpected output path");
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
-await cp(resolve(root, "dist/client/assets"), resolve(output, "assets"), { recursive: true });
-await cp(resolve(root, "dist/client/favicon.svg"), resolve(output, "favicon.svg"));
-await cp(resolve(root, "dist/client/.vite/manifest.json"), resolve(output, "landing-manifest.json"));
+// Preserve the full client output, including every file copied from public/.
+// Publish the build manifest under the name used by the landing verifier.
+await cp(client, output, { recursive: true, filter: path => path !== resolve(client, ".vite") });
+await cp(resolve(client, ".vite/manifest.json"), resolve(output, "landing-manifest.json"));
 for (const [url, path] of [["/", "index.html"], ["/en/", "en/index.html"], ["/de/", "de/index.html"]]) {
   const { html, starters } = await renderPage(url, assets);
   await mkdir(dirname(resolve(output, path)), { recursive: true });
