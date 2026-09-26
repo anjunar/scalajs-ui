@@ -27,7 +27,7 @@ val siteConfigUrlOverride = settingKey[Option[String]](
 // 3. Slash-Syntax ist Pflicht, 0.13-Syntax ist entfernt. War hier schon so.
 // ---------------------------------------------------------------------------
 
-version              := "1.0.7"
+version              := "1.0.8"
 organization         := "com.anjunar"
 organizationName     := "Anjunar"
 organizationHomepage := Some(url("https://github.com/anjunar"))
@@ -90,8 +90,8 @@ publishTo := {
 // dann `Files.move`. Ergebnis war reproduzierbar
 //
 //   java.nio.file.AccessDeniedException:
-//     ...\scalajs-ui-core_sjs1_3-1.0.7.jar.151b4332.tmp
-//       -> ...\scalajs-ui-core_sjs1_3-1.0.7.jar
+//     ...\scalajs-ui-core_sjs1_3-1.0.8.jar.151b4332.tmp
+//       -> ...\scalajs-ui-core_sjs1_3-1.0.8.jar
 //
 // bei *jedem* Lauf nach dem ersten im selben Server -- auch ohne Quelltext-
 // aenderung, weil packageBin jedes Mal laeuft. Nur ein Serverneustart half.
