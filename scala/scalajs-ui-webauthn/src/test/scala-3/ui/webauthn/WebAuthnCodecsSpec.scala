@@ -189,4 +189,28 @@ class WebAuthnCodecsSpec extends AnyFlatSpec with Matchers {
 
   private def bytes(values: Int*): Uint8Array =
     new Uint8Array(js.Array(values.map(_.toShort)*))
+
+  it should "hand options to the browser's own JSON parsers where the browser has them" in {
+    val global = js.Dynamic.global.globalThis
+    val calls = js.Array[String]()
+    val parsed = js.Dynamic.literal(parsed = true)
+    val api = js.Dynamic.literal()
+    api.updateDynamic("parseCreationOptionsFromJSON")(js.ThisFunction.fromFunction2 { (self: js.Dynamic, value: js.Dynamic) =>
+      calls.push(s"creation:${value.selectDynamic("challenge")}:${self eq api}")
+      parsed
+    })
+    api.updateDynamic("parseRequestOptionsFromJSON")(js.ThisFunction.fromFunction2 { (self: js.Dynamic, value: js.Dynamic) =>
+      calls.push(s"request:${value.selectDynamic("challenge")}:${self eq api}")
+      parsed
+    })
+    val previous = global.selectDynamic("PublicKeyCredential")
+    global.updateDynamic("PublicKeyCredential")(api)
+    try {
+      val creation = WebAuthnCodecs.creationOptionsFromJson(js.Dynamic.literal(challenge = "Y3JlYXRl"))
+      val request = WebAuthnCodecs.requestOptionsFromJson(js.Dynamic.literal(challenge = "cmVxdWVzdA"))
+      (creation.asInstanceOf[js.Any] eq parsed) shouldBe true
+      (request.asInstanceOf[js.Any] eq parsed) shouldBe true
+      calls.toSeq shouldBe Seq("creation:Y3JlYXRl:true", "request:cmVxdWVzdA:true")
+    } finally global.updateDynamic("PublicKeyCredential")(previous)
+  }
 }
