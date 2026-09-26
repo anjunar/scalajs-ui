@@ -1,6 +1,6 @@
 {
   "name": "@anjunar/scalajs-ui-bridge",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "The Scala.js implementation of @anjunar/scalajs-ui-core's contract -- the scalajs-ui-bridge sbt module, linked to an ES module.",
   "type": "module",
   "main": "./index.js",
@@ -69,7 +69,7 @@
   },
   "types": "./types/index.d.ts",
   "peerDependencies": {
-    "@anjunar/scalajs-ui-core": "^1.0.7"
+    "@anjunar/scalajs-ui-core": "^1.0.8"
   },
   "dependencies": {}
 }

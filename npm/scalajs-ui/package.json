@@ -1,6 +1,6 @@
 {
   "name": "@anjunar/scalajs-ui",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Default component CSS for the scalajs-ui Scala.js modules.",
   "type": "module",
   "license": "MIT",
