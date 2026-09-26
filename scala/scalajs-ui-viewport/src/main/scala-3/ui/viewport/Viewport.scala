@@ -282,8 +282,11 @@ object Viewport {
       val zIndex: Property[Int] = Property(0),
       val visible: Property[Boolean] = Property(true),
       val onClose: Option[Window => Unit] = None,
-      val onClick: Option[Window => Unit] = None
+      val onClick: Option[Window => Unit] = None,
+      val resizable: Boolean = true
   ) extends OwnedConf {
+    val widthProperty: Property[Double] = Property(widthPx.toDouble)
+    val heightProperty: Property[Double] = Property(heightPx.toDouble)
     val titleProperty: Property[String]  = Property("")
     private var titleBinding: Disposable = Disposable.empty
 
@@ -324,12 +327,14 @@ object Viewport {
         widthPx: Int = 520,
         heightPx: Int = 360,
         onClose: Option[Window => Unit] = None,
-        onClick: Option[Window => Unit] = None
+        onClick: Option[Window => Unit] = None,
+        resizable: Boolean = true
     )(body: WindowBody): WindowConf = {
       val conf = new WindowConf(
         body = body,
         widthPx = widthPx,
         heightPx = heightPx,
+        resizable = resizable,
         onClose = onClose,
         onClick = onClick
       )
@@ -402,6 +407,14 @@ object Viewport {
       heightPx: Int = 360
   )(body: WindowBody)(using component: AbstractComponent): WindowConf =
     addWindow(WindowConf(title, widthPx, heightPx)(body))
+
+  def addWindow(
+      title: String,
+      widthPx: Int,
+      heightPx: Int,
+      resizable: Boolean
+  )(body: WindowBody)(using component: AbstractComponent): WindowConf =
+    addWindow(WindowConf(title, widthPx, heightPx, resizable = resizable)(body))
 
   def addWindow[T](
       title: T,

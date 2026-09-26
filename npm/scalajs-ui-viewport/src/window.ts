@@ -23,6 +23,8 @@ export interface WindowOptions {
   readonly widthPx?: number;
   /** Defaults to 360. */
   readonly heightPx?: number;
+  /** Enables resizing from the window edges and corners. Defaults to true. */
+  readonly resizable?: boolean;
   /** Runs once, when the window's own close button is clicked. */
   readonly onClose?: () => void;
 }

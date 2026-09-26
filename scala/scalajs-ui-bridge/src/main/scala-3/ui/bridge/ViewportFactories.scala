@@ -110,12 +110,14 @@ private[bridge] object WindowFactory extends ComponentFactory {
     val title    = ControlFactories.str(options("title"))
     val widthPx  = options.get("widthPx").map(ControlFactories.int).getOrElse(520)
     val heightPx = options.get("heightPx").map(ControlFactories.int).getOrElse(360)
+    val resizable = options.get("resizable").map(ControlFactories.bool).getOrElse(true)
     val onClose  = options.get("onClose").map(_.asInstanceOf[js.Function0[Unit]]).orUndefined
 
     val conf = Viewport.WindowConf(
       title,
       widthPx,
       heightPx,
+      resizable = resizable,
       onClose = onClose.toOption.map(cb => (_: Window) => cb())
     ) {
       body(
