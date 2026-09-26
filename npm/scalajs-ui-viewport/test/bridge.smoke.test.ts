@@ -136,6 +136,43 @@ describe("notify", () => {
 });
 
 describe("floatingWindow", () => {
+  it("exposes resize handles only when resizable is enabled and keeps a wide window inside the viewport", () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1200 });
+    const build = (): void => {
+      viewport(() => {
+        floatingWindow({ title: "Resizable", widthPx: 1100 }, () => text("body"));
+        floatingWindow({ title: "Fixed", widthPx: 1100, resizable: false }, () => text("body"));
+      });
+    };
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const app = mount(root, build);
+    try {
+      const windows = root.querySelectorAll<HTMLElement>(".ui-window");
+      expect(windows).toHaveLength(2);
+      expect(windows[0]!.querySelectorAll(".ui-window__handle")).toHaveLength(8);
+      expect(windows[1]!.querySelectorAll(".ui-window__handle")).toHaveLength(0);
+      expect(windows[0]!.style.left).toBe("72px");
+      const eastHandle = windows[0]!.querySelector<HTMLElement>(".ui-window__handle--e")!;
+      eastHandle.dispatchEvent(new PointerEvent("pointerdown", {
+        bubbles: true, button: 0, pointerId: 1, clientX: 100,
+      }));
+      window.dispatchEvent(new PointerEvent("pointermove", { pointerId: 1, clientX: 110 }));
+      window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1 }));
+      expect(windows[0]!.style.width).toBe("1110px");
+
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 960 });
+      window.dispatchEvent(new Event("resize"));
+      expect(windows[0]!.style.left).toBe("8px");
+      expect(windows[1]!.style.left).toBe("8px");
+    } finally {
+      app.dispose();
+      root.remove();
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+    }
+  });
+
   const openFlagBuild = (): { open: ReturnType<typeof property<boolean>>; build: () => void } => {
     const open = property(false);
     const build = (): void => {
