@@ -9,7 +9,7 @@ Rich-text editing for Scala JS UI 1.0, backed by Ember in the browser and expose
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-editor" % "1.0.12"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-editor" % "1.1.0"
 ```
 
 The module uses the published `scalajs-ember` libraries and the viewport for link and image dialogs.
