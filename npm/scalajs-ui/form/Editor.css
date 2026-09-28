@@ -269,8 +269,9 @@
     text-decoration: line-through;
 }
 
+/* Inline code only: the <code> inside a code block's <pre> belongs to the block. */
 .scalajs-ui-editor .editor-text-code,
-.scalajs-ui-editor code:not(.scalajs-ui-editor-code__content) {
+.scalajs-ui-editor :not(pre) > code:not(.scalajs-ui-editor-code__content) {
     border: 1px solid var(--aj-line-soft);
     border-radius: 5px;
     padding: 0.1em 0.3em;
