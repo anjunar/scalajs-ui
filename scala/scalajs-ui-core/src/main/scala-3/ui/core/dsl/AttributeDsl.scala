@@ -2,6 +2,7 @@ package ui.core.dsl
 
 import ui.core.component.AbstractComponent
 import ui.core.state.ReadOnlyProperty
+import ui.core.text.TextValue
 
 trait AttributeDsl {
 
@@ -35,8 +36,12 @@ object AttributeDsl {
   def lang_=(value: String)(using AttributeDsl): Unit = put("lang", value)
   def title(using AttributeDsl): String = get("title")
   def title_=(value: String)(using AttributeDsl): Unit = put("title", value)
+  def title_=[T](value: T)(using TextValue[T], AbstractComponent): Unit =
+    bind("title", TextValue.asReadOnlyProperty(value))
   def placeholder(using AttributeDsl): String = get("placeholder")
   def placeholder_=(value: String)(using AttributeDsl): Unit = put("placeholder", value)
+  def placeholder_=[T](value: T)(using TextValue[T], AbstractComponent): Unit =
+    bind("placeholder", TextValue.asReadOnlyProperty(value))
   def inputMode(using AttributeDsl): String = get("inputmode")
   def inputMode_=(value: String)(using AttributeDsl): Unit = put("inputmode", value)
   def autoComplete(using AttributeDsl): String = get("autocomplete")
@@ -50,6 +55,8 @@ object AttributeDsl {
   def ariaLabel(using AttributeDsl): String = get("aria-label")
   def ariaLabel_=(value: String)(using AttributeDsl): Unit = put("aria-label", value)
   def ariaLabel_=(value: ReadOnlyProperty[String])(using AbstractComponent): Unit = bind("aria-label", value)
+  def ariaLabel_=[T](value: T)(using TextValue[T], AbstractComponent): Unit =
+    bind("aria-label", TextValue.asReadOnlyProperty(value))
   def ariaLabelledBy(using AttributeDsl): String = get("aria-labelledby")
   def ariaLabelledBy_=(value: String)(using AttributeDsl): Unit = put("aria-labelledby", value)
   def ariaControls(using AttributeDsl): String = get("aria-controls")
@@ -67,6 +74,9 @@ object AttributeDsl {
 
   def setAttribute(name: String, value: String)(using component: AttributeDsl): Unit =
     component.setAttribute(name, value)
+
+  def setAttribute[T](name: String, value: T)(using TextValue[T], AbstractComponent): Unit =
+    bind(name, TextValue.asReadOnlyProperty(value))
 
   def removeAttribute(name: String)(using component: AttributeDsl): Unit =
     component.removeAttribute(name)

@@ -61,15 +61,30 @@ final class Property[T](private var value: T) extends WritableProperty[T] {
     }
   }
 
-  override def observe(listener: T => Unit): Disposable = {
-    listeners += listener
-    listener(value)
-    () => listeners -= listener
-  }
+  override def observe(listener: T => Unit): Disposable =
+    subscribe(listener, notifyInitial = true)
 
-  override def observeWithoutInitial(listener: T => Unit): Disposable = {
-    listeners += listener
-    () => listeners -= listener
+  override def observeWithoutInitial(listener: T => Unit): Disposable =
+    subscribe(listener, notifyInitial = false)
+
+  private def subscribe(listener: T => Unit, notifyInitial: Boolean): Disposable = {
+    var active = true
+    // Another listener can dispose this subscription during the same notification snapshot.
+    val guarded: T => Unit = next => if (active) listener(next)
+    listeners += guarded
+    val subscription = Disposable {
+      active = false
+      listeners -= guarded
+    }
+    if (notifyInitial) {
+      try guarded(value)
+      catch {
+        case error: Throwable =>
+          subscription.dispose()
+          throw error
+      }
+    }
+    subscription
   }
 
   override def toString: String =

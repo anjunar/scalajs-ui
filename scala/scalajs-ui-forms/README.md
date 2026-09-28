@@ -9,7 +9,7 @@ Model-bound forms and controls for Scala JS UI 1.0, including inputs, validation
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-forms" % "1.0.12"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-forms" % "1.0.13"
 ```
 
 ## Quick start
@@ -60,6 +60,27 @@ form(profile) {
 ```
 
 Validators are supplied by `ui.forms.validators`, including nullability, emptiness, size, numeric bounds, decimal bounds, digits, patterns, email, and date constraints. They use the same annotation metadata for model-backed validation.
+
+## Translated selection labels
+
+Inside a component with an inherited i18n runtime, supply the macro directly.
+For example, inside the existing `form(model)` composition:
+
+```scala
+import ui.core.i18n.i18n
+import ui.forms.SelectInput.selectInput
+import ui.forms.SelectOption
+
+selectInput("status", Seq(
+  SelectOption("DRAFT", i18n"Draft"),
+  SelectOption("PUBLISHED", i18n"Published")
+)) {}
+```
+
+Only labels are translated; option values and the selected model value stay
+unchanged. Labels also accept strings, existing string properties and properties
+of messages, using the same `TextValue` contract as `text` and `button`.
+Form placeholders likewise accept `placeholder = i18n"Choose an author"`.
 
 ## SSR and non-JavaScript behavior
 
