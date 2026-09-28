@@ -57,7 +57,7 @@ private[editor] final class NativeEditorAdapter(
   private val holder             = new CompositionHolder()
   private val mediaPolicy        = NativeMediaPolicy(schemes = Set.empty)
   private val rules = MarkdownSupports.everything(media = mediaPolicy) ++ TableSupport.markdownRules
-  private val markdownCodec = new UiMarkdownCodec(rules, generator, mediaUrlPolicy)
+  private val markdownCodec = new UiMarkdownCodec(rules, generator, mediaUrlPolicy, labels)
   private val field         = new EditorField(name, markdownCodec)
   private val gate          = new Extension {
     val id                  = ExtensionId("ui.editor.composition")
@@ -536,6 +536,24 @@ private[editor] final class NativeEditorAdapter(
     cleanups += (() => commits.dispose())
     val focusIn: js.Function1[dom.Event, Unit]  = _ => onFocusChanged(true)
     val focusOut: js.Function1[dom.Event, Unit] = _ => onFocusChanged(false)
+    // Images are atomic document nodes. A pointer click selects the node, rather than
+    // letting the browser leave a caret before or after it and opening an insert dialog.
+    val selectImage: js.Function1[dom.MouseEvent, Unit] = event =>
+      if (available && event.button == 0 && !event.shiftKey && !event.ctrlKey && !event.metaKey)
+        event.target match {
+          case image: dom.HTMLImageElement =>
+            Option(image.getAttribute("data-ember-node")).map(NodeId.apply)
+              .filter(id => session.document.node(id).exists(_.isInstanceOf[ImageNode]))
+              .foreach { id =>
+                event.preventDefault()
+                selection.scope.focus()
+                session.update(tx => { tx.select(NodeSelection(Set(id))); () })
+                selection.write(session.selection, WriteIntent.Explicit)
+              }
+          case _ => ()
+        }
+    surface.addEventListener("mousedown", selectImage)
+    cleanups += (() => surface.removeEventListener("mousedown", selectImage))
     surface.addEventListener("focusin", focusIn)
     surface.addEventListener("focusout", focusOut)
     cleanups += (() => {
@@ -630,6 +648,7 @@ private[editor] final class NativeEditorAdapter(
   }
 
   private def openImage(): Either[EditorError, Unit] = {
+    if (selection.scope.focusWithin) selection.importPendingNative()
     val image = dialogService.selectedImage
     openWindow(
       if (image.nonEmpty) EditorMessages.editImage else EditorMessages.insertImage,
@@ -683,7 +702,7 @@ private[editor] final class NativeEditorAdapter(
   ): Either[EditorError, Unit] = {
     if (dialogWindow.nonEmpty)
       return Left(ToolbarFailure(labels.now(EditorMessages.closeDialog)))
-    if (selection.scope.focusWithin) selection.importNative()
+    if (selection.scope.focusWithin) selection.importPendingNative()
     dialogService.capture().map { target =>
       var applied                   = false
       var finished                  = false

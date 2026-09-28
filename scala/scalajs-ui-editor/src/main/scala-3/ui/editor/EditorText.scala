@@ -11,6 +11,9 @@ private[editor] final class EditorText(val runtime: I18nRuntime) {
 }
 
 private[editor] object EditorText {
+  def fallback: EditorText = new EditorText(
+    I18nRuntime(Property(I18nLocale.En), I18nResolver(MessageCatalog.empty))
+  )
   def apply(owner: AbstractComponent): EditorText =
     new EditorText(
       I18nRuntime
