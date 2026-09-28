@@ -9,7 +9,7 @@ The core Scala.js runtime and DSL for Scala JS UI 1.0. Use it to compose DOM com
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-core" % "1.0.12"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-core" % "1.0.13"
 ```
 
 Enable the Scala.js sbt plugin in the consuming project. In this repository the module is built with Scala 3.3.8 and sbt 2; `%%` supplies the Scala.js platform suffix in this build.
@@ -46,6 +46,34 @@ def counter(using ui.core.component.AbstractComponent, ui.core.render.Cursor): U
 `Condition.when` mounts its body while a boolean property is true. `Foreach` mounts one body per list item. `FetchComponent.fetch` registers asynchronous work with the render context so SSR can wait for it.
 
 `Runtime.renderToString` renders a fragment and `Runtime.renderToStringAsync` waits for async work. `Runtime.mount` renders with the supplied cursor: use `DomCursor.root(...)` for an empty browser host and `HydratingCursor.root(...)` to claim server-rendered nodes. `Head.head`, `DocumentHead`, and `ui.core.i18n` provide document metadata and locale-aware messages.
+
+## Messages in the DSL
+
+Provide an `I18nRuntime` on an ancestor component, then pass messages directly.
+Inside the existing `compose` / `render` block:
+
+```scala
+import ui.core.dsl.AttributeDsl.{ariaLabel, ariaLabel_=}
+import ui.core.i18n.i18n
+import ui.core.layout.Button.button
+import ui.core.layout.Div.div
+import ui.core.state.Property
+
+val busy = Property(false)
+div {
+  ariaLabel = i18n"Publication status"
+  button(busy.map(value => if (value) i18n"Saving" else i18n"Save")) {}
+}
+```
+
+`TextValue` resolves messages through the component context. A property of
+messages follows both its own updates and locale changes; the mounted DSL
+component owns the subscriptions. There is no need to call `runtime.text` at
+these call sites. Existing string properties pass through unchanged.
+
+`AttributeDsl` accepts these values in `ariaLabel`, `title`, `placeholder`
+and `setAttribute`. String overloads remain available, including for components
+that only implement `AttributeDsl`.
 
 ## SSR and hydration
 
