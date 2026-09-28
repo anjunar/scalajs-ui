@@ -3,11 +3,13 @@ package ui.editor
 import ui.core.component.AbstractComponent
 import ui.core.context.UrlScope
 
-import ui.core.dsl.AttributeDsl.{setAttribute as setDslAttribute}
+import ui.core.dsl.AttributeDsl.{ariaLabel, ariaLabel_=, setAttribute as setDslAttribute}
 import ui.core.dsl.ClassDsl.{addClass, classes}
 import ui.core.dsl.DslLayer
 import ui.core.dsl.DslLayer.render
 import ui.core.dsl.StyleDsl.*
+import ui.core.layout.Button.{button, buttonType}
+import ui.core.dsl.EventDsl.onClick
 import ui.core.layout.Condition.when
 import ui.core.layout.Div
 import ui.core.layout.Div.div
@@ -47,9 +49,12 @@ final class Editor private[editor] (
 
   override val valueProperty: Property[String] = Property("")
 
-  private val placeholderProperty                      = Property("")
-  private val presentationError                        = Property("")
-  private val sourceModeLabel                          = Property("Markdown")
+  private val placeholderProperty  = Property("")
+  private val presentationError    = Property(Option.empty[String])
+  private lazy val labels          = EditorText(this)
+  private lazy val sourceModeLabel = markdownModeProperty.flatMap(source =>
+    labels.text(if (source) EditorMessages.visual else EditorMessages.markdown)
+  )
   private val markdownModeProperty                     = Property(false)
   private val plugins                                  = mutable.ArrayBuffer.empty[EditorPlugin]
   var mediaUploader: Option[MediaUploader]             = None
@@ -65,16 +70,16 @@ final class Editor private[editor] (
 
   private var toolbarModeValue: EditorToolbarMode       = EditorToolbarMode.Ribbon
   private var editUrlValue: Option[String]              = None
-  private var editLabelValue                            = "Edit"
+  private var editLabelValue: Option[String]            = None
   private var readonlyUrlValue: Option[String]          = None
-  private var readonlyLabelValue                        = "Readonly"
+  private var readonlyLabelValue: Option[String]        = None
   private var showModeActionsValue                      = true
   private var toolbarHost: Div                          = uninitialized
   private var fallbackHost: Div                         = uninitialized
   private var surfaceHost: Div                          = uninitialized
   private var nativeAdapter: NativeEditorAdapter | Null = null
   private var browserRendering                          = false
-  private var configuredEditable: Option[Either[Boolean, Property[Boolean]]] = None
+  private var configuredEditable: Option[Either[Boolean, Property[Boolean]]]     = None
   private var configuredMarkdownMode: Option[Either[Boolean, Property[Boolean]]] = None
 
   override def compose(cursor: Cursor): Unit = {
@@ -89,8 +94,11 @@ final class Editor private[editor] (
       valueProperty.set(MarkdownImages.discardEmbedded(valueProperty.get))
       validators += new ui.forms.validators.Validator[String] {
         def validate(value: String): Option[String] =
-          MarkdownImages.validationError(value, mediaUrlPolicy)
+          MarkdownImages
+            .validationError(value, mediaUrlPolicy)
+            .map(_ => labels.now(EditorMessages.invalidImages))
       }
+      addDisposable(labels.runtime.locale.observeWithoutInitial(_ => validate()))
       installConfiguredEditable()
       installConfiguredMarkdownMode()
       initializeUrlMode()
@@ -111,7 +119,7 @@ final class Editor private[editor] (
 
           toolbarHost = div {
             classes = Seq("scalajs-ui-editor__toolbar")
-            setDslAttribute("aria-label", "Editor toolbar")
+            ariaLabel = labels.text(EditorMessages.toolbar)
             style { display = "none" }
           }
 
@@ -125,9 +133,12 @@ final class Editor private[editor] (
               )
             }
             text(
-              mediaStatusProperty.map(status =>
-                status.error.getOrElse(
-                  if (status.pending > 0) s"Uploading ${status.pending} image(s)…" else ""
+              mediaStatusProperty.flatMap(status =>
+                labels.runtime.locale.map(_ =>
+                  status.error.getOrElse(
+                    if (status.pending > 0) labels.now(EditorMessages.uploading(status.pending))
+                    else ""
+                  )
                 )
               )
             ) {}
@@ -136,9 +147,9 @@ final class Editor private[editor] (
           if showModeActionsValue then
             div {
               classes = Seq("scalajs-ui-editor__markdown-actions")
-              ui.core.layout.Button.button(sourceModeLabel) {
-                ui.core.layout.Button.buttonType("button")
-                ui.core.dsl.EventDsl.onClick { _ =>
+              button(sourceModeLabel) {
+                buttonType("button")
+                onClick { _ =>
                   markdownModeProperty.set(!markdownModeProperty.get)
                 }
               }
@@ -146,14 +157,16 @@ final class Editor private[editor] (
                 if (editable)
                   new MarkdownModeLink(
                     readonlyUrlValue.getOrElse(modeUrl(editable = false)),
-                    readonlyLabelValue,
+                    readonlyLabelValue
+                      .map(Property(_))
+                      .getOrElse(labels.text(EditorMessages.readonly)),
                     readonly = true,
                     onActivate = () => editableProperty.set(false)
                   )
                 else
                   new MarkdownModeLink(
                     editUrlValue.getOrElse(modeUrl(editable = true)),
-                    editLabelValue,
+                    editLabelValue.map(Property(_)).getOrElse(labels.text(EditorMessages.edit)),
                     readonly = false,
                     onActivate = () => editableProperty.set(true)
                   )
@@ -162,7 +175,21 @@ final class Editor private[editor] (
 
           div {
             setDslAttribute("role", "status")
-            text(presentationError) {}
+            text(
+              presentationError.flatMap(reason =>
+                labels.runtime.locale.map { _ =>
+                  reason.fold("")(detail =>
+                    labels.now(
+                      EditorMessages.markdownFallback(
+                        Option(detail)
+                          .filter(_.nonEmpty)
+                          .getOrElse(labels.now(EditorMessages.unavailable))
+                      )
+                    )
+                  )
+                }
+              )
+            ) {}
           }
 
           div {
@@ -190,6 +217,7 @@ final class Editor private[editor] (
                 "ember-editor-input"
               )
               setDslAttribute("role", "textbox")
+              setDslAttribute("aria-label", name)
               setDslAttribute("aria-multiline", "true")
               setDslAttribute("contenteditable", editableProperty.get.toString)
               setDslAttribute("aria-readonly", (!editableProperty.get).toString)
@@ -245,20 +273,21 @@ final class Editor private[editor] (
   private[editor] def editUrl_=(value: String): Unit =
     editUrlValue = Option(value).map(_.trim).filter(_.nonEmpty)
 
-  private[editor] def editLabel: String = editLabelValue
+  private[editor] def editLabel: String = editLabelValue.getOrElse(labels.now(EditorMessages.edit))
 
   private[editor] def editLabel_=(value: String): Unit =
-    editLabelValue = Option(value).map(_.trim).filter(_.nonEmpty).getOrElse("Edit")
+    editLabelValue = Option(value).map(_.trim).filter(_.nonEmpty)
 
   private[editor] def readonlyUrl: Option[String] = readonlyUrlValue
 
   private[editor] def readonlyUrl_=(value: String): Unit =
     readonlyUrlValue = Option(value).map(_.trim).filter(_.nonEmpty)
 
-  private[editor] def readonlyLabel: String = readonlyLabelValue
+  private[editor] def readonlyLabel: String =
+    readonlyLabelValue.getOrElse(labels.now(EditorMessages.readonly))
 
   private[editor] def readonlyLabel_=(value: String): Unit =
-    readonlyLabelValue = Option(value).map(_.trim).filter(_.nonEmpty).getOrElse("Readonly")
+    readonlyLabelValue = Option(value).map(_.trim).filter(_.nonEmpty)
 
   private[editor] def showModeActions: Boolean = showModeActionsValue
 
@@ -294,7 +323,8 @@ final class Editor private[editor] (
   private def installConfiguredMarkdownMode(): Unit =
     configuredMarkdownMode.foreach {
       case Left(value)  => markdownModeProperty.set(value)
-      case Right(value) => addDisposable(Property.subscribeBidirectional(value, markdownModeProperty))
+      case Right(value) =>
+        addDisposable(Property.subscribeBidirectional(value, markdownModeProperty))
     }
 
   private def initializeUrlMode(): Unit =
@@ -346,6 +376,7 @@ final class Editor private[editor] (
         val adapter = new NativeEditorAdapter(
           name = name,
           owner = this,
+          labels = labels,
           surface = surface,
           toolbar = toolbar,
           plugins = plugins.toSeq,
@@ -359,15 +390,12 @@ final class Editor private[editor] (
         try {
           adapter.mount(valueProperty.get, editableProperty.get)
           nativeAdapter = adapter
-          presentationError.set("")
+          presentationError.set(None)
         } catch {
           case scala.util.control.NonFatal(error) =>
             adapter.close()
             markdownModeProperty.set(true)
-            presentationError.set(
-              "Markdown-Ansicht: " + Option(error.getMessage)
-                .getOrElse("Darstellung nicht verfügbar.")
-            )
+            presentationError.set(Some(Option(error.getMessage).getOrElse("")))
         }
         syncPresentation(editableProperty.get)
         setAttribute("data-scalajs-ui-editor-loading", "false")
@@ -378,7 +406,9 @@ final class Editor private[editor] (
 
   private def updateEditable(editable: Boolean): Unit = {
     if (
-      browserRendering && editable && !markdownModeProperty.get && nativeAdapter == null && Option(surfaceHost).exists(
+      browserRendering && editable && !markdownModeProperty.get && nativeAdapter == null && Option(
+        surfaceHost
+      ).exists(
         _.isBound
       )
     )
@@ -389,7 +419,6 @@ final class Editor private[editor] (
   }
 
   private def syncPresentation(editable: Boolean): Unit = {
-    sourceModeLabel.set(if (markdownModeProperty.get) "Visuell" else "Markdown")
     // Once Ember has been mounted in the browser, keep it as the live surface when the
     // control becomes readonly. The adapter applies Ember's readonly state and hides the
     // toolbar; falling back to MarkdownRenderer here would unnecessarily replace the DOM and
@@ -415,11 +444,7 @@ final class Editor private[editor] (
       catch {
         case scala.util.control.NonFatal(error) =>
           markdownModeProperty.set(true)
-          presentationError.set(
-            "Markdown-Ansicht: " + Option(error.getMessage).getOrElse(
-              "Darstellung nicht verfügbar."
-            )
-          )
+          presentationError.set(Some(Option(error.getMessage).getOrElse("")))
           syncPresentation(editableProperty.get)
       }
     }
@@ -513,7 +538,8 @@ object Editor {
 
   def markdownMode(using editor: Editor): Boolean = editor.markdownModeProperty.get
 
-  def markdownMode_=(value: Boolean)(using editor: Editor): Unit = editor.configureMarkdownMode(value)
+  def markdownMode_=(value: Boolean)(using editor: Editor): Unit =
+    editor.configureMarkdownMode(value)
 
   def markdownMode_=(value: Property[Boolean])(using editor: Editor): Unit =
     editor.configureMarkdownMode(value)

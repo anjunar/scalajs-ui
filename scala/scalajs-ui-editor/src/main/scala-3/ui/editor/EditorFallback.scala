@@ -9,7 +9,7 @@ import ui.core.dsl.EventDsl.{on, onClick}
 import ui.core.layout.Div.div
 import ui.core.layout.TextComponent.text
 import ui.core.render.Cursor
-import ui.core.state.Property
+import ui.core.state.{Property, ReadOnlyProperty}
 import ui.core.statement.DynamicComponentRenderer.dynamic
 import org.scalajs.dom
 import org.scalajs.dom.HTMLTextAreaElement
@@ -74,10 +74,13 @@ private final class MarkdownTextArea(
 /** The ordinary link used to change editor mode with or without JavaScript. */
 private[editor] final class MarkdownModeLink(
     url: String,
-    label: String,
+    label: ReadOnlyProperty[String],
     readonly: Boolean,
     onActivate: () => Unit
 ) extends AbstractComponent {
+  def this(url: String, label: String, readonly: Boolean, onActivate: () => Unit) =
+    this(url, Property(label), readonly, onActivate)
+
   override val tagName: String = "a"
 
   override def compose(cursor: Cursor): Unit =

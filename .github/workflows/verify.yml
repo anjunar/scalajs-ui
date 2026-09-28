@@ -51,8 +51,8 @@ jobs:
       - name: Link the production Scala.js bridge
         run: sbt --server "scalajs-ui-bridge/fullLinkJS"
 
-      - name: Link the core browser test application
-        run: sbt --server "scalajs-ui-core-browser-tests/fullLinkJS"
+      - name: Link the core and editor browser test applications
+        run: sbt --server "scalajs-ui-core-browser-tests/fullLinkJS" "scalajs-ui-editor-browser-tests/fullLinkJS"
 
       # Every Scala.js artifact needed before Verify is already linked. Left
       # running, the resident sbt server (a JVM) would sit through the whole
