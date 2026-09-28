@@ -27,6 +27,7 @@ import ember.editor.forms.{MediaCoordinator as NativeMediaCoordinator, *}
 import ember.editor.ui.DocumentView
 import ui.core.component.{AbstractComponent, Runtime}
 import ui.core.render.DomCursor
+import ui.core.i18n.RuntimeMessage
 import ui.core.dsl.DslLayer
 import ui.viewport.Viewport
 import ui.editor.plugins.EditorPlugin
@@ -39,6 +40,7 @@ import scala.util.control.NonFatal
 private[editor] final class NativeEditorAdapter(
     name: String,
     owner: AbstractComponent,
+    labels: EditorText,
     surface: dom.HTMLDivElement,
     toolbar: dom.HTMLElement,
     plugins: Seq[EditorPlugin],
@@ -54,10 +56,10 @@ private[editor] final class NativeEditorAdapter(
   private val history            = new History()
   private val holder             = new CompositionHolder()
   private val mediaPolicy        = NativeMediaPolicy(schemes = Set.empty)
-  private val rules              = MarkdownSupports.everything(media = mediaPolicy) ++ TableSupport.markdownRules
-  private val markdownCodec      = new UiMarkdownCodec(rules, generator, mediaUrlPolicy)
-  private val field              = new EditorField(name, markdownCodec)
-  private val gate               = new Extension {
+  private val rules = MarkdownSupports.everything(media = mediaPolicy) ++ TableSupport.markdownRules
+  private val markdownCodec = new UiMarkdownCodec(rules, generator, mediaUrlPolicy)
+  private val field         = new EditorField(name, markdownCodec)
+  private val gate          = new Extension {
     val id                  = ExtensionId("ui.editor.composition")
     override def contribute =
       ExtensionContributions(preCommitRules = Vector(BrowserInputController.busyRule(holder)))
@@ -129,7 +131,10 @@ private[editor] final class NativeEditorAdapter(
           TextNode(textId, "")
         )
       )
-      .fold(violations => throw new IllegalArgumentException(violations.map(_.render).mkString("; ")), identity)
+      .fold(
+        violations => throw new IllegalArgumentException(violations.map(_.render).mkString("; ")),
+        identity
+      )
   }
 
   def mount(markdown: String, editable: Boolean): Unit = {
@@ -179,13 +184,16 @@ private[editor] final class NativeEditorAdapter(
             service.upload(file, abort.signal).map { reference =>
               val checked = MediaUrlPolicy
                 .checked(mediaUrlPolicy, reference.src)
-                .getOrElse(throw new IllegalArgumentException("Bildadresse ist nicht zulässig."))
+                .getOrElse(
+                  throw new IllegalArgumentException(labels.now(EditorMessages.invalidImageAddress))
+                )
               val url = mediaPolicy
                 .parse(checked.src)
                 .fold(e => throw new IllegalArgumentException(e.message), identity)
               NativeMediaReference(url, Some(MediaId(reference.mediaId)))
             }
-          case None => Future.failed(new IllegalStateException("Kein Bild-Upload eingerichtet."))
+          case None =>
+            Future.failed(new IllegalStateException(labels.now(EditorMessages.missingUploader)))
         }
         result
           .recoverWith { case js.JavaScriptException(error: js.Error) =>
@@ -258,7 +266,8 @@ private[editor] final class NativeEditorAdapter(
         session,
         cmd,
         payload,
-        () => CommandState(available && Tables.contextAt(session.document, session.selection).isDefined)
+        () =>
+          CommandState(available && Tables.contextAt(session.document, session.selection).isDefined)
       )
     def mark(id: String, label: String, value: TextMark) =
       ToolbarAction.command(
@@ -269,13 +278,13 @@ private[editor] final class NativeEditorAdapter(
         value,
         () => ToolbarState.mark(session.state, value, available)
       )
-    val groups = Vector(
+    def groups = Vector(
       ToolbarGroup(
-        "Verlauf",
+        labels.now(EditorMessages.history),
         Vector(
           ToolbarAction.command(
             "undo",
-            "Rückgängig",
+            labels.now(EditorMessages.undo),
             session,
             HistoryCommands.Undo,
             (),
@@ -283,7 +292,7 @@ private[editor] final class NativeEditorAdapter(
           ),
           ToolbarAction.command(
             "redo",
-            "Wiederholen",
+            labels.now(EditorMessages.redo),
             session,
             HistoryCommands.Redo,
             (),
@@ -292,88 +301,153 @@ private[editor] final class NativeEditorAdapter(
         )
       ),
       ToolbarGroup(
-        "Text",
+        labels.now(EditorMessages.text),
         if (enabledPlugins("base"))
           Vector(
-            mark("bold", "Fett", StandardMarks.Strong),
-            mark("italic", "Kursiv", StandardMarks.Emphasis),
-            mark("inline-code", "Inline-Code", StandardMarks.InlineCode)
+            mark("bold", labels.now(EditorMessages.bold), StandardMarks.Strong),
+            mark("italic", labels.now(EditorMessages.italic), StandardMarks.Emphasis),
+            mark("inline-code", labels.now(EditorMessages.inlineCode), StandardMarks.InlineCode)
           )
         else Vector.empty
       ),
       ToolbarGroup(
-        "Absatz",
+        labels.now(EditorMessages.paragraph),
         if (enabledPlugins("heading"))
           Vector(
-            command("paragraph", "Text", RichText.SetHeading, None),
-            command("heading-1", "Überschrift 1", RichText.SetHeading, HeadingLevel.fromInt(1)),
-            command("heading-2", "Überschrift 2", RichText.SetHeading, HeadingLevel.fromInt(2)),
-            command("heading-3", "Überschrift 3", RichText.SetHeading, HeadingLevel.fromInt(3)),
-            command("quote", "Zitat", RichText.Quote, ()),
-            command("unquote", "Zitat aufheben", RichText.Unquote, ())
+            command("paragraph", labels.now(EditorMessages.paragraph), RichText.SetHeading, None),
+            command(
+              "heading-1",
+              labels.now(EditorMessages.heading1),
+              RichText.SetHeading,
+              HeadingLevel.fromInt(1)
+            ),
+            command(
+              "heading-2",
+              labels.now(EditorMessages.heading2),
+              RichText.SetHeading,
+              HeadingLevel.fromInt(2)
+            ),
+            command(
+              "heading-3",
+              labels.now(EditorMessages.heading3),
+              RichText.SetHeading,
+              HeadingLevel.fromInt(3)
+            ),
+            command("quote", labels.now(EditorMessages.quote), RichText.Quote, ()),
+            command("unquote", labels.now(EditorMessages.unquote), RichText.Unquote, ())
           )
         else Vector.empty
       ),
       ToolbarGroup(
-        "Listen",
+        labels.now(EditorMessages.lists),
         if (enabledPlugins("list"))
           Vector(
-            command("bullet-list", "Aufzählung", ListCommands.ToggleList, ListKind.Unordered),
-            command("ordered-list", "Nummerierung", ListCommands.ToggleList, ListKind.Ordered),
-            command("indent", "Einrücken", ListCommands.Indent, ()),
-            command("outdent", "Ausrücken", ListCommands.Outdent, ())
+            command(
+              "bullet-list",
+              labels.now(EditorMessages.bulletList),
+              ListCommands.ToggleList,
+              ListKind.Unordered
+            ),
+            command(
+              "ordered-list",
+              labels.now(EditorMessages.orderedList),
+              ListCommands.ToggleList,
+              ListKind.Ordered
+            ),
+            command("indent", labels.now(EditorMessages.indent), ListCommands.Indent, ()),
+            command("outdent", labels.now(EditorMessages.outdent), ListCommands.Outdent, ())
           )
         else Vector.empty
       ),
       ToolbarGroup(
-        "Einfügen",
+        labels.now(EditorMessages.insert),
         Vector(
           Option.when(enabledPlugins("link"))(
-            ToolbarAction("link", "Link", () => enabled, () => openLink())
+            ToolbarAction("link", labels.now(EditorMessages.link), () => enabled, () => openLink())
           ),
           Option.when(enabledPlugins("image"))(
             ToolbarAction(
               "image",
-              "Bild bearbeiten",
+              labels.now(EditorMessages.editImage),
               () => CommandState(available && session.selection.nonEmpty),
               () => openImage()
             )
           ),
           Option.when(enabledPlugins("code"))(
-            command("code-block", "Codeblock", CodeCommands.ToggleCodeBlock, CodeInfo())
+            command(
+              "code-block",
+              labels.now(EditorMessages.codeBlock),
+              CodeCommands.ToggleCodeBlock,
+              CodeInfo()
+            )
           ),
           Option.when(enabledPlugins("table"))(
-            command("table-insert", "Tabelle einfügen", TableCommands.InsertTable, TableSize(rows = 3, columns = 3))
+            command(
+              "table-insert",
+              labels.now(EditorMessages.insertTable),
+              TableCommands.InsertTable,
+              TableSize(rows = 3, columns = 3)
+            )
           ),
           Option.when(enabledPlugins("image") && mediaUploader.nonEmpty)(
-            ToolbarAction("upload-image", "Bild hochladen", () => enabled, () => picker.open())
+            ToolbarAction(
+              "upload-image",
+              labels.now(EditorMessages.uploadImage),
+              () => enabled,
+              () => picker.open()
+            )
           ),
           Option.when(enabledPlugins("horizontalRule"))(
-            command("rule", "Trennlinie", RichText.InsertThematicBreak, ())
+            command("rule", labels.now(EditorMessages.rule), RichText.InsertThematicBreak, ())
           )
         ).flatten
       ),
       ToolbarGroup(
-        "Tabelle",
+        labels.now(EditorMessages.table),
         if (enabledPlugins("table"))
           Vector(
-            inTable("table-row-above", "Zeile oben einfügen", TableCommands.InsertRow, RowPosition.Above),
-            inTable("table-row-below", "Zeile unten einfügen", TableCommands.InsertRow, RowPosition.Below),
+            inTable(
+              "table-row-above",
+              labels.now(EditorMessages.rowAbove),
+              TableCommands.InsertRow,
+              RowPosition.Above
+            ),
+            inTable(
+              "table-row-below",
+              labels.now(EditorMessages.rowBelow),
+              TableCommands.InsertRow,
+              RowPosition.Below
+            ),
             inTable(
               "table-column-before",
-              "Spalte davor einfügen",
+              labels.now(EditorMessages.columnBefore),
               TableCommands.InsertColumn,
               ColumnPosition.Before
             ),
             inTable(
               "table-column-after",
-              "Spalte danach einfügen",
+              labels.now(EditorMessages.columnAfter),
               TableCommands.InsertColumn,
               ColumnPosition.After
             ),
-            inTable("table-delete-row", "Zeile löschen", TableCommands.DeleteRow, ()),
-            inTable("table-delete-column", "Spalte löschen", TableCommands.DeleteColumn, ()),
-            inTable("table-delete", "Tabelle löschen", TableCommands.DeleteTable, ())
+            inTable(
+              "table-delete-row",
+              labels.now(EditorMessages.deleteRow),
+              TableCommands.DeleteRow,
+              ()
+            ),
+            inTable(
+              "table-delete-column",
+              labels.now(EditorMessages.deleteColumn),
+              TableCommands.DeleteColumn,
+              ()
+            ),
+            inTable(
+              "table-delete",
+              labels.now(EditorMessages.deleteTable),
+              TableCommands.DeleteTable,
+              ()
+            )
           )
         else Vector.empty
       )
@@ -411,20 +485,34 @@ private[editor] final class NativeEditorAdapter(
       "table-delete-column" -> "remove",
       "table-delete"        -> "delete"
     )
-    val iconGroups = groups.map(group =>
-      group.copy(actions =
-        group.actions.map(action => action.copy(icon = icons.get(action.id)))
-      )
+    def iconGroups = groups.map(group =>
+      group.copy(actions = group.actions.map(action => action.copy(icon = icons.get(action.id))))
     )
     val ribbon = toolbarMode == EditorToolbarMode.Ribbon
-    bar = new EditorToolbar(
-      session,
-      selection,
-      iconGroups.flatMap(_.actions),
-      name = "Text bearbeiten",
-      groups = if (ribbon) iconGroups else Vector.empty
-    )
-    Runtime.mount(bar, DomCursor.root(toolbar))
+    // Ember's labels are constructor values. Replace only the toolbar when the locale changes;
+    // the document view, selection, composition controller, uploads and undo history stay alive.
+    def mountToolbar(): Unit = {
+      val focusedCommand = Option(surface.ownerDocument.activeElement)
+        .filter(toolbar.contains)
+        .flatMap(element => Option(element.getAttribute("data-command")))
+      if (bar != null) Runtime.unmount(bar)
+      val translatedGroups = iconGroups
+      bar = new EditorToolbar(
+        session,
+        selection,
+        translatedGroups.flatMap(_.actions),
+        name = labels.now(EditorMessages.editText),
+        groups = if (ribbon) translatedGroups else Vector.empty
+      )
+      Runtime.mount(bar, DomCursor.root(toolbar))
+      focusedCommand.foreach { id =>
+        Option(toolbar.querySelector(s"[data-command='$id']"))
+          .foreach(_.asInstanceOf[dom.HTMLElement].focus())
+      }
+    }
+    mountToolbar()
+    val localeChanges = labels.runtime.locale.observeWithoutInitial(_ => mountToolbar())
+    cleanups += (() => localeChanges.dispose())
     toolbar.classList.add(if (ribbon) "scalajs-ui-editor__ribbon" else "scalajs-ui-editor__compact")
     val composition = input.onComposition { _ =>
       bar.refresh()
@@ -526,15 +614,15 @@ private[editor] final class NativeEditorAdapter(
       .collect { case range: RangeSelection => range.focus }
       .flatMap(Links.linkAt(session.document, _))
     openWindow(
-      "Link bearbeiten",
+      EditorMessages.editLink,
       Vector(
-        "Adresse" -> link.map(_.target.url.value).getOrElse(""),
-        "Titel"   -> link.flatMap(_.target.title).getOrElse("")
+        EditorMessages.address -> link.map(_.target.url.value).getOrElse(""),
+        EditorMessages.title   -> link.flatMap(_.target.title).getOrElse("")
       )
     )(
       (target, values) => dialogService.setLink(target, values(0), values(1)),
       Option.when(link.nonEmpty)(
-        "Link entfernen" -> ((target: DialogTarget, _: Vector[String]) =>
+        EditorMessages.removeLink -> ((target: DialogTarget, _: Vector[String]) =>
           dialogService.removeLink(target)
         )
       )
@@ -544,12 +632,12 @@ private[editor] final class NativeEditorAdapter(
   private def openImage(): Either[EditorError, Unit] = {
     val image = dialogService.selectedImage
     openWindow(
-      if (image.nonEmpty) "Bild bearbeiten" else "Bild einfügen",
+      if (image.nonEmpty) EditorMessages.editImage else EditorMessages.insertImage,
       Vector(
-        "Bildadresse"                               -> image.map(_.src.value).getOrElse(""),
-        "Alternativtext"                            -> image.map(_.alt).getOrElse(""),
-        "Titel"                                     -> image.flatMap(_.title).getOrElse(""),
-        "Breite in Pixeln (leer für Originalgröße)" -> image
+        EditorMessages.imageAddress    -> image.map(_.src.value).getOrElse(""),
+        EditorMessages.alternativeText -> image.map(_.alt).getOrElse(""),
+        EditorMessages.title           -> image.flatMap(_.title).getOrElse(""),
+        EditorMessages.imageWidth      -> image
           .flatMap(_.width)
           .map(_.value.toString)
           .getOrElse("")
@@ -560,7 +648,7 @@ private[editor] final class NativeEditorAdapter(
           val width  = Option(values(3).trim).filter(_.nonEmpty)
           val pixels = width.flatMap(_.toIntOption).flatMap(PositivePixels.parse)
           if (width.nonEmpty && pixels.isEmpty)
-            Left(ToolbarFailure("Bitte eine Bildbreite zwischen 1 und 100000 eingeben."))
+            Left(ToolbarFailure(labels.now(EditorMessages.invalidWidth)))
           else
             mediaPolicy.parse(reference.src).flatMap { src =>
               val source = NativeMediaReference(src, reference.mediaId.flatMap(MediaId.parse))
@@ -583,17 +671,18 @@ private[editor] final class NativeEditorAdapter(
                 }
               }
             }
-        case None => Left(ToolbarFailure("Bildadresse ist nicht zulässig."))
+        case None => Left(ToolbarFailure(labels.now(EditorMessages.invalidImageAddress)))
       }
     )
   }
 
-  private def openWindow(title: String, fields: Vector[(String, String)])(
+  private def openWindow(title: RuntimeMessage, fields: Vector[(RuntimeMessage, String)])(
       submit: (DialogTarget, Vector[String]) => Either[EditorError, Unit],
-      extra: Option[(String, (DialogTarget, Vector[String]) => Either[EditorError, Unit])] = None
+      extra: Option[(RuntimeMessage, (DialogTarget, Vector[String]) => Either[EditorError, Unit])] =
+        None
   ): Either[EditorError, Unit] = {
     if (dialogWindow.nonEmpty)
-      return Left(ToolbarFailure("Bitte den geöffneten Dialog zuerst schließen."))
+      return Left(ToolbarFailure(labels.now(EditorMessages.closeDialog)))
     if (selection.scope.focusWithin) selection.importNative()
     dialogService.capture().map { target =>
       var applied                   = false
@@ -619,6 +708,7 @@ private[editor] final class NativeEditorAdapter(
         body = {
           DslLayer.child(
             new EditorDialogForm(
+              labels,
               fields,
               values => applyResult(submit(target, values)),
               extra.map((label, action) =>
@@ -632,7 +722,7 @@ private[editor] final class NativeEditorAdapter(
         heightPx = if (fields.size > 2) 460 else 360,
         onClose = Some(_ => finish())
       )
-      conf.title = title
+      conf.title = labels.text(title)
       dialogWindow = Some(conf)
       closeDialog = () => finish()
       Viewport.addWindow(conf)(using owner)
@@ -656,7 +746,8 @@ private[editor] final class NativeEditorAdapter(
     if (!editable) closeDialog()
     input.setMode(if (editable) EditorMode.Editable else EditorMode.ReadOnly)
     if (media != null) {
-      if (editable) media.resume() else media.invalidate("Editor ist nicht mehr bearbeitbar.")
+      if (editable) media.resume()
+      else media.invalidate(labels.now(EditorMessages.noLongerEditable))
     }
     surface.setAttribute("aria-readonly", (!editable).toString)
     surface.classList.toggle("ember-read-only", !editable)
