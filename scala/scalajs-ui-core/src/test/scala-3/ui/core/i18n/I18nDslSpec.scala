@@ -7,6 +7,7 @@ import ui.core.dsl.AttributeDsl
 import ui.core.dsl.AttributeDsl.*
 import ui.core.dsl.DslLayer.render
 import ui.core.layout.Button.button
+import ui.core.layout.Condition.when
 import ui.core.layout.Div.div
 import ui.core.layout.TextComponent.text
 import ui.core.render.{Cursor, SsrCursor}
@@ -61,6 +62,32 @@ class I18nDslSpec extends AnyFlatSpec with Matchers {
 
     busy.set(false)
     cursor.collectHtml() should include(">Speichern<button>Speichern</button>")
+    Runtime.unmount(root)
+  }
+
+  it should "dispose a conditional message while its source is notifying" in {
+    val runtime = I18nRuntime(Property(I18nLocale.En), I18nResolver(catalog))
+    val visible = Property(false)
+    val cursor = new SsrCursor()
+    val root = Runtime.mount(new AbstractComponent {
+      val tagName = "main"
+      override def compose(cursor: Cursor): Unit = {
+        I18nRuntime.provide(runtime)(using this)
+        render(this, cursor) {
+          when(visible) {
+            text(visible.map(value => if (value) i18n"Save" else i18n"Saving")) {}
+          }
+        }
+      }
+    }, cursor)
+
+    visible.set(true)
+    cursor.collectHtml() should include("Save")
+    noException should be thrownBy visible.set(false)
+    runtime.setLocale(german)
+    visible.set(true)
+    cursor.collectHtml() should include("Speichern")
+    noException should be thrownBy visible.set(false)
     Runtime.unmount(root)
   }
 

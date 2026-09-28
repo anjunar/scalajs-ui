@@ -31,6 +31,29 @@ class PropertySpec extends AnyFlatSpec with Matchers {
     target.get shouldBe 2
   }
 
+  it should "skip observers disposed earlier in the same notification" in {
+    val source = Property(0)
+    val observed = mutable.ArrayBuffer.empty[Int]
+    var later: Disposable = Disposable.empty
+    val first = source.observeWithoutInitial(_ => later.dispose())
+    later = source.observeWithoutInitial(value => observed += value)
+    val last = source.observeWithoutInitial(value => observed += value * 10)
+
+    source.set(1)
+    observed.toSeq shouldBe Seq(10)
+    first.dispose()
+    later.dispose()
+    last.dispose()
+  }
+
+  it should "release a subscription whose initial callback fails" in {
+    val source = Property(0)
+    intercept[IllegalArgumentException] {
+      source.observe(_ => throw new IllegalArgumentException("Initial callback failed"))
+    }
+    noException should be thrownBy source.set(1)
+  }
+
   it should "observe the current and replacement inner properties without an initial value" in {
     val first    = Property(1)
     val second   = Property(10)
