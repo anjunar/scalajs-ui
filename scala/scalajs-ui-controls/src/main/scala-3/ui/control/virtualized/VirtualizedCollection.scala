@@ -5,7 +5,6 @@ import ui.core.context.UrlScope
 import ui.core.dsl.ClassDsl.classes
 import ui.core.dsl.EventDsl.onClick
 import ui.core.layout.Anchor.{anchor, href}
-import ui.core.layout.Button.*
 import ui.core.layout.Condition.when
 import ui.core.layout.Div
 import ui.core.layout.Div.div
@@ -214,24 +213,6 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
     recomputeVisible()
   }
 
-  protected def toggleDisplayMode(): Unit = {
-    if (isPaging) {
-      configureDisplayMode(CollectionDisplayMode.Scrolling)
-      val offset = pageStart
-      scrollTopProperty.set(topForIndex(offset))
-      domElement(viewportComponent).foreach(_.scrollTop = scrollTopProperty.get)
-    } else {
-      val offset =
-        geometry.indexForOffset(math.max(0.0, scrollTopProperty.get - geometry.headerOffset))
-      val nextPage = math.max(0, offset / pageSize)
-      pageIndexProperty.set(nextPage)
-      configureDisplayMode(CollectionDisplayMode.Paging)
-      scrollTopProperty.set(0.0)
-      domElement(viewportComponent).foreach(_.scrollTop = 0.0)
-      recomputeVisible()
-    }
-  }
-
   /** Enhances the SSR paging fallback to scrolling after successful hydration.
     *
     * The rendered slice and footer must remain unchanged while HydratingCursor claims them. The
@@ -255,30 +236,25 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
       }
     }
 
+  /** The pager, rendered while the control pages and gone while it scrolls; visitors cannot switch.
+    *
+    * The server always renders it: paging is the SSR default, so crawlers follow the Previous/Next
+    * links through every page. Hydration claims it unchanged, since the browser still pages until
+    * hydration completes. Then [[enableDefaultBrowserScrolling]] switches to scrolling and the
+    * footer is removed. An explicit paging choice (DSL, bridge or `<key>.mode=page`) keeps it.
+    */
   protected def renderPagingFooter(
       cssPrefix: String
   )(using AbstractComponent, ui.core.render.Cursor): Unit =
-    div {
-      classes = Seq(s"$cssPrefix-footer", "ui-virtualized-footer")
-
-      when(displayModeProperty.map(_ == CollectionDisplayMode.Paging)) {
+    when(displayModeProperty.map(_ == CollectionDisplayMode.Paging)) {
+      div {
+        classes = Seq(s"$cssPrefix-footer", "ui-virtualized-footer")
         renderPagingControl("Previous", pageDelta = -1)
         div {
           classes = Seq("ui-virtualized-page-status")
           text(pageStatusProperty) {}
         }
         renderPagingControl("Next", pageDelta = 1)
-      }
-
-      button(
-        displayModeProperty.map {
-          case CollectionDisplayMode.Paging    => "Switch to scrolling"
-          case CollectionDisplayMode.Scrolling => "Switch to paging"
-        }
-      ) {
-        classes = Seq("ui-virtualized-mode-button")
-        if (browserRendering) onClick(_ => toggleDisplayMode())
-        else disabled = true
       }
     }
 

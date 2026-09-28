@@ -9,7 +9,7 @@ The controls build on `scalajs-ui-core` state and data-source contracts. They re
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-controls" % "1.0.9"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-controls" % "1.0.10"
 ```
 
 ## Quick start
@@ -43,7 +43,7 @@ The three collection controls accept local `ListProperty` values or remote list 
 
 ## SSR and non-JavaScript behavior
 
-SSR renders a stable paged slice of a collection. With crawlability enabled, the slice is addressable through ordinary pager links and a crawl cookie stores the visitor's position. After successful hydration, `TableView`, `DataGrid`, and `VirtualListView` automatically switch that default fallback to scrolling and retain the server-rendered offset. Setting `paging = true` keeps paging in the browser; an explicit `scrolling = true` also remains available. A crawler cannot scroll, so do not rely on scrolling alone to expose important content.
+SSR renders a stable paged slice of a collection. With crawlability enabled, the slice is addressable through ordinary pager links and a crawl cookie stores the visitor's position. After successful hydration, `TableView`, `DataGrid`, and `VirtualListView` automatically switch that default fallback to scrolling and retain the server-rendered offset. Setting `paging = true` keeps paging in the browser; an explicit `scrolling = true` also remains available. The mode is the application's choice: visitors get no control to switch it. The pager footer (Previous, page status, Next) exists exactly while the collection pages, so the server always renders it, hydration claims it unchanged and the browser removes it once it switches to scrolling. A crawler cannot scroll, so do not rely on scrolling alone to expose important content.
 
 ## API overview
 

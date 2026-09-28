@@ -34,7 +34,7 @@ class VirtualListViewSpec extends AnyFlatSpec with Matchers {
     html should not include "10:Item 10"
   }
 
-  it should "omit the paging controls and page status in scrolling mode" in {
+  it should "render no footer at all in scrolling mode" in {
     val items = ListProperty[String](js.Array((0 until 30).map(index => s"Item $index")*))
 
     val html = renderList(items) {
@@ -44,7 +44,21 @@ class VirtualListViewSpec extends AnyFlatSpec with Matchers {
     html should not include ">Previous</a>"
     html should not include ">Next</a>"
     html should not include "ui-virtualized-page-status"
-    html should include("Switch to paging")
+    html should not include "ui-virtual-list-footer"
+    html should not include "ui-virtualized-footer"
+  }
+
+  it should "render the pager for crawlers by default, without a control to switch the mode" in {
+    val items = ListProperty[String](js.Array((0 until 30).map(index => s"Item $index")*))
+
+    val html = renderList(items)()
+
+    html should include("ui-virtual-list-footer")
+    html should include(">Previous</a>")
+    html should include("Page 1 of 3")
+    html should include(">Next</a>")
+    html should not include "ui-virtualized-mode-button"
+    html should not include "Switch to"
   }
 
   it should "render unloaded remote positions as measured placeholder cells" in {

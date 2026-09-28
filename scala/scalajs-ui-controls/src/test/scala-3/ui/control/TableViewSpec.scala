@@ -240,7 +240,7 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
     html should include("overflow-y: auto")
   }
 
-  it should "omit the paging controls and page status in scrolling mode" in {
+  it should "render no footer at all in scrolling mode" in {
     val html = renderTable((0 until 20).map(index => s"Member $index")) {
       scrolling = true
     }
@@ -248,7 +248,19 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
     html should not include ">Previous</a>"
     html should not include ">Next</a>"
     html should not include "ui-virtualized-page-status"
-    html should include("Switch to paging")
+    html should not include "ui-table-footer"
+    html should not include "ui-virtualized-footer"
+  }
+
+  it should "render the pager for crawlers by default, without a control to switch the mode" in {
+    val html = renderTable((0 until 20).map(index => s"Member $index")) {}
+
+    html should include("ui-table-footer")
+    html should include(">Previous</a>")
+    html should include("Page 1 of 2")
+    html should include(">Next</a>")
+    html should not include "ui-virtualized-mode-button"
+    html should not include "Switch to"
   }
 
   it should "hide the paging footer through the TableView DSL" in {
