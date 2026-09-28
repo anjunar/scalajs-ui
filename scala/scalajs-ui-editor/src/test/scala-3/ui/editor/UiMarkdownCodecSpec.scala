@@ -10,6 +10,8 @@ import ember.editor.table.{TableExtension, TableNode}
 import ember.editor.standard.{MarkdownSupports, TableSupport}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import ui.core.i18n.{I18n, I18nLocale, I18nResolver, I18nRuntime, MessageCatalog}
+import ui.core.state.Property
 
 final class UiMarkdownCodecSpec extends AnyFlatSpec with Matchers {
   private val generator    = NodeIdGenerator.sequential("codec")
@@ -81,6 +83,27 @@ final class UiMarkdownCodecSpec extends AnyFlatSpec with Matchers {
     decode("![Image](/media/cat.webp){width=-1}").isLeft shouldBe true
     decode("![Image](https://external.test/cat.webp)").isLeft shouldBe true
   }
+  it should "resolve Markdown errors through the owning locale with English fallback" in {
+    val locale = Property(I18nLocale.En)
+    val runtime = I18nRuntime(locale, I18nResolver(MessageCatalog(
+      I18n.entry(EditorMessages.unsupportedMarkdown.key)
+        .translations(I18nLocale("de") -> "Bitte im Markdown-Quelltext bearbeiten."),
+      I18n.entry(EditorMessages.invalidImageReference.key)
+        .translations(I18nLocale("de") -> "Bildadresse oder Breite ungültig.")
+    )))
+    val localized = new UiMarkdownCodec(
+      MarkdownSupports.everything(media = nativePolicy) ++ TableSupport.markdownRules,
+      generator, ui.editor.MediaUrlPolicy.internal, new EditorText(runtime)
+    )
+    def error(source: String): String =
+      localized.decode(source, extensions.schema, NodeId("localized")).swap.toOption.get.message
+    error("<div>Text</div>") should include("HTML and additional text marks")
+    error("![Image](https://external.test/image.png)") should include("image address or width")
+    locale.set(I18nLocale("de"))
+    error("<div>Text</div>") should include("Bitte im Markdown-Quelltext bearbeiten.")
+    error("![Image](https://external.test/image.png)") should include("Bildadresse oder Breite ungültig.")
+  }
+
   it should "decode and re-encode GFM pipe tables through the native table model" in {
     val document = decode("| First | Second |\n| --- | --- |\n| A | B |").toOption.get
     document.inDocumentOrder.collect { case table: TableNode => table.header }.toVector shouldBe Vector(

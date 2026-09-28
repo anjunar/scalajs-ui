@@ -24,6 +24,29 @@ test('editor defaults to English without an I18n provider', async ({ page }) => 
   await expect(dialog.getByRole('alert')).toHaveText('The image address is not allowed.');
 });
 
+test('clicking an existing image edits its metadata without inserting another image', async ({ page }) => {
+  await mount(page);
+  const surface = page.getByRole('textbox', { name: 'body' });
+  await surface.click();
+  await page.getByRole('button', { name: 'Edit image', exact: true }).click();
+  const dialog = page.locator('.scalajs-ui-editor-dialog');
+  await dialog.getByLabel('Image address', { exact: true }).fill('/media/example.png');
+  await dialog.getByLabel('Alternative text', { exact: true }).fill('Original description');
+  await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
+  const image = surface.locator('img');
+  await expect(image).toHaveCount(1);
+  await image.click();
+  expect(await page.evaluate(() => window.fixtures.selection())).toContain('NodeSelection');
+  await page.getByRole('button', { name: 'Edit image', exact: true }).click();
+  await expect(dialog.getByLabel('Image address', { exact: true })).toHaveValue('/media/example.png');
+  await expect(dialog.getByLabel('Alternative text', { exact: true })).toHaveValue('Original description');
+  await dialog.getByLabel('Alternative text', { exact: true }).fill('Changed description');
+  await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(image).toHaveCount(1);
+  await expect(image).toHaveAttribute('alt', 'Changed description');
+  await expect.poll(() => page.evaluate(() => window.fixtures.value())).toContain('![Changed description]');
+});
+
 test('changing language preserves the session, document, focus and undo history', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));

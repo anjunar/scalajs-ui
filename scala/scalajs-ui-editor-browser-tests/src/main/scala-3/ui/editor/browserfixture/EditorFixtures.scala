@@ -7,7 +7,7 @@ import ui.core.dsl.DslLayer.render
 import ui.core.i18n.{I18n, I18nLocale, I18nResolver, I18nRuntime, MessageCatalog}
 import ui.core.render.{Cursor, DomCursor}
 import ui.core.state.Property
-import ui.editor.{Editor, EditorMessages, MediaUploadStatus}
+import ui.editor.{Editor, EditorMessages, MediaUploadStatus, NativeEditorBinding}
 import ui.viewport.Viewport.viewport
 
 /** Browser test application only; exercises the real editor and its application I18n context. */
@@ -15,6 +15,7 @@ import ui.viewport.Viewport.viewport
 object EditorFixtures {
   private var root: AbstractComponent = null
   private var control: Editor         = null
+  private var binding: NativeEditorBinding = null
   private var mountedSessions         = 0
   private val locale                  = Property(I18nLocale.En)
   private val language                = I18nRuntime(
@@ -50,7 +51,7 @@ object EditorFixtures {
           viewport {
             control = Editor.editor("body", standalone = true) {
               Editor.value = "Original text"
-              summon[Editor].onNativeSession = Some(_ => mountedSessions += 1)
+              summon[Editor].onNativeSession = Some(value => { binding = value; mountedSessions += 1 })
             }
           }
         }
@@ -61,6 +62,7 @@ object EditorFixtures {
 
   @JSExport def setLocale(code: String): Unit = language.setLocale(I18nLocale(code))
   @JSExport def value(): String               = control.valueProperty.get
+  @JSExport def selection(): String = binding.session.selection.toString
   @JSExport def sessions(): Int               = mountedSessions
   @JSExport def pending(count: Int): Unit     =
     control.mediaStatusProperty.set(MediaUploadStatus(pending = count))

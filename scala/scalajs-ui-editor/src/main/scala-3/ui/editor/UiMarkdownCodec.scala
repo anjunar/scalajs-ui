@@ -12,7 +12,8 @@ import scala.collection.mutable
 private[editor] final class UiMarkdownCodec(
     rules: MarkdownSupport,
     generator: NodeIdGenerator,
-    policy: MediaUrlPolicy
+    policy: MediaUrlPolicy,
+    labels: EditorText = EditorText.fallback
 ) extends FieldCodec {
   val name                                               = "ui-markdown"
   def emptyValue(schema: Schema, rootId: NodeId): String = ""
@@ -30,7 +31,7 @@ private[editor] final class UiMarkdownCodec(
       return Left(
         FieldError.NotDecodable(
           name,
-          "HTML und zusätzliche Textmarkierungen werden derzeit im Markdown-Quelltext bearbeitet."
+          labels.now(EditorMessages.unsupportedMarkdown)
         )
       )
     val widths     = mutable.Map.empty[String, mutable.Queue[Option[Int]]]
@@ -41,12 +42,12 @@ private[editor] final class UiMarkdownCodec(
           if (image.widthPx.exists(PositivePixels.parse(_).isEmpty))
             failure = Some(
               FieldError
-                .NotDecodable(name, "Bildbreite liegt außerhalb des unterstützten Bereichs.")
+                .NotDecodable(name, labels.now(EditorMessages.unsupportedImageWidth))
             )
           widths.getOrElseUpdate(image.src, mutable.Queue.empty).enqueue(image.widthPx)
           MarkdownImages.format(image.copy(widthPx = None), policy)
         case None =>
-          failure = Some(FieldError.NotDecodable(name, "Ungültige Bildadresse oder Bildbreite."))
+          failure = Some(FieldError.NotDecodable(name, labels.now(EditorMessages.invalidImageReference)))
           matched.matched
       }
     }
@@ -76,7 +77,7 @@ private[editor] final class UiMarkdownCodec(
                     .flatMap(PositivePixels.parse)
                   val reference = MediaUrlPolicy.checked(policy, image.src.value)
                   if (reference.isEmpty)
-                    failure = Some(FieldError.NotDecodable(name, "Bildadresse ist nicht zulässig."))
+                    failure = Some(FieldError.NotDecodable(name, labels.now(EditorMessages.invalidImageAddress)))
                   image.copy(
                     width = width,
                     source = image.source
@@ -103,7 +104,7 @@ private[editor] final class UiMarkdownCodec(
           )
         )
           failure =
-            Some(FieldError.NotRepresentable(name, Vector("Bildadresse ist nicht zulässig.")))
+            Some(FieldError.NotRepresentable(name, Vector(labels.now(EditorMessages.invalidImageAddress))))
         widths
           .getOrElseUpdate(image.src.value, mutable.Queue.empty)
           .enqueue(image.width.map(_.value))
