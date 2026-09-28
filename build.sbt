@@ -362,10 +362,22 @@ lazy val uiCoreBrowserTests = Project(id = "scalajs-ui-core-browser-tests", base
       (LocalRootProject / baseDirectory).value / "target" / "core-browser-tests"
   )
 
+// Isolated browser fixture for Editor integration; never published.
+lazy val uiEditorBrowserTests = Project(id = "scalajs-ui-editor-browser-tests", base = file("scala/scalajs-ui-editor-browser-tests"))
+  .enablePlugins(ScalaJSPlugin)
+  .dependsOn(uiEditor)
+  .settings(commonJsSettings)
+  .settings(
+    publish / skip := true,
+    Compile / fullLinkJS / scalaJSLinkerOutputDirectory :=
+      (LocalRootProject / baseDirectory).value / "target" / "editor-browser-tests"
+  )
+
 lazy val root = Project(id = "scalajs-ui-root", base = file("."))
   .aggregate(
     uiCore,
     uiCoreBrowserTests,
+    uiEditorBrowserTests,
     uiRouter,
     uiViewport,
     uiJson,
