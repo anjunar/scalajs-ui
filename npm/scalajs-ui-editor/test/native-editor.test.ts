@@ -54,7 +54,7 @@ describe("native Ember in the UI Viewport", () => {
     const source = f.root.querySelector<HTMLTextAreaElement>("textarea")!;
     source.value = "## Source heading"; source.dispatchEvent(new Event("input", { bubbles: true }));
     expect(f.model.body.get).toBe("## Source heading");
-    expect(toggle.textContent).toBe("Visuell"); toggle.click();
+    expect(toggle.textContent).toBe("Visual"); toggle.click();
     expect(f.surface.querySelector("h2")!.textContent).toBe("Source heading");
     expect(toggle.textContent).toBe("Markdown");
   });
