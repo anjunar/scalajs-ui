@@ -736,7 +736,7 @@ respectively. If `headerRows` is omitted, the browser continues to measure the r
 
 ## SSR and non-JavaScript behavior
 
-SSR renders a stable paged or crawl slice. After successful hydration, `tableView`, `dataGrid`, and `virtualList` automatically switch the default fallback to scrolling and retain the server-rendered offset. Set `paging: true` to keep paging in the browser. A crawler cannot scroll; use crawlability or paging when deeper collection content must be addressable without JavaScript.
+SSR renders a stable paged or crawl slice. After successful hydration, `tableView`, `dataGrid`, and `virtualList` automatically switch the default fallback to scrolling and retain the server-rendered offset. Set `paging: true` to keep paging in the browser. Visitors get no control to switch the mode: the pager footer exists exactly while the collection pages, so the server renders it for crawlers and the browser removes it after switching to scrolling. A crawler cannot scroll; use crawlability or paging when deeper collection content must be addressable without JavaScript.
 
 ## API overview
 

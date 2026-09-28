@@ -41,8 +41,7 @@
   border-top: 1px solid var(--aj-line);
 }
 
-.ui-data-grid-footer .ui-virtualized-page-button,
-.ui-data-grid-footer .ui-virtualized-mode-button {
+.ui-data-grid-footer .ui-virtualized-page-button {
   appearance: none;
   border: 1px solid var(--aj-line);
   border-radius: 6px;
