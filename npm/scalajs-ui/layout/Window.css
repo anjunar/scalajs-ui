@@ -180,6 +180,8 @@ html[data-color-scheme="light"] .ui-window .ui-window__title {
 
 @media (max-width: 900px) {
     .ui-window {
+        /* Full-screen sheet: pinned to the browser viewport, not to the (possibly scrolled) Viewport. */
+        position: fixed !important;
         top: 8px !important;
         left: 8px !important;
         width: calc(100vw - 16px) !important;

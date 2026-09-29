@@ -7,10 +7,11 @@ import ui.core.dsl.DslLayer.{render, renderInto}
 import ui.core.dsl.StyleDsl.*
 import ui.core.layout.Div
 import ui.core.layout.Div.div
-import ui.core.render.Cursor
+import ui.core.render.{Cursor, DomHostElement}
 import ui.core.state.{CompositeDisposable, Disposable, ListProperty, Property, ReadOnlyProperty}
 import ui.core.statement.Foreach
 import ui.core.text.TextValue
+import org.scalajs.dom
 
 import scala.compiletime.uninitialized
 import scala.scalajs.js.timers.{clearTimeout, setTimeout}
@@ -91,14 +92,50 @@ final class Viewport extends AbstractComponent {
   private[viewport] def addWindow(conf: Viewport.WindowConf): Viewport.WindowConf = {
     attach(conf, "window")
     if (!windows.exists(_ eq conf)) {
-      val nextIndex = windows.length
-      conf.leftPx.set(Viewport.windowBaseOffsetPx + nextIndex * Viewport.windowStepPx)
-      conf.topPx.set(Viewport.windowBaseOffsetPx + nextIndex * Viewport.windowStepPx)
+      val cascade = Viewport.windowBaseOffsetPx + windows.length * Viewport.windowStepPx
+      visibleArea match {
+        case Some(area) =>
+          conf.leftPx.set(area.place(cascade, conf.widthProperty.get, horizontal = true))
+          conf.topPx.set(area.place(cascade, conf.heightProperty.get, horizontal = false))
+        case None =>
+          conf.leftPx.set(cascade)
+          conf.topPx.set(cascade)
+      }
       windows += conf
     }
     touchWindow(conf)
     conf
   }
+
+  /** The part of this viewport currently visible in the browser window, in the coordinate space of
+    * its absolutely positioned children (windows). Accounts for both the page scrolling past the
+    * viewport and the viewport scrolling its own content. `None` outside the browser.
+    */
+  private def visibleArea: Option[Viewport.VisibleArea] =
+    host match {
+      case browser: DomHostElement =>
+        browser.node match {
+          case element: dom.HTMLElement =>
+            val rect       = element.getBoundingClientRect()
+            val clientLeft = rect.left + element.clientLeft
+            val clientTop  = rect.top + element.clientTop
+            val root       = dom.document.documentElement
+            val visibleLeft   = math.max(0.0, clientLeft)
+            val visibleTop    = math.max(0.0, clientTop)
+            val visibleRight  = math.min(root.clientWidth.toDouble, clientLeft + element.clientWidth)
+            val visibleBottom = math.min(root.clientHeight.toDouble, clientTop + element.clientHeight)
+            Some(
+              Viewport.VisibleArea(
+                left = visibleLeft - clientLeft + element.scrollLeft,
+                top = visibleTop - clientTop + element.scrollTop,
+                width = math.max(0.0, visibleRight - visibleLeft),
+                height = math.max(0.0, visibleBottom - visibleTop)
+              )
+            )
+          case _ => None
+        }
+      case _ => None
+    }
 
   private[viewport] def addOverlay(conf: Viewport.OverlayConf): Viewport.OverlayConf = {
     attach(conf, "overlay")
@@ -216,6 +253,19 @@ object Viewport {
   private val windowFadeOutMs       = 300
   private val windowBaseOffsetPx    = 72.0
   private val windowStepPx          = 28.0
+  private val windowMarginPx        = 8.0
+
+  private[viewport] final case class VisibleArea(left: Double, top: Double, width: Double, height: Double) {
+
+    /** Position along one axis: `offset` into the visible area, pulled back so a window of `size`
+      * still fits, but never before the area's leading margin.
+      */
+    def place(offset: Double, size: Double, horizontal: Boolean): Double = {
+      val (start, extent) = if (horizontal) (left, width) else (top, height)
+      val maxOffset       = math.max(windowMarginPx, extent - size - windowMarginPx)
+      start + math.min(offset, maxOffset)
+    }
+  }
 
   private[viewport] trait OwnedConf {
     private var owner: Viewport | Null    = null
