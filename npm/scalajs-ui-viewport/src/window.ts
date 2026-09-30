@@ -25,6 +25,12 @@ export interface WindowOptions {
   readonly heightPx?: number;
   /** Enables resizing from the window edges and corners. Defaults to true. */
   readonly resizable?: boolean;
+  /** Defaults to cascaded placement. */
+  readonly placement?: "cascaded" | "centered";
+  /** Fill the screen on narrow viewports. Defaults to true. */
+  readonly mobileSheet?: boolean;
+  /** Size the window to its rendered content, up to the visible viewport height; disables resize handles. Defaults to false. */
+  readonly autoHeight?: boolean;
   /** Runs once, when the window's own close button is clicked. */
   readonly onClose?: () => void;
 }

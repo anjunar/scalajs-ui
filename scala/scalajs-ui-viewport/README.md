@@ -9,7 +9,7 @@ The global UI layer for Scala JS UI 1.0: movable windows, anchor-following overl
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-viewport" % "1.1.0"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-viewport" % "1.1.1"
 ```
 
 ## Quick start
@@ -30,6 +30,8 @@ Viewport.viewport {
 ## Usage
 
 `Viewport.addWindow` adds a `WindowConf` to the active viewport. The configuration contains the title, optional dimensions and position, and the component body. `Overlay.overlay` positions content relative to the nearest anchor. `Viewport.notify` adds a notification with one of the supported notification kinds.
+
+Reusable floating windows can use `WindowConf` with `placement = WindowPlacement.Centered`, `mobileSheet = false`, `autoHeight = true`, and `closeBehavior = WindowCloseBehavior.Hide`. An auto-height window follows its rendered content up to the viewport height and repositions as the content changes. `Viewport.showWindow` reopens the same window without remounting its body; `Viewport.hideWindow` hides it, and `Viewport.closeWindow` removes it when its owner is disposed.
 
 ```scala
 Viewport.addWindow("Details") {

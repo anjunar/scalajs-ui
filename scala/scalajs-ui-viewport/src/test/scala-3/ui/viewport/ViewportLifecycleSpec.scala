@@ -76,6 +76,35 @@ class ViewportLifecycleSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(fixture.root)
   }
 
+  it should "reuse a hidden window and keep a single mounted instance" in {
+    val fixture = mountViewport()
+    val conf = Viewport.WindowConf("Player", placement = Viewport.WindowPlacement.Centered,
+      mobileSheet = false, closeBehavior = Viewport.WindowCloseBehavior.Hide) {}
+
+    fixture.viewport.addWindow(conf)
+    fixture.viewport.hideWindow(conf)
+    conf.visible.get shouldBe false
+    fixture.viewport.showWindow(conf)
+    conf.visible.get shouldBe true
+    fixture.viewport.windows.toSeq shouldBe Seq(conf)
+
+    Runtime.unmount(fixture.root)
+  }
+
+  it should "retain a dragged centered window's position while it remains visible" in {
+    val fixture = mountViewport()
+    val conf = Viewport.WindowConf("Player", placement = Viewport.WindowPlacement.Centered) {}
+    fixture.viewport.addWindow(conf)
+    conf.leftPx.set(145)
+    conf.topPx.set(185)
+
+    fixture.viewport.showWindow(conf)
+
+    conf.leftPx.get shouldBe 145
+    conf.topPx.get shouldBe 185
+    Runtime.unmount(fixture.root)
+  }
+
   it should "cancel a pending removal when it is disposed" in {
     val fixture = mountViewport()
     val conf    = Viewport.WindowConf("Closing") {}
@@ -86,6 +115,15 @@ class ViewportLifecycleSpec extends AnyFlatSpec with Matchers {
     // The scheduled removal must not run against a disposed viewport.
     noException should be thrownBy Runtime.unmount(fixture.root)
     fixture.viewport.windows shouldBe empty
+  }
+
+  "Centered placement" should "center a window within the visible area" in {
+    val area = Viewport.VisibleArea(30, 100, 800, 400)
+    area.center(600, horizontal = true) shouldBe 130
+    area.center(200, horizontal = false) shouldBe 200
+    area.center(1000, horizontal = true) shouldBe 38
+    area.clamp(600, 600, horizontal = true) shouldBe 222
+    area.clamp(15, 200, horizontal = false) shouldBe 108
   }
 
   "Notifications" should "be owned, closable and cleared on dispose" in {

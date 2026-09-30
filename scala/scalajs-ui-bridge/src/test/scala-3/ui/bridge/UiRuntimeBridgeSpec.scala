@@ -458,9 +458,12 @@ class UiRuntimeBridgeSpec extends AsyncFlatSpec with Matchers {
           viewportScope.component(
             "window",
             js.Dictionary[js.Any](
-              "title"    -> "A room for thoughts",
-              "widthPx"  -> 400,
-              "heightPx" -> 300
+              "title"       -> "A room for thoughts",
+              "widthPx"     -> 400,
+              "heightPx"    -> 300,
+              "placement"   -> "centered",
+              "mobileSheet" -> false,
+              "autoHeight"  -> true
             ),
             (_, windowScope) => { windowScope.text("window body"); () }
           )
@@ -472,6 +475,8 @@ class UiRuntimeBridgeSpec extends AsyncFlatSpec with Matchers {
 
     render(build).map { result =>
       result.html should include("ui-window")
+      result.html should include("ui-window--floating")
+      result.html should include("ui-window--auto-height")
       result.html should include("A room for thoughts")
       result.html should include("window body")
     }

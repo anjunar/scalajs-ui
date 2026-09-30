@@ -23,13 +23,16 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
 
   private var containerHost: Div = _
   private var activeResizeCleanup: Option[() => Unit] = None
+  private var activeDragCleanup: Option[() => Unit] = None
 
   override def compose(cursor: Cursor): Unit = {
     given AbstractComponent = this
 
     render(this, cursor) {
       addClass("ui-window")
-      if (conf.resizable) addClass("ui-window--resizable")
+      if (conf.resizable && !conf.autoHeight) addClass("ui-window--resizable")
+      if (!conf.mobileSheet) addClass("ui-window--floating")
+      if (conf.autoHeight) addClass("ui-window--auto-height")
       classIf("is-hidden", conf.visible.map(!_))
 
       style {
@@ -37,7 +40,8 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
         left = conf.leftPx.map(px => s"${px.round}px")
         top = conf.topPx.map(px => s"${px.round}px")
         width = conf.widthProperty.map(px => s"${px.round}px")
-        height = conf.heightProperty.map(px => s"${px.round}px")
+        if (conf.autoHeight) height = "auto"
+        else height = conf.heightProperty.map(px => s"${px.round}px")
         zIndex = conf.zIndex.map(_.toString)
       }
 
@@ -52,7 +56,7 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
         div {
           classes = Seq("ui-window__header")
 
-          on("mousedown") { event =>
+          on("pointerdown") { event =>
             startDrag(event)
           }
 
@@ -71,7 +75,10 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
               onClick { event =>
                 event.stopPropagation()
                 conf.onClose.foreach(_(this))
-                Viewport.closeWindow(conf)
+                conf.closeBehavior match {
+                  case Viewport.WindowCloseBehavior.Remove => Viewport.closeWindow(conf)
+                  case Viewport.WindowCloseBehavior.Hide => Viewport.hideWindow(conf)
+                }
               }
             }
           }
@@ -82,7 +89,7 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
         }
       }
 
-      if (conf.resizable) {
+      if (conf.resizable && !conf.autoHeight) {
         Seq(
           ("n", 0, -1), ("ne", 1, -1), ("e", 1, 0), ("se", 1, 1),
           ("s", 0, 1), ("sw", -1, 1), ("w", -1, 0), ("nw", -1, -1)
@@ -105,11 +112,28 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
       val reposition: js.Function1[dom.Event, Unit] = _ => keepInsideViewport()
       keepInsideViewport()
       dom.window.addEventListener("resize", reposition)
+      val sizeObserver =
+        if (conf.autoHeight) host match {
+          case browser: DomHostElement => browser.node match {
+            case element: dom.HTMLElement =>
+              val observer = new dom.ResizeObserver((_, _) => positionMeasured(element))
+              observer.observe(element)
+              positionMeasured(element)
+              Some(observer)
+            case _ => None
+          }
+          case _ => None
+        } else None
       addDisposable(Disposable {
         dom.window.removeEventListener("resize", reposition)
+        sizeObserver.foreach(_.disconnect())
         stopResize()
+        stopDrag()
       })
     }
+
+  private def positionMeasured(element: dom.HTMLElement): Unit =
+    Viewport.positionMeasuredWindow(conf, element.offsetWidth.toDouble, element.offsetHeight.toDouble)
 
   private def viewportWidth: Double =
     host match {
@@ -126,6 +150,16 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
     }
 
   private def keepInsideViewport(): Unit = {
+    if (conf.placement == Viewport.WindowPlacement.Centered) {
+      if (conf.autoHeight) host match {
+        case browser: DomHostElement => browser.node match {
+          case element: dom.HTMLElement => positionMeasured(element)
+          case _ => ()
+        }
+        case _ => ()
+      } else Viewport.constrainWindow(conf)
+      return
+    }
     val width = math.min(conf.widthProperty.get, math.max(0.0, viewportWidth - 16.0))
     val maxLeft = math.max(8.0, viewportWidth - width - 8.0)
     conf.leftPx.set(conf.leftPx.get.max(8.0).min(maxLeft))
@@ -134,6 +168,12 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
   private def stopResize(): Unit = {
     val cleanup = activeResizeCleanup
     activeResizeCleanup = None
+    cleanup.foreach(_())
+  }
+
+  private def stopDrag(): Unit = {
+    val cleanup = activeDragCleanup
+    activeDragCleanup = None
     cleanup.foreach(_())
   }
 
@@ -193,27 +233,46 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
 
   private def startDrag(event: UiEvent): Unit =
     event.raw match {
-      case mouse: dom.MouseEvent =>
+      case pointer: dom.PointerEvent if pointer.button == 0 &&
+          (pointer.target match {
+            case element: dom.Element => element.closest("button") == null
+            case _ => true
+          }) =>
+        stopDrag()
         event.preventDefault()
         Viewport.touchWindow(conf)
 
-        val startX      = mouse.clientX.toDouble
-        val startY      = mouse.clientY.toDouble
+        val startX      = pointer.clientX.toDouble
+        val startY      = pointer.clientY.toDouble
         val initialLeft = conf.leftPx.get
         val initialTop  = conf.topPx.get
+        val pointerId = pointer.pointerId
 
-        val moveListener: js.Function1[dom.MouseEvent, Any] = next =>
-          conf.leftPx.set(initialLeft + next.clientX.toDouble - startX)
-          conf.topPx.set(initialTop + next.clientY.toDouble - startY)
-          keepInsideViewport()
+        val moveListener: js.Function1[dom.PointerEvent, Unit] = next =>
+          if (next.pointerId == pointerId) {
+            conf.userPositioned = true
+            conf.leftPx.set(initialLeft + next.clientX.toDouble - startX)
+            conf.topPx.set(initialTop + next.clientY.toDouble - startY)
+            if (conf.autoHeight) host match {
+              case browser: DomHostElement => browser.node match {
+                case element: dom.HTMLElement => positionMeasured(element)
+                case _ => ()
+              }
+              case _ => ()
+            } else Viewport.constrainWindow(conf)
+          }
 
-        var upListener: js.Function1[dom.MouseEvent, Any] = null
-        upListener = _ =>
-          dom.window.removeEventListener("mousemove", moveListener)
-          dom.window.removeEventListener("mouseup", upListener)
+        val finishListener: js.Function1[dom.PointerEvent, Unit] = next =>
+          if (next.pointerId == pointerId) stopDrag()
 
-        dom.window.addEventListener("mousemove", moveListener)
-        dom.window.addEventListener("mouseup", upListener)
+        dom.window.addEventListener("pointermove", moveListener)
+        dom.window.addEventListener("pointerup", finishListener)
+        dom.window.addEventListener("pointercancel", finishListener)
+        activeDragCleanup = Some(() => {
+          dom.window.removeEventListener("pointermove", moveListener)
+          dom.window.removeEventListener("pointerup", finishListener)
+          dom.window.removeEventListener("pointercancel", finishListener)
+        })
       case _ =>
         ()
     }

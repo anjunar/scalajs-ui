@@ -153,7 +153,7 @@ describe("floatingWindow", () => {
       expect(windows).toHaveLength(2);
       expect(windows[0]!.querySelectorAll(".ui-window__handle")).toHaveLength(8);
       expect(windows[1]!.querySelectorAll(".ui-window__handle")).toHaveLength(0);
-      expect(windows[0]!.style.left).toBe("72px");
+      expect(windows[0]!.style.left).toBe("8px");
       const eastHandle = windows[0]!.querySelector<HTMLElement>(".ui-window__handle--e")!;
       eastHandle.dispatchEvent(new PointerEvent("pointerdown", {
         bubbles: true, button: 0, pointerId: 1, clientX: 100,

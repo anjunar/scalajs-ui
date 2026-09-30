@@ -29,6 +29,9 @@ viewport(() => {
     title: "Details",
     widthPx: 400,
     heightPx: 260,
+    placement: "centered",
+    mobileSheet: false,
+    autoHeight: true,
     onClose: () => open.set(false),
   }, () => div(() => text("Window content"))));
 });

@@ -92,20 +92,63 @@ final class Viewport extends AbstractComponent {
   private[viewport] def addWindow(conf: Viewport.WindowConf): Viewport.WindowConf = {
     attach(conf, "window")
     if (!windows.exists(_ eq conf)) {
-      val cascade = Viewport.windowBaseOffsetPx + windows.length * Viewport.windowStepPx
-      visibleArea match {
-        case Some(area) =>
-          conf.leftPx.set(area.place(cascade, conf.widthProperty.get, horizontal = true))
-          conf.topPx.set(area.place(cascade, conf.heightProperty.get, horizontal = false))
-        case None =>
-          conf.leftPx.set(cascade)
-          conf.topPx.set(cascade)
-      }
+      placeWindow(conf)
       windows += conf
     }
     touchWindow(conf)
     conf
   }
+
+  private def placeWindow(conf: Viewport.WindowConf, width: Double, height: Double): Unit = {
+    val cascade = Viewport.windowBaseOffsetPx + windows.length * Viewport.windowStepPx
+    visibleArea match {
+      case Some(area) if conf.placement == Viewport.WindowPlacement.Centered =>
+        val fittedWidth = math.min(width, math.max(0.0, area.width - 2 * Viewport.windowMarginPx))
+        val fittedHeight = math.min(height, math.max(0.0, area.height - 2 * Viewport.windowMarginPx))
+        conf.leftPx.set(area.center(fittedWidth, horizontal = true))
+        conf.topPx.set(area.center(fittedHeight, horizontal = false))
+      case Some(area) =>
+        conf.leftPx.set(area.place(cascade, width, horizontal = true))
+        conf.topPx.set(area.place(cascade, height, horizontal = false))
+      case None =>
+        conf.leftPx.set(cascade)
+        conf.topPx.set(cascade)
+    }
+  }
+
+  private def placeWindow(conf: Viewport.WindowConf): Unit =
+    placeWindow(conf, conf.widthProperty.get, conf.heightProperty.get)
+
+  private[viewport] def showWindow(conf: Viewport.WindowConf): Unit =
+    if (owns(conf)) {
+      if (!conf.autoHeight && !conf.visible.get && conf.placement == Viewport.WindowPlacement.Centered && !conf.userPositioned)
+        placeWindow(conf)
+      else if (!conf.autoHeight) constrainWindow(conf)
+      conf.visible.set(true)
+      touchWindow(conf)
+    }
+
+  private[viewport] def hideWindow(conf: Viewport.WindowConf): Unit =
+    if (owns(conf)) conf.visible.set(false)
+
+  private[viewport] def repositionWindow(conf: Viewport.WindowConf): Unit =
+    if (owns(conf) && conf.visible.get && conf.placement == Viewport.WindowPlacement.Centered) placeWindow(conf)
+
+  private[viewport] def constrainWindow(conf: Viewport.WindowConf): Unit =
+    constrainWindow(conf, conf.widthProperty.get, conf.heightProperty.get)
+
+  private[viewport] def constrainWindow(conf: Viewport.WindowConf, width: Double, height: Double): Unit =
+    if (owns(conf)) visibleArea.foreach { area =>
+      conf.leftPx.set(area.clamp(conf.leftPx.get, width, horizontal = true))
+      conf.topPx.set(area.clamp(conf.topPx.get, height, horizontal = false))
+    }
+
+  private[viewport] def positionMeasuredWindow(conf: Viewport.WindowConf, width: Double, height: Double): Unit =
+    if (owns(conf)) {
+      if (conf.placement == Viewport.WindowPlacement.Centered && !conf.userPositioned)
+        placeWindow(conf, width, height)
+      else constrainWindow(conf, width, height)
+    }
 
   /** The part of this viewport currently visible in the browser window, in the coordinate space of
     * its absolutely positioned children (windows). Accounts for both the page scrolling past the
@@ -249,6 +292,9 @@ object Viewport {
   type WindowBody  = AbstractComponent ?=> Cursor ?=> Unit
   type OverlayBody = Overlay ?=> Cursor ?=> Unit
 
+  enum WindowPlacement { case Cascaded, Centered }
+  enum WindowCloseBehavior { case Remove, Hide }
+
   private val notificationFadeOutMs = 250
   private val windowFadeOutMs       = 300
   private val windowBaseOffsetPx    = 72.0
@@ -264,6 +310,18 @@ object Viewport {
       val (start, extent) = if (horizontal) (left, width) else (top, height)
       val maxOffset       = math.max(windowMarginPx, extent - size - windowMarginPx)
       start + math.min(offset, maxOffset)
+    }
+
+    def center(size: Double, horizontal: Boolean): Double = {
+      val (start, extent) = if (horizontal) (left, width) else (top, height)
+      start + math.max(windowMarginPx, (extent - size) / 2)
+    }
+
+    def clamp(position: Double, size: Double, horizontal: Boolean): Double = {
+      val (start, extent) = if (horizontal) (left, width) else (top, height)
+      val minimum = start + windowMarginPx
+      val maximum = start + math.max(windowMarginPx, extent - size - windowMarginPx)
+      position.max(minimum).min(maximum)
     }
   }
 
@@ -333,8 +391,13 @@ object Viewport {
       val visible: Property[Boolean] = Property(true),
       val onClose: Option[Window => Unit] = None,
       val onClick: Option[Window => Unit] = None,
-      val resizable: Boolean = true
+      val resizable: Boolean = true,
+      val placement: WindowPlacement = WindowPlacement.Cascaded,
+      val mobileSheet: Boolean = true,
+      val closeBehavior: WindowCloseBehavior = WindowCloseBehavior.Remove,
+      val autoHeight: Boolean = false
   ) extends OwnedConf {
+    private[viewport] var userPositioned: Boolean = false
     val widthProperty: Property[Double] = Property(widthPx.toDouble)
     val heightProperty: Property[Double] = Property(heightPx.toDouble)
     val titleProperty: Property[String]  = Property("")
@@ -378,7 +441,11 @@ object Viewport {
         heightPx: Int = 360,
         onClose: Option[Window => Unit] = None,
         onClick: Option[Window => Unit] = None,
-        resizable: Boolean = true
+        resizable: Boolean = true,
+        placement: WindowPlacement = WindowPlacement.Cascaded,
+        mobileSheet: Boolean = true,
+        closeBehavior: WindowCloseBehavior = WindowCloseBehavior.Remove,
+        autoHeight: Boolean = false
     )(body: WindowBody): WindowConf = {
       val conf = new WindowConf(
         body = body,
@@ -386,7 +453,11 @@ object Viewport {
         heightPx = heightPx,
         resizable = resizable,
         onClose = onClose,
-        onClick = onClick
+        onClick = onClick,
+        placement = placement,
+        mobileSheet = mobileSheet,
+        closeBehavior = closeBehavior,
+        autoHeight = autoHeight
       )
       conf.title = title
       conf
@@ -478,6 +549,24 @@ object Viewport {
 
   def closeWindow(conf: WindowConf): Unit =
     conf.ownerOption.foreach(_.closeWindow(conf))
+
+  /** Reuse a window without mounting another copy of its contents. */
+  def showWindow(conf: WindowConf): Unit =
+    conf.ownerOption.foreach(_.showWindow(conf))
+
+  /** Hide a reusable window without disposing its contents. */
+  def hideWindow(conf: WindowConf): Unit =
+    conf.ownerOption.foreach(_.hideWindow(conf))
+
+  /** Keep a centered window within the currently visible area after a browser resize. */
+  def repositionWindow(conf: WindowConf): Unit =
+    conf.ownerOption.foreach(_.repositionWindow(conf))
+
+  private[viewport] def constrainWindow(conf: WindowConf): Unit =
+    conf.ownerOption.foreach(_.constrainWindow(conf))
+
+  private[viewport] def positionMeasuredWindow(conf: WindowConf, width: Double, height: Double): Unit =
+    conf.ownerOption.foreach(_.positionMeasuredWindow(conf, width, height))
 
   def closeWindowById(id: String)(using component: AbstractComponent): Unit =
     requireCurrent.closeWindowById(id)
