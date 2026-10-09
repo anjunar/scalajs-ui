@@ -1,0 +1,442 @@
+package ui.editor
+
+import ui.core.component.{AbstractComponent, Runtime}
+import ui.core.context.UrlScope
+import ui.core.dsl.DslLayer
+import ui.core.dsl.DslLayer.render
+import ui.core.render.{Cursor, HostElement, HostNode, SsrCursor, TextNode, UiEvent}
+import ui.core.state.{Disposable, Property}
+import ui.editor.Editor.*
+import ui.editor.plugins.*
+import ui.forms.{Control, ErrorResponse, Form, FormController}
+import ui.forms.Form.form
+import ui.viewport.Viewport
+import ui.viewport.Viewport.viewport
+import org.scalajs.dom.HTMLElement
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+import scala.collection.mutable
+
+final class EditorSpec extends AnyFlatSpec with Matchers {
+
+  "Editor SSR" should "keep Markdown as its public value and render semantic HTML" in {
+    val document =
+      """## **Heading**
+        |
+        |A *linked* [paragraph](https://example.test).
+        |
+        |1. First
+        |2. Second
+        |
+        |![Preview](/media/image.png)
+        |
+        || Name | Value |
+        || --- | --- |
+        || answer | 42 |
+        |
+        |```scala
+        |val answer = 42
+        |```
+        |
+        |---
+        |
+        |<script>alert('escaped')</script>
+        |""".stripMargin
+
+    val cursor          = new SsrCursor()
+    var control: Editor = null
+    val root            = Runtime.mount(
+      new EditorRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          control = editor("article", standalone = true) {
+            Editor.value = document
+            editable = false
+          }
+      },
+      cursor
+    )
+
+    try {
+      control.valueProperty.get shouldBe document
+      val html = cursor.collectHtml()
+      html should include("name=\"article\"")
+      html should include("<h2 class=\"editor-heading-h2\"")
+      html should include("<strong>Heading</strong>")
+      html should include("Heading")
+      html should include("<ol class=\"editor-list-ol\"")
+      html should include("href=\"https://example.test\"")
+      html should include("alt=\"Preview\"")
+      html should include("<table>")
+      html should include("val answer = 42")
+      html should include("editor-horizontal-rule")
+      html should include("&lt;script&gt;alert('escaped')&lt;/script&gt;")
+      html should not include "<script>"
+    } finally Runtime.unmount(root)
+  }
+
+  it should "render an edit link in readonly mode and a Markdown textarea in editable mode" in {
+    val readonly = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new EditorRoot {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            editor("article", standalone = true) {
+              Editor.value = "# Server rendered"
+              editable = false
+            }
+        },
+        cursor
+      )
+    }
+
+    readonly should include("href=\"?article.editor=editable\"")
+    readonly should include("<h1 class=\"editor-heading-h1\"")
+    readonly should not include "<textarea"
+
+    val editableHtml = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new EditorRoot {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            editor("article", standalone = true) {
+              Editor.value = "# Server rendered"
+              editable = true
+            }
+        },
+        cursor
+      )
+    }
+
+    editableHtml should include("<textarea")
+    editableHtml should include("# Server rendered")
+    editableHtml should include("href=\"?article.editor=readonly\"")
+    editableHtml should not include "<h1"
+    editableHtml should include("scalajs-ui-editor__readonly-link")
+  }
+
+  it should "let callers place mode actions outside the editor" in {
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new EditorRoot {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            editor("article", standalone = true) {
+              Editor.value = "# Source mode"
+              editable = true
+              markdownMode = true
+              showModeActions = false
+            }
+        },
+        cursor
+      )
+    }
+
+    html should include("<textarea")
+    html should not include "scalajs-ui-editor__markdown-actions"
+  }
+
+  it should "derive its mode from UrlScope and preserve the remaining route URL" in {
+    val readonly = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new EditorUrlRoot(
+          UrlScope(() => "/articles/42?lang=de&article.editor=readonly#body")((_, _) => ())
+        ) {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            editor("article", standalone = true) {
+              Editor.value = "# Readonly from URL"
+              editable = true
+            }
+        },
+        cursor
+      )
+    }
+
+    readonly should include("<h1")
+    readonly should not include "<textarea"
+    readonly should include(
+      "href=\"/articles/42?lang=de&amp;article.editor=editable#body\""
+    )
+
+    val editableHtml = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new EditorUrlRoot(UrlScope(() => "/articles/42?article.editor=editable")((_, _) => ())) {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            editor("article", standalone = true) {
+              Editor.value = "Editable from URL"
+              editable = false
+            }
+        },
+        cursor
+      )
+    }
+
+    editableHtml should include("<textarea")
+    editableHtml should include("Editable from URL")
+    editableHtml should not include "<h1"
+  }
+
+  it should "navigate mode links through UrlScope without a browser reload" in {
+    val navigations = mutable.ArrayBuffer.empty[(String, Boolean)]
+    val scope       = UrlScope(() => "/articles/42?lang=de&article.editor=editable#body") {
+      (url, replace) => navigations += url -> replace
+    }
+    var activated                           = false
+    var linkHost: EditorLinkTestHostElement = null
+    val cursor = new EditorLinkTestCursor(host => if (host.tagName == "a") linkHost = host)
+    val root   = Runtime.mount(
+      new EditorUrlRoot(scope) {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          DslLayer.child(
+            new MarkdownModeLink(
+              "/articles/42?lang=de&article.editor=readonly#body",
+              "Readonly",
+              readonly = true,
+              onActivate = () => activated = true
+            )
+          ) {}
+      },
+      cursor
+    )
+
+    linkHost.attribute("href") shouldBe Some(
+      "/articles/42?lang=de&article.editor=readonly#body"
+    )
+    linkHost.fireClick() shouldBe Some(true)
+    activated shouldBe true
+    navigations.toSeq shouldBe Seq(
+      "/articles/42?lang=de&article.editor=readonly#body" -> false
+    )
+
+    Runtime.unmount(root)
+    linkHost.fireClick() shouldBe None
+  }
+
+  it should "render a deterministic readonly shell and placeholder" in {
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new EditorRoot {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            editor("summary", standalone = true) {
+              placeholder = "Write a summary"
+              editable = false
+            }
+        },
+        cursor
+      )
+    }
+
+    html should include("class=\"scalajs-ui-editor-host")
+    html should include("aria-disabled=\"true\"")
+    html should include("aria-readonly=\"true\"")
+    html should include("Write a summary")
+    html should include("data-scalajs-ui-editor-loading=\"false\"")
+
+    val hostStart    = html.indexOf("class=\"scalajs-ui-editor-host")
+    val hostEnd      = html.indexOf('>', hostStart)
+    val surfaceStart = html.indexOf("class=\"scalajs-ui-editor__surface ember")
+    val surfaceEnd   = html.indexOf('>', surfaceStart)
+
+    html.substring(hostStart, hostEnd) should not include ("contenteditable")
+    html.substring(surfaceStart, surfaceEnd) should include("contenteditable=\"false\"")
+  }
+
+  it should "anchor an empty placeholder for hydration" in {
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new EditorRoot {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            editor("empty", standalone = true) {}
+        },
+        cursor
+      )
+    }
+
+    html should include("class=\"scalajs-ui-editor__placeholder\"")
+    html should include("<!--ui:Condition:start--><!--ui:Condition:end-->")
+  }
+
+  it should "replace the SSR preview when Markdown changes" in {
+    val cursor          = new SsrCursor()
+    var control: Editor = null
+    val root            = Runtime.mount(
+      new EditorRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          control = editor("reactive", standalone = true) {
+            placeholder = "Start writing"
+            editable = false
+          }
+      },
+      cursor
+    )
+
+    try {
+      cursor.collectHtml() should include("Start writing")
+      control.valueProperty.set("## First state")
+      cursor.collectHtml() should include("<h2")
+      cursor.collectHtml() should include("First state")
+
+      control.valueProperty.set("**Second state**")
+      val updated = cursor.collectHtml()
+      updated should include("<strong>Second state</strong>")
+      updated should not include "First state"
+
+      control.valueProperty.set("")
+      cursor.collectHtml() should not include "Second state"
+      cursor.collectHtml() should include("Start writing")
+    } finally Runtime.unmount(root)
+  }
+
+  it should "escape raw HTML and reject executable Markdown URLs" in {
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new EditorRoot {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            editor("safe", standalone = true) {
+              Editor.value =
+                "[bad](javascript:alert(1)) ![bad](data:text/html;base64,PHNjcmlwdD4=) <script>alert(1)</script>"
+              editable = false
+            }
+        },
+        cursor
+      )
+    }
+
+    html should include("href=\"#\"")
+    html should include("&lt;script&gt;alert(1)&lt;/script&gt;")
+    html should not include "href=\"javascript:"
+    html should not include "src=\"data:text/html"
+    html should not include "<script>"
+  }
+
+  it should "preserve the complete Markdown projection contract" in {
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new EditorRoot {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            editor("contract", standalone = true) {
+              Editor.value = """# Heading
+                  |
+                  |> Quote with **bold**, *italic*, ++underline++, ~~strike~~, ==highlight== and `code`.
+                  |
+                  |- unordered
+                  |
+                  |![Sized](/media/image.png){width=37}
+                  |""".stripMargin
+              editable = false
+            }
+        },
+        cursor
+      )
+    }
+
+    html should include("<blockquote")
+    html should include("<ul")
+    html should include("<strong>bold</strong>")
+    html should include("<em>italic</em>")
+    html should include("<u>underline</u>")
+    html should include("<s>strike</s>")
+    html should include("<mark>highlight</mark>")
+    html should include("<code>code</code>")
+    html should include("width=\"37\"")
+  }
+
+  it should "switch editable to readonly and back without changing Markdown" in {
+    val cursor          = new SsrCursor()
+    var control: Editor = null
+    val root            = Runtime.mount(
+      new EditorRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          control = editor("mode", standalone = true) {
+            Editor.value = "## Stable"
+            editable = true
+          }
+      },
+      cursor
+    )
+
+    try {
+      cursor.collectHtml() should include("<textarea")
+      control.editableProperty.set(false)
+      cursor.collectHtml() should include("<h2")
+      cursor.collectHtml() should not include "<textarea"
+      control.editableProperty.set(true)
+      cursor.collectHtml() should include("<textarea")
+      control.valueProperty.get shouldBe "## Stable"
+    } finally Runtime.unmount(root)
+  }
+
+  it should "compose the complete plugin set without changing the Markdown value type" in {
+    val document        = "Plugin content"
+    var control: Editor = null
+
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new EditorRoot {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            control = editor("body", standalone = true) {
+              Editor.value = document
+              editable = false
+              menuToolbar()
+              basePlugin()
+              headingPlugin()
+              listPlugin()
+              linkPlugin()
+              imagePlugin()
+              tablePlugin()
+              codePlugin()
+              horizontalRulePlugin()
+            }
+        },
+        cursor
+      )
+    }
+
+    control.valueProperty.get shouldBe document
+    html should include("scalajs-ui-editor__toolbar")
+    html should include("Plugin content")
+  }
+
+  "Editor forms integration" should "register and unregister like every other control" in {
+    val cursor     = new SsrCursor()
+    val controller = new RecordingFormController()
+    val root       = Runtime.mount(
+      new EditorRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit = {
+          Form.FormContext.provide(controller)
+          editor("body") {}
+        }
+      },
+      cursor
+    )
+
+    controller.controls.map(_.name).toSeq shouldBe Seq("body")
+    Runtime.unmount(root)
+    controller.controls shouldBe empty
+  }
+
+  it should "bind Markdown bidirectionally and detach the binding on unmount" in {
+    val article         = new ArticleBody()
+    var control: Editor = null
+    article.body.set("Initial Markdown")
+
+    val root = Runtime.mount(
+      new EditorRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          form(article) {
+            control = editor("body") {}
+          }
+      },
+      new SsrCursor()
+    )
+
+    control.valueProperty.get shouldBe "Initial Markdown"
+    article.body.set("From model")
+    control.valueProperty.get shouldBe "From model"
+    control.valueProperty.set("From editor")
+    article.body.get shouldBe "From editor"
+
+    Runtime.unmount(root)
+    article.body.set("After unmount")
+    control.valueProperty.get shouldBe "From editor"
+  }
+
+}
+

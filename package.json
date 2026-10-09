@@ -1,0 +1,37 @@
+{
+  "name": "scalajs-ui",
+  "version": "1.1.5",
+  "private": true,
+  "workspaces": [
+    "npm/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "set-version": "node scripts/set-version.mjs",
+    "check-version": "node scripts/set-version.mjs --check",
+    "build:landing": "npm run build --workspace npm/scalajs-ui-landing",
+    "preview:landing": "npm run start --workspace npm/scalajs-ui-landing",
+    "verify:landing": "npm run verify --workspace npm/scalajs-ui-landing",
+    "predev": "sbt --server \"scalajs-ui-demo/fastLinkJS\"",
+    "dev": "node server/server.mjs",
+    "build:client": "vite build",
+    "build:server": "vite build --ssr src/entry-server.js",
+    "start": "cross-env NODE_ENV=production node server/server.mjs",
+    "generate:site-metadata": "node tools/generate-site-metadata.mjs",
+    "i18n:extract": "node tools/i18n-extract.mjs",
+    "prerender": "node server/prerender-pages.mjs",
+    "build:pages": "node tools/build-pages.mjs",
+    "check:pages": "node tools/build-pages.mjs --check",
+    "preview:pages": "node tools/serve-pages.mjs"
+  },
+  "dependencies": {
+    "@anjunar/scalajs-ui": "*",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.1",
+    "cross-env": "^10.1.0",
+    "tailwindcss": "^4.3.1",
+    "vite": "^8.0.16"
+  }
+}

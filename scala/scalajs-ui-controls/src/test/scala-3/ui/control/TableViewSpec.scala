@@ -1,0 +1,528 @@
+package ui.control
+
+import ui.control.table.TableColumn
+import ui.control.table.TableColumn.*
+import ui.control.table.TableView
+import ui.control.table.TableView.*
+import ui.core.component.{AbstractComponent, Runtime}
+import ui.core.context.UrlScope
+import ui.core.remote.{RemoteListProperty, RemoteLoader, RemotePage, RemoteSort}
+import ui.core.dsl.ClassDsl.{addClass, classes, classes_=}
+import ui.core.dsl.DslLayer
+import ui.core.layout.Div.div
+import ui.core.layout.TextComponent.text
+import ui.core.render.{Cursor, SsrCursor}
+import ui.core.request.{RequestContext, RequestHeaders}
+import ui.core.state.{ListDataSource, ListProperty}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.scalajs.js
+
+class TableViewSpec extends AnyFlatSpec with Matchers {
+
+  "Column navigation" should "keep SSR deterministic for reference and index requests" in {
+    var rowEvents    = 0
+    var columnEvents = 0
+    val html         = renderTable(Seq("Ada")) {
+      val table  = summon[TableView[String]]
+      val target = column[String, String]("Other") { prefWidth = 1200.0 }
+      table.onScrollToProperty.set(Some(_ => rowEvents += 1))
+      table.onScrollToColumnProperty.set(Some(_ => columnEvents += 1))
+      table.scrollTo(0)
+      table.scrollToColumn(target)
+      table.scrollToColumnIndex(1)
+      table.scrollToColumnIndex(-1)
+      table.scrollToColumn(null)
+      val foreign = new ui.control.table.TableColumn[String, String]("Foreign")
+      table.scrollToColumn(foreign)
+      foreign.dispose()
+      table.scrollLeftProperty.get shouldBe 0.0
+      table.selectedIndexProperty.get shouldBe -1
+    }
+    html should include("Ada")
+    html should include("Other")
+    html should include regex "translateX\\(-0(?:\\.0)?px\\)"
+    rowEvents shouldBe 0
+    columnEvents shouldBe 0
+  }
+
+  it should "render a deterministic right-to-left table while keeping native scrolling normalized" in {
+    val html = renderTable(Seq("Ada")) {
+      direction = ui.control.table.TableDirection.RightToLeft
+    }
+
+    html should include("dir=\"rtl\"")
+    html should include("direction: rtl")
+    html should include("direction: ltr")
+    html should include regex "translateX\\(-0(?:\\.0)?px\\)"
+  }
+
+  "Table menu" should "remain opt-in and disappear with the header" in {
+    renderTable(Seq("Ada")) {} should not include "ui-table-column-menu"
+    renderTable(Seq("Ada")) {
+      tableMenuButtonVisible = true
+      showHeader = false
+    } should not include "ui-table-column-menu"
+  }
+
+  it should "render only a disabled trigger during SSR in a Viewport" in {
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new AbstractComponent {
+          override val tagName                       = "main"
+          override def compose(cursor: Cursor): Unit = DslLayer.render(this, cursor) {
+            ui.viewport.Viewport.viewport {
+              tableView(ListProperty(js.Array("Ada"))) {
+                tableMenuButtonVisible = true
+                column[String, String]("Name") {}
+              }
+            }
+          }
+        },
+        cursor
+      )
+    }
+    html should include("ui-table-column-menu-button")
+    html should include("aria-expanded=\"false\"")
+    html should include("disabled")
+    html should not include "ui-table-column-menu-panel"
+  }
+
+  "TableView SSR" should "render the crawlable cookie range without URL paging state" in {
+    val members = (0 until 20).map(index => s"Member $index")
+
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new CrawlTestRoot(
+          cookieHeader = Some(
+            s"ui-crawl-members-table=${js.URIUtils.encodeURIComponent("5:5:")}"
+          )
+        ) {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            tableView[String](ListProperty(js.Array(members*))) {
+              crawlable = true
+              crawlId = "members-table"
+              column[String, String]("Name") {
+                prefWidth = 240.0
+                cell { item => text(item) {} }
+              }
+            }
+        },
+        cursor
+      )
+    }
+
+    html should not include "Member 4"
+    html should include("Member 5")
+    html should include("Member 9")
+    html should not include "Member 10"
+    html should not include "offset="
+    html should not include "limit="
+    html should not include "More items..."
+  }
+
+  it should "compose columns and the scrolling content header in stable initial mount ranges" in {
+    val html = renderTable(Seq("Alice", "Bob", "Cara")) {
+      header {
+        div {
+          addClass("custom-table-body-header")
+          text("Table body header") {}
+        }
+      }
+    }
+
+    html should include("ui-table-content-header")
+    html should include("custom-table-body-header")
+    html should include("Table body header")
+    html should include("Alice")
+    html.indexOf("ui:KeyedChildren:start") should be < html.indexOf("ui-table-header-cell")
+    html.indexOf("ui-table-header-cell") should be < html.indexOf("ui:KeyedChildren:end")
+  }
+
+  it should "reserve content-header height in table-row units" in {
+    val html = renderTable(Seq("Alice", "Bob", "Cara")) {
+      rowHeight = 40
+      headerRows = 2
+      header {
+        div { text("Two table rows") {} }
+      }
+    }
+
+    html should include regex "min-height: 80(?:\\.0)?px"
+  }
+
+  it should "render variable row slots with a deterministic minimum before browser measurement" in {
+    val html = renderTable(Seq("Alice", "Bob")) {
+      rowHeight = 40
+      variableRowHeight = true
+    }
+
+    html should include("ui-table-row-slot")
+    html should include("height: auto")
+    html should include regex "min-height: 40(?:\\.0)?px"
+    html should include("Alice")
+    html should include("Bob")
+  }
+
+  it should "restore the page from the route URL" in {
+    val members = (0 until 25).map(index => s"Member $index")
+    val html    = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new AbstractComponent {
+          override val tagName: String = "main"
+
+          override def compose(contentCursor: Cursor): Unit =
+            DslLayer.render(this, contentCursor) {
+              UrlScope.provide(
+                UrlScope(() => "/table?members.offset=10&members.limit=10") { (_, _) => () }
+              )
+              tableView[String](ListProperty(js.Array(members*))) {
+                crawlId = "members"
+                column[String, String]("Name") {
+                  cell { item => text(item) {} }
+                }
+              }
+            }
+        },
+        cursor
+      )
+    }
+
+    html should include("Member 10")
+    html should not include "Member 9"
+    html should include("Page 2 of 3")
+    html should include("ui-table-footer")
+  }
+
+  it should "render usable footer links during no-JavaScript SSR" in {
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new AbstractComponent {
+          override val tagName: String = "main"
+
+          override def compose(contentCursor: Cursor): Unit =
+            DslLayer.render(this, contentCursor) {
+              UrlScope.provide(UrlScope(() => "/members") { (_, _) => () })
+              tableView[String](
+                ListProperty(js.Array((0 until 15).map(index => s"Member $index")*))
+              ) {
+                crawlId = "members"
+                paging = true
+                pageSize = 5
+                column[String, String]("Name") {
+                  cell { item => text(item) {} }
+                }
+              }
+            }
+        },
+        cursor
+      )
+    }
+
+    html should include("href=\"/members?members.offset=5&amp;members.limit=5\"")
+    html should include("Page 1 of 3")
+    html should not include "<button class=\"ui-virtualized-page-button\">Next</button>"
+  }
+
+  it should "apply an exact fixed height and keep the body viewport scrollable" in {
+    val html = renderTable((0 until 40).map(index => s"Member $index")) {
+      fixedHeight = 240.0
+      scrolling = true
+    }
+
+    html should include("height: 240px")
+    html should include("min-height: 240px")
+    html should include("max-height: 240px")
+    html should include("class=\"ui-table-viewport\"")
+    html should include("overflow-y: auto")
+  }
+
+  it should "render no footer at all in scrolling mode" in {
+    val html = renderTable((0 until 20).map(index => s"Member $index")) {
+      scrolling = true
+    }
+
+    html should not include ">Previous</a>"
+    html should not include ">Next</a>"
+    html should not include "ui-virtualized-page-status"
+    html should not include "ui-table-footer"
+    html should not include "ui-virtualized-footer"
+  }
+
+  it should "render the pager for crawlers by default, without a control to switch the mode" in {
+    val html = renderTable((0 until 20).map(index => s"Member $index")) {}
+
+    html should include("ui-table-footer")
+    html should include(">Previous</a>")
+    html should include("Page 1 of 2")
+    html should include(">Next</a>")
+    html should not include "ui-virtualized-mode-button"
+    html should not include "Switch to"
+  }
+
+  it should "hide the paging footer through the TableView DSL" in {
+    val html = renderTable(Seq("Alice", "Bob")) {
+      scrolling = true
+      showFooter = false
+    }
+
+    html should include("overflow-y: auto")
+    html should not include "ui-table-footer"
+    html should not include "ui-virtualized-footer"
+  }
+
+  "TableView list lifecycle" should "track inserts, updates and removals without stale rows" in {
+    val items  = ListProperty(js.Array("Alice", "Cara"))
+    val cursor = new SsrCursor()
+    val root   = Runtime.mount(new MutableTableRoot(items), cursor)
+
+    visibleText(cursor.collectHtml()) should include("AliceCara")
+
+    items.insert(1, "Bob")
+    visibleText(cursor.collectHtml()) should include("AliceBobCara")
+
+    items.update(0, "Ada")
+    visibleText(cursor.collectHtml()) should include("AdaBobCara")
+    visibleText(cursor.collectHtml()) should not include "Alice"
+
+    items.remove(2)
+    visibleText(cursor.collectHtml()) should include("AdaBob")
+    visibleText(cursor.collectHtml()) should not include "Cara"
+
+    Runtime.unmount(root)
+    val detachedHtml = cursor.collectHtml()
+    items.addOne("Dora")
+    cursor.collectHtml() shouldBe detachedHtml
+  }
+
+  "TableView RemoteListProperty" should "render unloaded ranges as placeholder rows" in {
+    val remote = remoteMembers(pageSize = 5)
+    remote.totalCountProperty.set(Some(20))
+    remote.hasMoreProperty.set(true)
+
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new CrawlTestRoot(
+          cookieHeader = Some(
+            s"ui-crawl-remote-members-table=${js.URIUtils.encodeURIComponent("5:5:")}"
+          )
+        ) {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            tableView[String](remote) {
+              crawlable = true
+              crawlId = "remote-members-table"
+              column[String, String]("Name") {
+                cell { item => text(item) {} }
+              }
+            }
+        },
+        cursor
+      )
+    }
+
+    html should include("ui-table-cell-loading-placeholder")
+    html should include("top: 160px")
+    html should not include "More items..."
+  }
+
+  it should "reflect remote sorting state in the header" in {
+    val remote = remoteMembers(pageSize = 5)
+    remote.sortingProperty.set(Vector(RemoteSort("name", ascending = false)))
+
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(new SingleTableRoot(remote), cursor)
+    }
+
+    html should include("ui-table-header-cell-sortable")
+    html should include("ui-table-header-cell-sorted")
+    html should include("ui-table-header-cell-sorted-desc")
+  }
+
+  "TableColumn header/cell classes" should "reach the separately created header and every data cell" in {
+    var nameColumn: TableColumn[String, String] = null
+    val cursor                                  = new SsrCursor()
+    val root                                    = Runtime.mount(
+      new AbstractComponent {
+        override val tagName: String               = "main"
+        override def compose(cursor: Cursor): Unit =
+          DslLayer.render(this, cursor) {
+            tableView[String](ListProperty(js.Array("Ada", "Cara"))) {
+              nameColumn = column[String, String]("Name") {
+                headerClasses = Seq("numeric-header")
+                cellClasses = Seq("numeric-cell")
+                cell { item => text(item) {} }
+              }
+            }
+          }
+      },
+      cursor
+    )
+
+    val initial = cursor.collectHtml()
+    initial should include("numeric-header")
+    // Both rows' cells carry the class, not just the first.
+    (initial.split("numeric-cell").length - 1) shouldBe 2
+    // The built-in header/cell classes are unaffected, not replaced.
+    initial should include("ui-table-header-cell")
+    initial should include("ui-table-cell")
+
+    nameColumn.headerClasses = Seq("date-header")
+    nameColumn.cellClasses = Seq("date-cell")
+    val relabelled = cursor.collectHtml()
+    relabelled should include("date-header")
+    relabelled should not include "numeric-header"
+    relabelled should include("date-cell")
+    relabelled should not include "numeric-cell"
+
+    Runtime.unmount(root)
+  }
+
+  "TableColumn headerCell/sortIndicator" should "replace the default header text and sort arrow with composed content" in {
+    var nameColumn: TableColumn[String, String] = null
+    val remote                                  = remoteMembers(pageSize = 5)
+    val cursor                                  = new SsrCursor()
+    val root                                    = Runtime.mount(
+      new AbstractComponent {
+        override val tagName: String               = "main"
+        override def compose(cursor: Cursor): Unit =
+          DslLayer.render(this, cursor) {
+            tableView[String](remote) {
+              nameColumn = column[String, String]("Name") {
+                sortable = true
+                sortKey = "name"
+                headerCell {
+                  div { classes = Seq("custom-header"); text("Custom Name") {} }
+                }
+                sortIndicator { state =>
+                  div {
+                    classes = Seq("custom-sort-icon")
+                    text(
+                      state.map(s =>
+                        if (!s.sorted) "none"
+                        else if (s.ascending) s"up${s.priority}"
+                        else s"down${s.priority}"
+                      )
+                    ) {}
+                  }
+                }
+              }
+            }
+          }
+      },
+      cursor
+    )
+
+    val initial = cursor.collectHtml()
+    initial should include("custom-header")
+    initial should include("Custom Name")
+    initial should not include "\">Name<" // the default, unreplaced header text
+    initial should include("custom-sort-icon")
+    initial should include(">none<")
+    initial should include("ui-table-header-cell-sort-indicator-custom")
+    // The built-in sort classes/attributes stay -- CSS-level theming and ARIA keep working even
+    // though the ::after arrow is suppressed for this column specifically.
+    initial should include("ui-table-header-cell-sortable")
+
+    // Drives the same requested-sort state toggleSort/setSortOrder ultimately set, without
+    // depending on the loader's Future resolving synchronously in this test.
+    remote.sortingProperty.set(Vector(RemoteSort("name", ascending = true)))
+    val ascending = cursor.collectHtml()
+    ascending should include(">up1<")
+    ascending should include("ui-table-header-cell-sorted-asc")
+
+    remote.sortingProperty.set(Vector(RemoteSort("name", ascending = false)))
+    val descending = cursor.collectHtml()
+    descending should include(">down1<")
+    descending should include("ui-table-header-cell-sorted-desc")
+
+    Runtime.unmount(root)
+  }
+
+  private final case class PageQuery(
+      index: Int,
+      limit: Int,
+      sorting: Vector[RemoteSort] = Vector.empty
+  )
+
+  private def remoteMembers(pageSize: Int) = {
+    val members = (0 until 20).map(index => s"Member $index")
+    RemoteListProperty[String, PageQuery](
+      loader = RemoteLoader { query =>
+        val sorted = query.sorting.headOption match {
+          case Some(sort) if sort.field == "name" && !sort.ascending => members.reverse
+          case _                                                     => members
+        }
+        val page = sorted.slice(query.index, query.index + query.limit)
+        val next = query.index + page.length
+        Future.successful(
+          RemotePage[String, PageQuery](
+            items = page,
+            offset = Some(query.index),
+            nextQuery = Option.when(next < sorted.length)(query.copy(index = next)),
+            totalCount = Some(sorted.length),
+            hasMore = Some(next < sorted.length)
+          )
+        )
+      },
+      initialQuery = PageQuery(0, pageSize),
+      sortUpdater = Some((query, sorting) => query.copy(index = 0, sorting = sorting.toVector)),
+      rangeQueryUpdater = Some((query, index, limit) => query.copy(index = index, limit = limit))
+    )
+  }
+
+  private def renderTable(itemsToRender: Seq[String])(
+      extra: TableView[String] ?=> Cursor ?=> Unit
+  ): String =
+    Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new AbstractComponent {
+          override val tagName: String                      = "main"
+          override def compose(contentCursor: Cursor): Unit =
+            DslLayer.render(this, contentCursor) {
+              tableView[String](ListProperty(js.Array(itemsToRender*))) {
+                column[String, String]("Name") {
+                  cell { item => text(item) {} }
+                }
+                extra
+              }
+            }
+        },
+        cursor
+      )
+    }
+
+  private def visibleText(html: String): String =
+    html.replaceAll("<!--.*?-->", "").replaceAll("<[^>]+>", "")
+
+  private final class MutableTableRoot(itemsProperty: ListProperty[String])
+      extends AbstractComponent {
+    override val tagName: String = "main"
+
+    override def compose(cursor: Cursor): Unit =
+      DslLayer.render(this, cursor) {
+        tableView[String](itemsProperty) {
+          column[String, String]("Name") {
+            cell { item => text(item) {} }
+          }
+        }
+      }
+  }
+
+  private final class SingleTableRoot(itemsProperty: ListDataSource[String])
+      extends AbstractComponent {
+    override val tagName: String = "main"
+
+    override def compose(cursor: Cursor): Unit =
+      DslLayer.render(this, cursor) {
+        tableView[String](itemsProperty) {
+          column[String, String]("Name") {
+            sortable = true
+            sortKey = "name"
+          }
+        }
+      }
+  }
+}

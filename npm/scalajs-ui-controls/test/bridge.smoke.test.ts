@@ -1,0 +1,3189 @@
+/**
+ * Smoke test against the real bridge.
+ *
+ * There is no stub half here: the stub runtime knows nothing about tables, tabs,
+ * carousels or virtualization, so the controls facade can only be exercised
+ * against the linked Scala.js bundle. This file asserts what step 6 of
+ * JAVASCRIPT_API.md §9 promised: the five controls mount, render server-side
+ * through the facade's renderers and column model, and -- for the two that do
+ * not depend on viewport measurement -- hydrate the server tree with node
+ * identity.
+ *
+ * The virtualized trio (`table-view`, `data-grid`, `virtual-list-view`) is
+ * covered here at the SSR level, the same split `UiRuntimeBridgeSpec` lives
+ * with; their real-browser hydration is checked against the running demo
+ * (`npm/scalajs-ui-demo`, `/controls`).
+ *
+ * It needs the linked artifact:
+ *
+ *     sbt --server "scalajs-ui-bridge/fullLinkJS"
+ *
+ * Missing, it fails loudly rather than skipping.
+ */
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  hydrate,
+  installRuntime,
+  listProperty,
+  mount,
+  renderToString,
+  resetRuntime,
+  runtime,
+  property,
+  element,
+  attr,
+  self,
+  onInput,
+  classes,
+  classIf,
+  disposeWith,
+  onClick,
+  capture,
+  component,
+} from "@anjunar/scalajs-ui-core";
+import { div, text } from "@anjunar/scalajs-ui-core";
+import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
+import { carousel, checkBoxColumn, choiceBoxColumn, columnGroup, comboBoxColumn, convertingTextFieldColumn, dataGrid, progressBarColumn, remoteSource, tab, tableView, tabs, textFieldColumn, valueColumn, virtualList } from "../src/index.js";
+import type { ColumnResizePolicy, ColumnResizeRequest, TableCellContext, TableDirection, TablePosition, TableViewHandle, TableRowContext, TableSelectionMode, TableSort, RemotePage, SortSpec } from "../src/index.js";
+
+const linkedArtifact = resolve(process.cwd(), "../scalajs-ui-bridge/dist/fullopt/main.js");
+
+beforeAll(() => {
+  if (!existsSync(linkedArtifact)) {
+    throw new Error(
+      `The Scala.js bridge is not linked. Run:\n\n` +
+        `    sbt --server "scalajs-ui-bridge/fullLinkJS"\n\n` +
+        `Expected: ${linkedArtifact}`
+    );
+  }
+  // The virtualized controls observe their viewport size in the browser; jsdom
+  // ships neither observer. A no-op pair is enough for mount/hydrate to run.
+  const noop = class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  };
+  (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= noop;
+  (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver ??= noop;
+  window.requestAnimationFrame ??= (callback: FrameRequestCallback): number =>
+    window.setTimeout(() => callback(performance.now()), 0);
+  window.cancelAnimationFrame ??= (handle: number): void => window.clearTimeout(handle);
+  // jsdom does not provide pointer capture; the component also owns window listeners.
+  globalThis.PointerEvent ??= class extends MouseEvent {
+    readonly pointerId: number;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 1;
+    }
+  } as typeof PointerEvent;
+});
+
+beforeEach(() => {
+  resetRuntime();
+  installRuntime(bridgeRuntime);
+  window.history.replaceState(null, "", "/");
+});
+
+function withoutAnchors(html: string): string {
+  return html.replace(/<!--ui:[^>]*-->/g, "");
+}
+
+describe("the linked runtime", () => {
+  it("is the bridge", () => {
+    expect(runtime().name).toBe("scalajs-ui-bridge");
+  });
+});
+
+describe("tabs", () => {
+  const strip = (): void =>
+    tabs(
+      [
+        tab("Overview", () => div(() => text("overview body"))),
+        tab("Activity", () => div(() => text("activity body"))),
+      ],
+      { selectedIndex: 1 }
+    );
+
+  it("server-renders the selected panel only", async () => {
+    const result = await renderToString(strip);
+    expect(result.status).toBe(200);
+    expect(withoutAnchors(result.html)).toContain("activity body");
+    expect(withoutAnchors(result.html)).not.toContain("overview body");
+  });
+
+  it("switches panel on a trigger click", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+
+    const app = mount(root, strip);
+    expect(root.textContent).toContain("activity body");
+
+    const triggers = root.querySelectorAll("button.ui-tabs__trigger");
+    (triggers[0] as HTMLButtonElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true })
+    );
+
+    expect(root.textContent).toContain("overview body");
+    expect(root.textContent).not.toContain("activity body");
+    app.dispose();
+  });
+
+  it("hydrates the server tree without a fault", async () => {
+    const rendered = await renderToString(strip);
+    const root = document.createElement("div");
+    root.innerHTML = rendered.html;
+    document.body.appendChild(root);
+
+    const before = root.querySelector("section.ui-tabs");
+    expect(before).not.toBeNull();
+
+    const app = await hydrate(root, strip);
+    expect(root.querySelector("section.ui-tabs")).toBe(before);
+    expect(root.textContent).toContain("activity body");
+    app.dispose();
+  });
+});
+
+describe("carousel", () => {
+  const slides = (): void => {
+    const items = listProperty<string>(["Atlas", "Signal", "Harbor"]);
+    carousel(items, (slide, index) => div(() => text(`${index + 1}. ${slide}`)), {
+      ssrShowAllStates: true,
+    });
+  };
+
+  it("server-renders every slide", async () => {
+    const result = await renderToString(slides);
+    expect(withoutAnchors(result.html)).toContain("1. Atlas");
+    expect(withoutAnchors(result.html)).toContain("2. Signal");
+    expect(withoutAnchors(result.html)).toContain("3. Harbor");
+  });
+
+  it("hydrates without a fault", async () => {
+    const rendered = await renderToString(slides);
+    const root = document.createElement("div");
+    root.innerHTML = rendered.html;
+    document.body.appendChild(root);
+
+    const before = root.querySelector("section.ui-carousel");
+    expect(before).not.toBeNull();
+
+    const app = await hydrate(root, slides);
+    expect(root.querySelector("section.ui-carousel")).toBe(before);
+    expect(root.textContent).toContain("1. Atlas");
+    app.dispose();
+  });
+
+  it("passes a reactive side preview count to the shared runtime", () => {
+    const count = property(3);
+    const items = listProperty(["0", "1", "2", "3", "4", "5", "6"]);
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const app = mount(root, () => {
+      carousel(items, (slide) => div(() => text(slide)), { sidePreviewCount: count });
+    });
+
+    expect(root.querySelector(".ui-carousel--side-previews-3")).not.toBeNull();
+    expect(root.querySelectorAll(".is-previous-3, .is-next-3")).toHaveLength(2);
+
+    count.set(1);
+    expect(root.querySelector(".ui-carousel--side-previews-3")).toBeNull();
+    expect(root.querySelectorAll(".is-previous-3, .is-next-3")).toHaveLength(0);
+    app.dispose();
+  });
+});
+
+describe("table-view", () => {
+  it("renders nested group headers and uses only visible leaves for cells, widths and handles", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const groupVisible = property(true);
+    let table!: TableViewHandle<{ first: string; last: string; year: number }>;
+    const app = mount(root, () => {
+      table = tableView(listProperty([{ first: "Ada", last: "Lovelace", year: 1815 }]), [
+        columnGroup("Identity", [
+          valueColumn("First", row => row.first, { prefWidth: 120 }),
+          valueColumn("Last", row => row.last, { prefWidth: 180 }),
+        ], { visible: groupVisible }),
+        valueColumn("Year", row => row.year, { prefWidth: 100 }),
+      ], { paging: true, rowHeight: 32, columnResizePolicy: "unconstrained" });
+    });
+    try {
+      const headers = (): HTMLElement[] => Array.from(root.querySelectorAll(".ui-table-header-cell"));
+      expect(headers().map(header => header.textContent)).toEqual(["Identity", "Year", "First", "Last"]);
+      expect(headers()[0]!.classList).toContain("ui-table-header-cell-group");
+      expect(headers()[0]!.getAttribute("aria-colspan")).toBe("2");
+      expect(headers()[1]!.getAttribute("aria-rowspan")).toBe("2");
+      expect(root.querySelector<HTMLElement>(".ui-table-header-viewport")!.style.height).toBe("64px");
+      expect(Array.from(root.querySelectorAll(".ui-table-cell")).map(cell => cell.textContent))
+        .toEqual(["Ada", "Lovelace", "1815"]);
+      expect(table.columnWidths.get).toEqual([120, 180, 100]);
+      expect(table.visibleColumnCount.get).toBe(3);
+      expect(table.getCellData(0, 0)).toBe("Ada");
+      expect(table.getCellObservableValue(0, 1)?.get).toBe("Lovelace");
+      expect(table.getCellData(0.5, 0)).toBeNull();
+      expect(table.getCellObservableValue(0, 99)).toBeNull();
+
+      expect(table.moveColumn(0, 1)).toBe(true);
+      expect(Array.from(root.querySelectorAll(".ui-table-cell")).map(cell => cell.textContent))
+        .toEqual(["Lovelace", "Ada", "1815"]);
+      expect(table.moveColumn(1, 2)).toBe(false);
+
+      groupVisible.set(false);
+      expect(headers().map(header => header.textContent)).toEqual(["Year"]);
+      expect(Array.from(root.querySelectorAll(".ui-table-cell")).map(cell => cell.textContent))
+        .toEqual(["1815"]);
+      expect(table.columnWidths.get).toEqual([100]);
+      expect(table.visibleColumnCount.get).toBe(1);
+      expect(table.getCellData(0, 0)).toBe(1815);
+      expect(root.querySelector<HTMLElement>(".ui-table-header-viewport")!.style.height).toBe("32px");
+      groupVisible.set(true);
+      expect(table.columnWidths.get).toEqual([180, 120, 100]);
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("applies headerClass/cellClass to the header and every data cell, reactively, without dropping the built-in classes", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const headerClass = property<readonly string[]>(["numeric-header"]);
+    const app = mount(root, () => {
+      tableView(listProperty(["Ada", "Cara"]), [
+        valueColumn("Name", row => row, { headerClass, cellClass: ["numeric-cell"] }),
+      ]);
+    });
+    try {
+      const header = root.querySelector<HTMLElement>(".ui-table-header-cell")!;
+      const cells = Array.from(root.querySelectorAll<HTMLElement>(".ui-table-cell"));
+      expect(header.classList).toContain("numeric-header");
+      expect(header.classList).toContain("ui-table-header-cell");
+      expect(cells).toHaveLength(2);
+      for (const cell of cells) {
+        expect(cell.classList).toContain("numeric-cell");
+        expect(cell.classList).toContain("ui-table-cell");
+      }
+
+      headerClass.set(["date-header"]);
+      expect(header.classList).toContain("date-header");
+      expect(header.classList).not.toContain("numeric-header");
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("replaces the default header text and CSS-only sort arrow with headerCell/sortIndicator content", () => {
+    type Query = { sorting: readonly SortSpec[] };
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const load = vi.fn(async (_query: Query) => ({ items: ["Ada"], totalCount: 1 }));
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(remoteSource<string, Query>({
+        initialQuery: { sorting: [] }, initial: ["Ada"], totalCount: 1,
+        load, sortQuery: (q, sorting) => ({ ...q, sorting }),
+      }), [
+        valueColumn("Name", row => row, {
+          sortable: true, sortKey: "name",
+          headerCell: () => { div(() => { classes("custom-header"); text("Custom Name"); }); },
+          sortIndicator: state => {
+            div(() => {
+              classes("custom-sort-icon");
+              text(state.map(s => s.sorted ? `${s.ascending ? "up" : "down"}${s.priority}` : "none"));
+            });
+          },
+        }),
+      ]);
+    });
+    try {
+      const header = root.querySelector<HTMLElement>(".ui-table-header-cell")!;
+      expect(header.querySelector(".custom-header")?.textContent).toBe("Custom Name");
+      expect(header.classList).toContain("ui-table-header-cell-sort-indicator-custom");
+      const indicator = header.querySelector(".custom-sort-icon")!;
+      expect(indicator.textContent).toBe("none");
+
+      expect(table.setSortOrder([{ columnIndex: 0, ascending: true }])).toBe(true);
+      expect(indicator.textContent).toBe("up1");
+      expect(header.classList).toContain("ui-table-header-cell-sorted-asc");
+
+      expect(table.setSortOrder([{ columnIndex: 0, ascending: false }])).toBe(true);
+      expect(indicator.textContent).toBe("down1");
+      expect(header.classList).toContain("ui-table-header-cell-sorted-desc");
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("opens the column menu in the nearest viewport and keeps visibility, widths and selection coherent", () => {
+    const root = document.createElement("div"); document.body.appendChild(root);
+    const visible = property(true);
+    const enabled = property(true);
+    const direction = property<TableDirection>("rtl");
+    const changed = vi.fn((next: boolean) => visible.set(next));
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => component("viewport", {}, () => {
+      table = tableView(listProperty(["Ada"]), [
+        valueColumn("A", row => row, { visible, onVisibilityChange: changed }),
+        valueColumn("B", row => row),
+      ], { paging: true, direction, columnResizePolicy: "unconstrained", tableMenuButtonVisible: enabled });
+    }));
+    const open = (): HTMLElement => {
+      root.querySelector<HTMLButtonElement>(".ui-table-column-menu-button")!.click();
+      return root.querySelector<HTMLElement>('[role="menu"]')!;
+    };
+    try {
+      table.selectIndex(0); table.resizeColumn(0, 30);
+      const retained = root.querySelectorAll(".ui-table-cell")[1];
+      const menu = open();
+      expect(menu.dir).toBe("rtl");
+      expect(menu.closest(".ui-table-view")).toBeNull();
+      expect(menu.closest(".scalajs-ui-viewport")).not.toBeNull();
+      const items = menu.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]');
+      expect(items).toHaveLength(2); expect(document.activeElement).toBe(items[0]);
+      expect(changed).not.toHaveBeenCalled();
+      items[0]!.click(); expect(visible.get).toBe(false); expect(changed).toHaveBeenCalledTimes(1);
+      expect(items[0]!.getAttribute("aria-checked")).toBe("false");
+      expect(root.querySelector(".ui-table-cell")).toBe(retained);
+      expect(table.selectedIndex.get).toBe(0);
+      items[1]!.click(); expect(root.querySelector(".ui-table-placeholder")).not.toBeNull();
+      expect(root.querySelector(".ui-table-column-menu-button")).not.toBeNull();
+      items[0]!.click(); expect(table.columnWidths.get).toEqual([190]);
+      expect(root.querySelector(".ui-table-placeholder")).toBeNull();
+      visible.set(false); expect(items[0]!.getAttribute("aria-checked")).toBe("false");
+      enabled.set(false); expect(root.querySelector('[role="menu"]')).toBeNull();
+      enabled.set(true); expect(root.querySelector(".ui-table-column-menu-button")).not.toBeNull();
+      expect(open().dir).toBe("rtl");
+      direction.set("ltr"); expect(root.querySelector('[role="menu"]')).toBeNull();
+      expect(open().dir).toBe("ltr");
+      app.dispose(); expect(root.querySelector(".scalajs-ui-viewport-overlay")).toBeNull();
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("navigates the menu by keyboard and closes on Escape, Tab, outside pointer/focus, blur and reordering", () => {
+    const root = document.createElement("div"); document.body.appendChild(root);
+    const outside = document.createElement("button"); document.body.appendChild(outside);
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => component("viewport", {}, () => {
+      table = tableView(listProperty(["Ada"]), [valueColumn("A", row => row), valueColumn("B", row => row)],
+        { paging: true, tableMenuButtonVisible: true });
+    }));
+    const trigger = root.querySelector<HTMLButtonElement>(".ui-table-column-menu-button")!;
+    const press = (element: Element, key: string): void => { element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })); };
+    const items = (): NodeListOf<HTMLButtonElement> => root.querySelectorAll('[role="menuitemcheckbox"]');
+    try {
+      press(trigger, "ArrowUp"); expect(document.activeElement).toBe(items()[1]);
+      press(items()[1]!, "ArrowDown"); expect(document.activeElement).toBe(items()[0]);
+      press(items()[0]!, "End"); expect(document.activeElement).toBe(items()[1]);
+      press(items()[1]!, "Home"); expect(document.activeElement).toBe(items()[0]);
+      press(items()[0]!, "Escape"); expect(document.activeElement).toBe(trigger);
+      expect(trigger.getAttribute("aria-expanded")).toBe("false"); expect(items()).toHaveLength(0);
+      trigger.click(); press(items()[0]!, "Tab"); expect(document.activeElement).toBe(trigger); expect(items()).toHaveLength(0);
+      trigger.click(); outside.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })); expect(items()).toHaveLength(0);
+      trigger.click(); outside.focus(); expect(items()).toHaveLength(0);
+      trigger.click(); window.dispatchEvent(new Event("blur")); expect(items()).toHaveLength(0);
+      trigger.click(); table.moveColumn(0, 1); expect(items()).toHaveLength(0);
+      trigger.click(); expect(Array.from(items()).map(e => e.textContent)).toEqual(["B", "A"]);
+    } finally { app.dispose(); root.remove(); outside.remove(); }
+  });
+
+  it("hydrates a closed menu without an overlay or stolen focus and requires a viewport only when enabled", async () => {
+    const root = document.createElement("div"); document.body.appendChild(root);
+    const build = (): void => { component("viewport", {}, () => {
+      tableView(listProperty(["Ada"]), [valueColumn("Name", row => row)],
+        { paging: true, tableMenuButtonVisible: true, columnMenuText: "Spalten" });
+    }); };
+    root.innerHTML = (await renderToString(build)).html;
+    const before = root.querySelector<HTMLButtonElement>(".ui-table-column-menu-button")!;
+    expect(before.disabled).toBe(true); expect(root.querySelector('[role="menu"]')).toBeNull();
+    const app = await hydrate(root, build);
+    try {
+      expect(root.querySelector(".ui-table-column-menu-button")).toBe(before);
+      expect(before.disabled).toBe(false); expect(document.activeElement).not.toBe(before);
+      before.click(); const menu = root.querySelector('[role="menu"]')!;
+      expect(menu.getAttribute("aria-label")).toBe("Spalten");
+      expect(before.getAttribute("aria-controls")).toBe(menu.id);
+    } finally { app.dispose(); root.remove(); }
+    await expect(renderToString(() => { tableView(listProperty(["Ada"]), [], { tableMenuButtonVisible: true }); })).rejects.toThrow("No Viewport");
+  });
+
+  // jsdom has no layout engine. Model the CSS max-content result; real geometry is checked
+  // against the production demo in a browser, including padding and sort decoration.
+  function intrinsicWidths(widths: Map<Element, number>): () => void {
+    const computed = window.getComputedStyle.bind(window);
+    const css = vi.spyOn(window, "getComputedStyle").mockImplementation((element, pseudo) => {
+      const result = computed(element, pseudo);
+      if ((element as HTMLElement).style.width === "max-content" && widths.has(element)) {
+        const width = widths.get(element);
+        return new Proxy(result, { get(target, name) {
+          if (name === "boxSizing") return "border-box";
+          if (name === "getPropertyValue") return (property: string) =>
+            property === "width" ? `${width}px` : target.getPropertyValue(property);
+          return Reflect.get(target, name);
+        } });
+      }
+      return result;
+    });
+    const rects = vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(function (this: HTMLElement) {
+      return { length: widths.has(this) ? 1 : 0 } as DOMRectList;
+    });
+    return () => { css.mockRestore(); rects.mockRestore(); };
+  }
+
+  it("auto-fits intrinsic header/cell widths through the policy, retaining editors and bindings", () => {
+    const root = document.createElement("div"); document.body.appendChild(root);
+    const value = property("Ada");
+    const widths = new Map<Element, number>();
+    const restore = intrinsicWidths(widths);
+    const locked = property(false);
+    const visible = property(true);
+    let table!: TableViewHandle<string>;
+    let builds = 0;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [
+        { text: "Editor", prefWidth: 200, minWidth: 80, maxWidth: 300, visible, resizable: locked.map(v => !v),
+          cell: () => { builds++; element("input")(() => attr("value", "Lovelace")); } },
+        valueColumn("Other", () => value, { prefWidth: 200 }),
+      ], { paging: true, columnResizePolicy: "unconstrained" });
+    });
+    try {
+      const header = root.querySelector<HTMLElement>(".ui-table-header-cell")!;
+      const cell = root.querySelector<HTMLElement>(".ui-table-cell")!;
+      const editor = root.querySelector<HTMLInputElement>("input")!;
+      const grip = header.querySelector<HTMLElement>(".ui-table-column-resize-handle")!;
+      widths.set(header, 120); widths.set(cell, 240.2);
+      editor.focus(); editor.setSelectionRange(1, 4, "backward"); table.selectIndex(0);
+      expect(table.autoFitColumn(0)).toBe(true);
+      expect(table.columnWidths.get).toEqual([241, 200]);
+      expect(cell.style.minWidth).toBe("241px"); expect(cell.style.maxWidth).toBe("");
+      expect(header.style.width).toBe("241px"); expect(header.style.maxWidth).toBe("");
+      expect(table.autoFitColumn(0)).toBe(false);
+      widths.set(cell, 400);
+      grip.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      expect(table.columnWidths.get).toEqual([300, 200]);
+      widths.set(cell, 40);
+      grip.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }));
+      expect(table.columnWidths.get).toEqual([120, 200]); // Header wins; fitting can shrink.
+      widths.set(header, 30); expect(table.autoFitColumn(0)).toBe(true);
+      expect(table.columnWidths.get).toEqual([80, 200]);
+      locked.set(true); widths.set(cell, 200); expect(table.autoFitColumn(0)).toBe(false);
+      locked.set(false);
+      editor.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+      expect(table.autoFitColumn(0)).toBe(false);
+      editor.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+      expect(table.autoFitColumn(0)).toBe(true);
+      expect(root.querySelector("input")).toBe(editor); expect(builds).toBe(1);
+      expect(document.activeElement).toBe(editor);
+      expect([editor.selectionStart, editor.selectionEnd, editor.selectionDirection]).toEqual([1, 4, "backward"]);
+      expect(table.selectedIndex.get).toBe(0);
+      value.set("Grace"); expect(root.querySelectorAll(".ui-table-cell")[1]!.textContent).toBe("Grace");
+      for (const index of [-1, 2, 0.5, Infinity, NaN]) expect(table.autoFitColumn(index)).toBe(false);
+      expect(table.moveColumn(0, 1)).toBe(true);
+      widths.set(cell, 250); expect(table.autoFitColumn(1)).toBe(true);
+      expect(table.columnWidths.get).toEqual([200, 250]);
+      visible.set(false); visible.set(true);
+      widths.set(root.querySelectorAll(".ui-table-header-cell")[1]!, 110);
+      widths.set(root.querySelectorAll(".ui-table-cell")[1]!, 90);
+      expect(table.autoFitColumn(1)).toBe(true);
+      expect(table.columnWidths.get).toEqual([200, 110]); // Disposed cells must not remain in the sample.
+      expect(builds).toBe(2);
+      app.dispose(); expect(table.autoFitColumn(0)).toBe(false);
+    } finally { app.dispose(); restore(); root.remove(); }
+  });
+
+  it("samples at most 100 mounted loaded cells without fetching remote data", () => {
+    const rows = Array.from({ length: 150 }, (_, i) => String(i));
+    const load = vi.fn(async () => ({ items: rows, offset: 0, totalCount: 150 }));
+    const source = remoteSource({ initialQuery: {}, initial: rows, totalCount: 150, load });
+    const root = document.createElement("div");
+    const widths = new Map<Element, number>(); const restore = intrinsicWidths(widths);
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => { table = tableView(source, [valueColumn("Name", row => row)],
+      { paging: true, pageSize: 150, rowHeight: 1, showHeader: false, columnResizePolicy: "unconstrained" }); });
+    try {
+      expect(root.querySelectorAll(".ui-table-cell").length).toBe(150);
+      root.querySelectorAll(".ui-table-cell").forEach((cell, i) => widths.set(cell, i < 100 ? 200 : 900));
+      expect(table.autoFitColumn(0)).toBe(true); expect(table.columnWidths.get).toEqual([200]);
+      expect(load).not.toHaveBeenCalled();
+      widths.clear(); expect(table.autoFitColumn(0)).toBe(false); // Hidden/unmeasurable layout.
+    } finally { app.dispose(); restore(); }
+  });
+
+  it("defers auto-fit until hydration and respects constrained compensation", async () => {
+    const widths = new Map<Element, number>(); const restore = intrinsicWidths(widths);
+    let table!: TableViewHandle<string>;
+    const build = (): void => {
+      table = tableView(listProperty(["Ada"]), [valueColumn("A", row => row, { prefWidth: 200 }),
+        valueColumn("B", row => row, { prefWidth: 200, minWidth: 100 })], { paging: true, columnResizePolicy: "flex-last-column" });
+      table.autoFitColumn(0);
+    };
+    const root = document.createElement("div");
+    root.innerHTML = (await renderToString(build)).html;
+    const header = root.querySelector<HTMLElement>(".ui-table-header-cell")!;
+    const cell = root.querySelector<HTMLElement>(".ui-table-cell")!;
+    const sum = table.columnWidths.get.reduce((a,b) => a+b, 0);
+    widths.set(header, 120); widths.set(cell, 900);
+    const app = await hydrate(root, build);
+    try {
+      expect(root.querySelector(".ui-table-cell")).toBe(cell);
+      expect(root.querySelector(".ui-table-header-cell")).toBe(header);
+      expect(table.columnWidths.get).toEqual([sum - 100, 100]);
+      expect(table.autoFitColumn(0)).toBe(false);
+    } finally { app.dispose(); restore(); }
+  });
+
+  it("restores temporary sizing when intrinsic measurement throws", () => {
+    const root = document.createElement("div");
+    const widths = new Map<Element, number>(); const restore = intrinsicWidths(widths);
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => { table = tableView(listProperty(["Ada"]), [valueColumn("A", row => row)], { paging: true }); });
+    const header = root.querySelector<HTMLElement>(".ui-table-header-cell")!;
+    widths.set(header, 100);
+    const before = header.getAttribute("style");
+    const fail = vi.spyOn(widths, "get").mockImplementation(() => { throw new Error("measurement failed"); });
+    try {
+      expect(() => table.autoFitColumn(0)).toThrow("measurement failed");
+      expect(header.getAttribute("style")).toBe(before);
+    } finally { fail.mockRestore(); app.dispose(); restore(); }
+  });
+
+  it("moves columns without rebuilding cells, losing focus, selection or width overrides", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const visible = property(false);
+    const value = property("Ada");
+    let table!: TableViewHandle<string>;
+    let builds = 0;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [
+        { text: "Editor", prefWidth: 200, reorderable: false, cell: () => {
+          builds++; element("input")(() => attr("value", "Lovelace"));
+        } },
+        valueColumn("Hidden", () => "hidden", { visible }),
+        valueColumn("Value", () => value, { prefWidth: 100 }),
+      ], { paging: true, columnResizePolicy: "unconstrained" });
+    });
+    try {
+      const editor = root.querySelector<HTMLInputElement>("input")!;
+      const headers = Array.from(root.querySelectorAll(".ui-table-header-cell"));
+      const cells = Array.from(root.querySelectorAll(".ui-table-cell"));
+      editor.focus(); editor.setSelectionRange(1, 4, "backward");
+      table.selectIndex(0); table.resizeColumn(0, 30);
+      expect(table.moveColumn(0, 1)).toBe(true); // reorderable only restricts gestures.
+      expect(Array.from(root.querySelectorAll(".ui-table-header-cell"))).toEqual([...headers].reverse());
+      expect(Array.from(root.querySelectorAll(".ui-table-cell"))).toEqual([...cells].reverse());
+      expect(table.columnWidths.get).toEqual([100, 230]);
+      expect(table.selectedIndex.get).toBe(0);
+      expect(document.activeElement).toBe(editor);
+      expect([editor.selectionStart, editor.selectionEnd, editor.selectionDirection]).toEqual([1, 4, "backward"]);
+      expect(builds).toBe(1);
+      value.set("Grace"); expect(cells[1]!.textContent).toBe("Grace");
+      expect(table.moveColumn(1, 0)).toBe(true);
+      for (const index of [-1, 2, 0.5, NaN, Infinity]) {
+        expect(table.moveColumn(index, 0)).toBe(false);
+        expect(table.moveColumn(0, index)).toBe(false);
+      }
+      expect(table.moveColumn(0, 0)).toBe(false);
+      editor.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+      expect(table.moveColumn(0, 1)).toBe(false);
+      editor.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+      expect(table.moveColumn(0, 1)).toBe(true);
+      visible.set(true);
+      expect(Array.from(root.querySelectorAll(".ui-table-header-cell")).map(e => e.textContent)).toEqual(["Hidden", "Value", "Editor"]);
+      app.dispose(); expect(table.moveColumn(0, 1)).toBe(false);
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("defers column commands until hydration finishes and retains server nodes", async () => {
+    let table!: TableViewHandle<string>;
+    const build = (): void => {
+      table = tableView(listProperty(["Ada"]), [
+        valueColumn("A", row => row), valueColumn("B", row => row), valueColumn("C", row => row),
+      ], { paging: true });
+      table.moveColumn(0, 1);
+      table.moveColumn(0, 2); // Latest request wins; both address the original declaration.
+    };
+    const root = document.createElement("div");
+    root.innerHTML = (await renderToString(build)).html;
+    const before = Array.from(root.querySelectorAll(".ui-table-header-cell"));
+    const cells = Array.from(root.querySelectorAll(".ui-table-cell"));
+    expect(before.map(e => e.textContent)).toEqual(["A", "B", "C"]);
+    const app = await hydrate(root, build);
+    try {
+      expect(Array.from(root.querySelectorAll(".ui-table-header-cell"))).toEqual([before[1], before[2], before[0]]);
+      expect(Array.from(root.querySelectorAll(".ui-table-cell"))).toEqual([cells[1], cells[2], cells[0]]);
+    } finally { app.dispose(); }
+  });
+
+  function measureHeaders(root: HTMLElement): HTMLElement[] {
+    const headers = Array.from(root.querySelectorAll<HTMLElement>(".ui-table-header-cell"));
+    const rect = (left: number, width: number): DOMRect => ({ left, right: left + width, top: 0,
+      bottom: 40, x: left, y: 0, width, height: 40, toJSON: () => ({}) });
+    root.querySelector<HTMLElement>(".ui-table-header-viewport")!.getBoundingClientRect = () => rect(0, headers.length * 100);
+    headers.forEach((header, index) => { header.getBoundingClientRect = () => rect(index * 100, 100); });
+    return headers;
+  }
+
+  it("shows a drop marker, reorders by pointer/keyboard and never sorts on drag or resize", () => {
+    const sortQuery = vi.fn((query: { offset: number }) => query);
+    const source = remoteSource({ initialQuery: { offset: 0 }, initial: ["Ada"], totalCount: 1,
+      load: async () => ({ items: ["Ada"], offset: 0, totalCount: 1 }), sortQuery });
+    const root = document.createElement("div");
+    const app = mount(root, () => tableView(source, ["A", "B", "C"].map(name =>
+      valueColumn(name, row => row, { sortable: true, sortKey: name })), { paging: true }));
+    try {
+      const headers = measureHeaders(root);
+      headers[0]!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 20, clientY: 20, pointerId: 7 }));
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 280, clientY: 20, pointerId: 8 }));
+      expect(root.querySelector(".ui-table-column-dragging")).toBeNull();
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 280, clientY: 20, pointerId: 7 }));
+      expect(headers[2]!.classList.contains("ui-table-column-drop-after")).toBe(true);
+      window.dispatchEvent(new PointerEvent("pointerup", { clientX: 280, clientY: 20, pointerId: 7 }));
+      headers[0]!.click();
+      expect(sortQuery).not.toHaveBeenCalled();
+      expect(Array.from(root.querySelectorAll(".ui-table-header-cell"))).toEqual([headers[1], headers[2], headers[0]]);
+      expect(root.querySelector(".ui-table-column-drop-after")).toBeNull();
+      headers[0]!.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowLeft", altKey: true, shiftKey: true }));
+      expect(Array.from(root.querySelectorAll(".ui-table-header-cell"))).toEqual([headers[1], headers[0], headers[2]]);
+      headers[0]!.querySelector<HTMLElement>(".ui-table-column-resize-handle")!.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 20 }));
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 290, clientY: 20 }));
+      window.dispatchEvent(new PointerEvent("pointerup", { clientX: 290, clientY: 20 }));
+      expect(Array.from(root.querySelectorAll(".ui-table-header-cell"))).toEqual([headers[1], headers[0], headers[2]]);
+      // A new short gesture still performs ordinary sorting.
+      headers[0]!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 20, clientY: 20 }));
+      window.dispatchEvent(new PointerEvent("pointerup", { clientX: 22, clientY: 20 }));
+      headers[0]!.click(); expect(sortQuery).toHaveBeenCalledTimes(1);
+    } finally { app.dispose(); }
+  });
+
+  it("cancels reorder gestures on Escape, outside drop, capture loss, hiding, locking and disposal", () => {
+    const visible = property(true);
+    const reorderable = property(true);
+    const root = document.createElement("div");
+    const app = mount(root, () => tableView(listProperty(["Ada"]), [
+      valueColumn("A", row => row, { visible, reorderable }), valueColumn("B", row => row),
+    ], { paging: true }));
+    const begin = (): HTMLElement => {
+      const first = measureHeaders(root)[0]!;
+      first.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 20, clientY: 20 }));
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 180, clientY: 20 }));
+      return first;
+    };
+    const up = (y = 20): void => { window.dispatchEvent(new PointerEvent("pointerup", { clientX: 180, clientY: y })); };
+    const unchanged = (): void => { expect(Array.from(root.querySelectorAll(".ui-table-header-cell")).map(e => e.textContent)).toEqual(["A", "B"]); };
+    try {
+      begin(); window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); up(); unchanged();
+      begin(); up(100); unchanged();
+      begin().dispatchEvent(new Event("lostpointercapture")); up(); unchanged();
+      begin(); window.dispatchEvent(new PointerEvent("pointercancel")); up(); unchanged();
+      begin(); window.dispatchEvent(new Event("blur")); up(); unchanged();
+      begin(); reorderable.set(false); up(); unchanged();
+      begin(); up(); unchanged();
+      reorderable.set(true);
+      begin(); visible.set(false); visible.set(true); up(); unchanged();
+      begin(); app.dispose(); up();
+      expect(root.querySelector(".ui-table-column-dragging")).toBeNull();
+    } finally { app.dispose(); }
+  });
+
+  it.each([true, false])("grows past the viewport on a default column drag and synchronizes horizontal scrolling (paging=%s)", paging => {
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [
+        valueColumn("First", row => row, { prefWidth: 400 }),
+        valueColumn("Last", row => row, { prefWidth: 400 }),
+      ], { paging });
+    });
+    try {
+      const viewport = measureTable(root);
+      const header = root.querySelector<HTMLElement>(".ui-table-header-content")!;
+      const content = root.querySelector<HTMLElement>(".ui-table-content")!;
+      const grip = root.querySelector<HTMLElement>(".ui-table-column-resize-handle")!;
+      expect(table.columnWidths.get).toEqual([400, 400]);
+      grip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 400, pointerId: 9 }));
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 650, pointerId: 9 }));
+      window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 9 }));
+      expect(table.columnWidths.get).toEqual([650, 400]);
+      expect(content.style.width).toBe("1050px");
+      expect(header.style.width).toBe("1050px");
+      expect(viewport.style.overflowX).toBe("auto");
+      viewport.scrollLeft = 250;
+      viewport.dispatchEvent(new Event("scroll"));
+      expect(viewport.scrollLeft).toBe(250);
+      expect(header.style.transform).toMatch(/^translateX\(-250(?:\.0)?px\)$/);
+      expect(table.resizeColumn(1, 100)).toBe(true);
+      expect(table.columnWidths.get).toEqual([650, 500]);
+    } finally { app.dispose(); }
+  });
+
+  it("keeps columns scrollable when constrained minimum widths exceed the viewport", () => {
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [
+        valueColumn("First", row => row, { minWidth: 500, prefWidth: 500 }),
+        valueColumn("Last", row => row, { minWidth: 500, prefWidth: 500 }),
+      ], { columnResizePolicy: "flex-last-column" });
+    });
+    try {
+      expect(table.columnWidths.get).toEqual([500, 500]);
+      expect(measureTable(root).style.overflowX).toBe("auto");
+    } finally { app.dispose(); }
+  });
+
+  it("projects bounded column widths and reactive resize policies through the handle", () => {
+    const policy = property<ColumnResizePolicy>("unconstrained");
+    const locked = property(false);
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [
+        valueColumn("Name", row => row, { prefWidth: 200, minWidth: 100, maxWidth: 300 }),
+        valueColumn("Fixed", row => row, { prefWidth: 150, resizable: locked }),
+      ], { paging: true, columnResizePolicy: policy });
+    });
+    try {
+      expect(table.columnWidths.get).toEqual([200, 150]);
+      expect(table.resizeColumn(0, 200)).toBe(true);
+      expect(table.columnWidths.get).toEqual([300, 150]);
+      expect(table.resizeColumn(0, 1)).toBe(false);
+      expect(table.resizeColumn(1, 20)).toBe(false);
+      for (const index of [-1, 2, NaN, Infinity, 0.5]) expect(table.resizeColumn(index, 10)).toBe(false);
+      expect(table.resizeColumn(0, NaN)).toBe(false);
+      const snapshot = table.columnWidths.get as number[];
+      snapshot[0] = 999;
+      expect(table.columnWidths.get).toEqual([300, 150]);
+      const viewport = measureTable(root);
+      expect(viewport.style.overflowX).toBe("auto");
+      expect(viewport.style.overflowY).toBe("hidden");
+      locked.set(true);
+      policy.set("flex-last-column");
+      expect(table.columnWidths.get.reduce((sum, width) => sum + width, 0)).toBe(800);
+      expect(viewport.style.overflowX).toBe("auto");
+      expect(table.resizeColumn(0, -50)).toBe(true);
+      expect(table.columnWidths.get).toEqual([250, 550]);
+      app.dispose();
+      expect(table.resizeColumn(0, 10)).toBe(false);
+    } finally { app.dispose(); }
+  });
+
+  it("replaces the built-in resize strategy with a custom policy, atomically rejecting a malformed result", () => {
+    const seen: ColumnResizeRequest[] = [];
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [
+        valueColumn("First", row => row, { prefWidth: 200 }),
+        valueColumn("Second", row => row, { prefWidth: 200 }),
+      ], {
+        paging: true,
+        customResizePolicy: (request) => {
+          seen.push(request);
+          if (request.targetIndices === undefined) return request.widths;
+          return request.widths.map((width, index) =>
+            request.targetIndices!.includes(index) ? width + request.targetDelta! : width - request.targetDelta! * 2);
+        },
+      });
+    });
+    try {
+      expect(table.columnWidths.get).toEqual([200, 200]);
+      expect(seen[0]!.columns).toEqual([
+        { min: 40, max: Number.MAX_VALUE, preferred: 200, resizable: true },
+        { min: 40, max: Number.MAX_VALUE, preferred: 200, resizable: true },
+      ]);
+      expect(seen[0]!.targetIndices).toBeUndefined();
+      expect(table.resizeColumn(0, 30)).toBe(true);
+      expect(table.columnWidths.get).toEqual([230, 140]);
+      // Committing the resize bumps table state, which re-runs the policy once more as a pure
+      // re-layout (target undefined) -- the resize call itself is the last targeted one, not
+      // necessarily the very last entry overall.
+      const resized = seen.filter((request) => request.targetIndices !== undefined).at(-1)!;
+      expect(resized.targetIndices).toEqual([0]);
+      expect(resized.targetDelta).toBe(30);
+    } finally { app.dispose(); }
+  });
+
+  it("resizes by pointer and keyboard without replacing or defocusing an embedded editor", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [{
+        text: "Editor", prefWidth: 200, minWidth: 120, maxWidth: 260,
+        cell: () => element("input")(() => attr("value", "Lovelace")),
+      }, valueColumn("Other", row => row, { prefWidth: 200 })], { paging: true, columnResizePolicy: "unconstrained" });
+    });
+    try {
+      const handle = root.querySelector<HTMLElement>(".ui-table-column-resize-handle")!;
+      const editor = root.querySelector<HTMLInputElement>("input")!;
+      editor.focus(); editor.setSelectionRange(1, 4);
+      handle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 100, pointerId: 7 }));
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 200, pointerId: 8 }));
+      expect(table.columnWidths.get).toEqual([200, 200]);
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 200, pointerId: 7 }));
+      expect(table.columnWidths.get).toEqual([260, 200]);
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 140, pointerId: 7 }));
+      expect(table.columnWidths.get).toEqual([240, 200]);
+      window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 7 }));
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 0, pointerId: 7 }));
+      expect(table.columnWidths.get).toEqual([240, 200]);
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", shiftKey: true, bubbles: true }));
+      expect(table.columnWidths.get).toEqual([249, 200]);
+      expect(handle.getAttribute("aria-valuenow")).toBe("249");
+      expect(root.querySelector("input")).toBe(editor);
+      expect(document.activeElement).toBe(editor);
+      expect([editor.selectionStart, editor.selectionEnd]).toEqual([1, 4]);
+      expect(editor.closest<HTMLElement>(".ui-table-cell")!.style.width).toBe("249px");
+      expect(handle.parentElement!.style.width).toBe("249px");
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("ends a drag on cancellation, column locking/hiding, policy change and disposal", () => {
+    const visible = property(true);
+    const resizable = property(true);
+    const policy = property<ColumnResizePolicy>("unconstrained");
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [valueColumn("Name", row => row, { visible, resizable })],
+        { paging: true, columnResizePolicy: policy });
+    });
+    const begin = (): void => { root.querySelector(".ui-table-column-resize-handle")!.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, clientX: 100, pointerId: 1 })); };
+    const move = (): void => { window.dispatchEvent(new PointerEvent("pointermove", { clientX: 140, pointerId: 1 })); };
+    try {
+      begin(); window.dispatchEvent(new PointerEvent("pointercancel", { pointerId: 1 })); move();
+      expect(table.columnWidths.get).toEqual([160]);
+      begin(); resizable.set(false); resizable.set(true); move();
+      expect(table.columnWidths.get).toEqual([160]);
+      begin(); visible.set(false); visible.set(true); move();
+      expect(table.columnWidths.get).toEqual([160]);
+      begin(); policy.set("flex-last-column"); policy.set("unconstrained"); move();
+      expect(table.columnWidths.get).toEqual([160]);
+      begin(); app.dispose(); move();
+      expect(table.resizeColumn(0, 5)).toBe(false);
+    } finally { app.dispose(); }
+  });
+
+  it("hydrates resize handles and cell widths without replacing the server nodes", async () => {
+    const build = (): void => { tableView(listProperty(["Ada"]),
+      [valueColumn("Name", row => row, { minWidth: 120, prefWidth: 200, maxWidth: 300 })],
+      { paging: true, columnResizePolicy: "unconstrained" }); };
+    const root = document.createElement("div");
+    root.innerHTML = (await renderToString(build)).html;
+    const before = root.querySelector(".ui-table-column-resize-handle");
+    const cell = root.querySelector(".ui-table-cell");
+    const app = await hydrate(root, build);
+    try {
+      expect(root.querySelector(".ui-table-column-resize-handle")).toBe(before);
+      expect(root.querySelector(".ui-table-cell")).toBe(cell);
+      before!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      expect((cell as HTMLElement).style.width).toBe("210px");
+    } finally { app.dispose(); }
+  });
+
+  it("does not bubble resize clicks into remote sorting", () => {
+    const sortQuery = vi.fn((query: { offset: number }) => query);
+    const source = remoteSource({ initialQuery: { offset: 0 }, initial: ["Ada"], totalCount: 1,
+      load: async () => ({ items: ["Ada"], offset: 0, totalCount: 1 }), sortQuery });
+    const root = document.createElement("div");
+    const app = mount(root, () => tableView(source,
+      [valueColumn("Name", row => row, { sortable: true, sortKey: "name" })], { paging: true }));
+    try {
+      const handle = root.querySelector<HTMLElement>(".ui-table-column-resize-handle")!;
+      handle.click();
+      handle.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      expect(sortQuery).not.toHaveBeenCalled();
+      handle.parentElement!.click();
+      expect(sortQuery).toHaveBeenCalledTimes(1);
+    } finally { app.dispose(); }
+  });
+
+  function measureTable(root: HTMLElement, height = 100): HTMLElement {
+    const viewport = root.querySelector<HTMLElement>(".ui-table-viewport")!;
+    Object.defineProperties(viewport, {
+      clientHeight: { configurable: true, value: height },
+      clientWidth: { configurable: true, value: 800 },
+    });
+    return viewport;
+  }
+
+  it("measures variable table rows, anchors scrolling and switches back to fixed height", async () => {
+    const originalObserver = globalThis.ResizeObserver;
+    const resize = new Map<Element, () => void>();
+    globalThis.ResizeObserver = class {
+      private readonly observed = new Set<Element>();
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe(element: Element): void {
+        this.observed.add(element);
+        resize.set(element, () => this.callback([], this as unknown as ResizeObserver));
+      }
+      unobserve(element: Element): void { this.observed.delete(element); resize.delete(element); }
+      disconnect(): void { for (const element of this.observed) resize.delete(element); this.observed.clear(); }
+    } as unknown as typeof ResizeObserver;
+    const variable = property(true);
+    const root = document.createElement("div");
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(Array.from({ length: 30 }, (_, index) => index)),
+        [valueColumn("ID", row => row)],
+        { paging: false, rowHeight: 20, variableRowHeight: variable, showHeader: false });
+    });
+    try {
+      const viewport = measureTable(root);
+      const row = (index: number): HTMLElement => root.querySelector<HTMLElement>(
+        `.ui-table-row-slot .ui-table-row[aria-rowindex="${index + 1}"]`)!;
+      const slot = (index: number): HTMLElement => row(index).parentElement!;
+      const heights = new Map([[0, 30], [1, 50]]);
+      for (const index of [0, 1])
+        Object.defineProperty(row(index), "offsetHeight", { configurable: true, get: () => heights.get(index)! });
+      window.dispatchEvent(new Event("resize"));
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(slot(1).style.top).toBe("30px");
+      expect(slot(2).style.top).toBe("80px");
+      expect(root.querySelector<HTMLElement>(".ui-table-rows-surface")!.style.height).toBe("640px");
+      const thirdRow = row(2);
+
+      viewport.scrollTop = 90;
+      viewport.dispatchEvent(new Event("scroll"));
+      heights.set(0, 50);
+      resize.get(row(0))!();
+      expect(viewport.scrollTop).toBe(110);
+      expect(slot(2).style.top).toBe("100px");
+      expect(row(2)).toBe(thirdRow);
+
+      table.scrollToIndex(10);
+      expect(viewport.scrollTop).toBe(180);
+      variable.set(false);
+      expect(viewport.scrollTop).toBe(120);
+      table.scrollToIndex(0);
+      expect(slot(2).style.top).toBe("40px");
+      expect(root.querySelector<HTMLElement>(".ui-table-rows-surface")!.style.height).toBe("600px");
+    } finally {
+      app.dispose();
+      globalThis.ResizeObserver = originalObserver;
+    }
+  });
+
+  it("hydrates variable-height rows before starting browser measurement", async () => {
+    const build = (): void => {
+      tableView(listProperty(["Short", "Longer content"]),
+        [valueColumn("Text", row => row)],
+        { paging: true, rowHeight: 28, variableRowHeight: true });
+    };
+    const rendered = await renderToString(build);
+    const root = document.createElement("div"); root.innerHTML = rendered.html;
+    const firstRow = root.querySelector(".ui-table-row");
+    expect(firstRow).not.toBeNull();
+    expect(root.querySelector<HTMLElement>(".ui-table-row-slot")!.style.height).toBe("auto");
+    const app = await hydrate(root, build);
+    try {
+      expect(root.querySelector(".ui-table-row")).toBe(firstRow);
+      expect(root.querySelector<HTMLElement>(".ui-table-row-slot")!.style.minHeight).toBe("28px");
+    } finally { app.dispose(); }
+  });
+
+  it("keeps logical focus independent and navigates/selects rows with keyboard modifiers", async () => {
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(Array.from({ length: 100 }, (_, index) => index)),
+        [valueColumn("ID", row => row)], { paging: false, rowHeight: 20, selectionMode: "multiple" });
+    });
+    try {
+      const viewport = measureTable(root);
+      window.dispatchEvent(new Event("resize"));
+      await new Promise(resolve => setTimeout(resolve, 40));
+      const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+      const key = (value: string, options: KeyboardEventInit = {}): KeyboardEvent => {
+        const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: value, ...options });
+        grid.dispatchEvent(event); return event;
+      };
+      table.selectIndex(2); table.focusIndex(4);
+      expect(table.focusedItem.get).toBe(4); expect(table.selectedIndex.get).toBe(2);
+      expect(viewport.scrollTop).toBe(0); expect(document.activeElement).not.toBe(grid);
+      grid.focus(); expect(table.focusedIndex.get).toBe(4);
+      expect(key("ArrowDown").defaultPrevented).toBe(true);
+      expect(table.focusedIndex.get).toBe(5); expect(table.selectedIndices.get).toEqual([5]);
+      key("ArrowDown", { ctrlKey: true });
+      expect(table.focusedIndex.get).toBe(6); expect(table.selectedIndices.get).toEqual([5]);
+      key("ArrowDown", { shiftKey: true }); expect(table.selectedIndices.get).toEqual([5, 6, 7]);
+      key("ArrowUp", { shiftKey: true }); expect(table.selectedIndices.get).toEqual([5, 6]);
+      key("End", { metaKey: true }); expect(table.focusedIndex.get).toBe(99);
+      expect(table.selectedIndices.get).toEqual([5, 6]);
+      key(" ", { ctrlKey: true }); expect(table.selectedIndices.get).toEqual([5, 6, 99]);
+      key("Home"); expect(table.focusedIndex.get).toBe(0); expect(table.selectedIndices.get).toEqual([0]);
+      key("PageDown"); expect(table.focusedIndex.get).toBe(4);
+      key("PageUp"); expect(table.focusedIndex.get).toBe(0);
+      key("a", { ctrlKey: true }); expect(table.selectedIndices.get).toHaveLength(100);
+      expect(grid.getAttribute("aria-rowcount")).toBe("101");
+      expect(grid.getAttribute("aria-colcount")).toBe("1");
+      const active = document.getElementById(grid.getAttribute("aria-activedescendant")!);
+      expect(active?.getAttribute("aria-rowindex")).toBe("2");
+      expect(active?.classList.contains("ui-table-row-focused")).toBe(true);
+      expect(document.activeElement).toBe(grid);
+      table.focusIndex(90); // Offscreen logical focus does not leave a stale ARIA reference.
+      expect(grid.hasAttribute("aria-activedescendant")).toBe(false);
+      for (const invalid of [-1, 0.5, NaN, Infinity, 2 ** 32]) {
+        table.focusIndex(invalid); expect(table.focusedIndex.get).toBe(-1);
+      }
+      table.focusNext(); expect(table.focusedIndex.get).toBe(0);
+      table.focusPrevious(); expect(table.focusedIndex.get).toBe(0);
+      app.dispose(); table.focusIndex(9); expect(table.focusedIndex.get).toBe(0);
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("tracks stable cell focus through keyboard navigation, reordering and visibility", () => {
+    const showMiddle = property(true);
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty([0, 1, 2]), [
+        valueColumn("A", row => `a${row}`),
+        valueColumn("B", row => `b${row}`, { visible: showMiddle }),
+        valueColumn("C", row => `c${row}`),
+      ], { paging: true, selectionMode: "multiple" });
+    });
+    try {
+      const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+      table.focusCell(1, 1);
+      expect(table.focusedCell.get).toEqual({ row: 1, column: 1 });
+      expect(table.focusedItem.get).toBe(1);
+      expect(table.selectedIndices.get).toEqual([]);
+      let focused = root.querySelector<HTMLElement>(".ui-table-cell-focused")!;
+      expect(focused.textContent).toBe("b1");
+      expect(document.getElementById(grid.getAttribute("aria-activedescendant")!)).toBe(focused);
+
+      grid.focus();
+      grid.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "ArrowRight",
+      }));
+      expect(table.focusedCell.get).toEqual({ row: 1, column: 2 });
+      expect(table.selectedIndices.get).toEqual([]);
+      table.focusBelowCell();
+      expect(table.focusedCell.get).toEqual({ row: 2, column: 2 });
+      table.focusRightCell();
+      expect(table.focusedCell.get).toEqual({ row: 2, column: 2 });
+
+      table.focusCell(1, 1);
+      expect(table.moveColumn(1, 0)).toBe(true);
+      expect(table.focusedCell.get).toEqual({ row: 1, column: 0 });
+      focused = root.querySelector<HTMLElement>(".ui-table-cell-focused")!;
+      expect(focused.textContent).toBe("b1");
+
+      showMiddle.set(false);
+      expect(table.focusedCell.get).toEqual({ row: 1, column: -1 });
+      expect(table.focusedIndex.get).toBe(1);
+      expect(root.querySelector(".ui-table-cell-focused")).toBeNull();
+      expect(document.getElementById(grid.getAttribute("aria-activedescendant")!)?.classList)
+        .toContain("ui-table-row-focused");
+
+      root.querySelectorAll<HTMLElement>(".ui-table-row")[2]!
+        .querySelector<HTMLElement>('[role="gridcell"]')!.click();
+      expect(table.focusedCell.get).toEqual({ row: 2, column: 0 });
+      expect(table.selectedIndices.get).toEqual([2]);
+      expect(document.activeElement).toBe(grid);
+
+      for (const [row, column] of [[-1, 0], [0, -1], [0.5, 0], [0, NaN], [0, 99]] as const) {
+        table.focusCell(row, column);
+        expect(table.focusedCell.get).toBeNull();
+      }
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("selects cells, inclusive rectangles and stable columns through API, pointer and keyboard", () => {
+    const showMiddle = property(true);
+    const cellMode = property(true);
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty([0, 1, 2, 3]), [
+        valueColumn("A", row => `a${row}`),
+        valueColumn("B", row => `b${row}`, { visible: showMiddle }),
+        valueColumn("C", row => `c${row}`),
+      ], { paging: true, selectionMode: "multiple", cellSelectionEnabled: cellMode });
+    });
+    const positions = (): TablePosition[] => table.selectedCells.get.map(value => ({ ...value }));
+    const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+    const cells = (): HTMLElement[][] => Array.from(root.querySelectorAll<HTMLElement>(".ui-table-row"))
+      .map(row => Array.from(row.querySelectorAll<HTMLElement>(".ui-table-cell")));
+    const key = (value: string, options: KeyboardEventInit = {}): void => {
+      grid.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: value, ...options,
+      }));
+    };
+    try {
+      expect(table.cellSelectionEnabled.get).toBe(true);
+      table.selectCellRange(1, 2, 3, 0);
+      expect(positions()).toEqual(Array.from({ length: 9 }, (_, index) => ({
+        row: 1 + Math.floor(index / 3), column: index % 3,
+      })));
+      expect(table.selectedIndices.get).toEqual([1, 2, 3]);
+      expect(table.isCellSelected(2, 1)).toBe(true);
+      table.clearCell(2, 1);
+      expect(table.isCellSelected(2, 1)).toBe(false);
+      table.clearAndSelectCell(0, 0);
+      expect(positions()).toEqual([{ row: 0, column: 0 }]);
+      table.selectCell(1, 1);
+      expect(positions()).toEqual([{ row: 0, column: 0 }, { row: 1, column: 1 }]);
+
+      table.clearSelection();
+      cells()[1]![1]!.click();
+      cells()[3]![2]!.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+      expect(positions()).toEqual([
+        { row: 1, column: 1 }, { row: 1, column: 2 },
+        { row: 2, column: 1 }, { row: 2, column: 2 },
+        { row: 3, column: 1 }, { row: 3, column: 2 },
+      ]);
+      expect(root.querySelectorAll(".ui-table-cell-selected")).toHaveLength(6);
+
+      table.clearSelection(); table.focusCell(1, 1); grid.focus();
+      key("ArrowRight");
+      key("ArrowDown", { shiftKey: true });
+      key("ArrowLeft", { shiftKey: true });
+      expect(positions()).toEqual([
+        { row: 1, column: 1 }, { row: 1, column: 2 },
+        { row: 2, column: 1 }, { row: 2, column: 2 },
+      ]);
+      key("ArrowLeft", { ctrlKey: true });
+      expect(positions()).toHaveLength(4);
+
+      expect(table.moveColumn(2, 0)).toBe(true);
+      expect(positions()).toEqual([
+        { row: 1, column: 0 }, { row: 1, column: 2 },
+        { row: 2, column: 0 }, { row: 2, column: 2 },
+      ]);
+      showMiddle.set(false);
+      expect(positions()).toEqual([{ row: 1, column: 0 }, { row: 2, column: 0 }]);
+
+      cellMode.set(false);
+      expect(positions()).toEqual([{ row: 1, column: -1 }, { row: 2, column: -1 }]);
+      table.setCellSelectionEnabled(true);
+      expect(table.cellSelectionEnabled.get).toBe(true);
+      expect(positions()).toEqual([{ row: 1, column: 1 }, { row: 2, column: 1 }]);
+      table.selectCell(-1, 0);
+      expect(positions()).toEqual([]);
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("anchors Shift from focus, respects single selection and clears focus when data becomes empty", () => {
+    const rows = listProperty([0, 1, 2]);
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(rows, [valueColumn("ID", row => row)], {
+        paging: true, selectionMode: "multiple", row: row => {
+          attr("data-focused", row.focused.map(String)); row.renderCells();
+        },
+      });
+    });
+    try {
+      const grid = root.querySelector<HTMLElement>("[role=grid]")!; grid.focus();
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown", shiftKey: true }));
+      expect(table.selectedIndices.get).toEqual([0, 1]);
+      expect(root.querySelectorAll('[data-focused="true"]')).toHaveLength(1);
+      table.setSelectionMode("single");
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "End", shiftKey: true }));
+      expect(table.selectedIndices.get).toEqual([2]);
+      expect(grid.getAttribute("aria-multiselectable")).toBe("false");
+      rows.clear();
+      expect(table.focusedIndex.get).toBe(-1); expect(table.focusedItem.get).toBeNull();
+      expect(grid.hasAttribute("aria-activedescendant")).toBe(false);
+      expect(grid.getAttribute("aria-rowcount")).toBe("1");
+      const key = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowDown" });
+      grid.dispatchEvent(key); expect(key.defaultPrevented).toBe(false);
+      expect(table.focusedIndex.get).toBe(-1);
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("leaves editors, nested controls, headers, composition and canceled keys alone", () => {
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty([0, 1, 2]), [{ text: "Editor", cell: () => {
+        element("input")(() => attr("value", "Ada"));
+        element("button")(() => text("Action"));
+      } }], { paging: true });
+    });
+    try {
+      const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+      const editor = root.querySelector<HTMLInputElement>("input")!;
+      editor.focus(); editor.setSelectionRange(0, 2, "backward"); editor.click();
+      const key = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowDown" });
+      editor.dispatchEvent(key);
+      expect(key.defaultPrevented).toBe(false);
+      expect(table.focusedIndex.get).toBe(-1); expect(table.selectedIndex.get).toBe(-1);
+      expect(document.activeElement).toBe(editor);
+      expect(editor.selectionDirection).toBe("backward");
+      root.querySelector<HTMLButtonElement>(".ui-table-cell button")!.click();
+      expect(table.focusedIndex.get).toBe(-1);
+      const headerKey = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowDown" });
+      root.querySelector(".ui-table-header-cell")!.dispatchEvent(headerKey);
+      expect(headerKey.defaultPrevented).toBe(false);
+      grid.focus();
+      for (const options of [{ isComposing: true }, { altKey: true }]) {
+        const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowDown", ...options });
+        grid.dispatchEvent(event); expect(event.defaultPrevented).toBe(false);
+      }
+      const canceled = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowDown" });
+      canceled.preventDefault(); grid.dispatchEvent(canceled);
+      expect(table.focusedIndex.get).toBe(0);
+      editor.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "End" }));
+      expect(table.focusedIndex.get).toBe(0);
+      editor.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+      root.querySelectorAll<HTMLElement>(".ui-table-cell")[2]!.click();
+      expect(table.focusedIndex.get).toBe(2); expect(document.activeElement).toBe(grid);
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("coordinates table editing, writable value commit and structural cancellation", () => {
+    const name = property("Ada");
+    const rows = listProperty([{ name }]);
+    const visible = property(true);
+    const started = vi.fn();
+    const committed = vi.fn();
+    const canceled = vi.fn();
+    const customCommit = vi.fn();
+    const customObserved = vi.fn();
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<{ name: typeof name }>;
+    const app = mount(root, () => {
+      table = tableView(rows, [
+        valueColumn("Name", row => row.name, {
+          visible,
+          onEditStart: started,
+          onEditCommit: committed,
+          onEditCancel: canceled,
+        }),
+        valueColumn("Manual", row => row.name.map(value => value), {
+          editCommitHandler: customCommit,
+          onEditCommit: customObserved,
+        }),
+      ], { paging: true, editable: true });
+    });
+    try {
+      expect(table.editCell(0, 0)).toBe(true);
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      expect(table.editingItem.get).toBe(rows.get[0]);
+      expect(table.originalEditValue.get).toBe("Ada");
+      expect(table.editingValue.get).toBe("Ada");
+      expect(root.querySelector(".ui-table-cell")?.getAttribute("aria-readonly")).toBe("false");
+      expect(root.querySelector(".ui-table-cell-editing")).not.toBeNull();
+      expect(started).toHaveBeenCalledWith(expect.objectContaining({
+        position: { row: 0, column: 0 }, oldValue: "Ada", rowItem: rows.get[0],
+      }));
+
+      expect(table.updateEdit("Grace")).toBe(true);
+      expect(table.commitEdit()).toBe(true);
+      expect(name.get).toBe("Grace");
+      expect(committed).toHaveBeenCalledWith(expect.objectContaining({
+        oldValue: "Ada", newValue: "Grace",
+      }));
+      expect(table.editingCell.get).toBeNull();
+
+      expect(table.editCell(0, 1)).toBe(true);
+      expect(table.commitEdit("Manual")).toBe(true);
+      expect(name.get).toBe("Grace");
+      expect(customCommit).toHaveBeenCalledWith(expect.objectContaining({ newValue: "Manual" }));
+      expect(customObserved).toHaveBeenCalledWith(expect.objectContaining({ newValue: "Manual" }));
+
+      expect(table.editCell(0, 0)).toBe(true);
+      rows.insert(0, { name: property("Before") });
+      expect(table.editingCell.get).toEqual({ row: 1, column: 0 });
+      visible.set(false);
+      expect(table.editingCell.get).toBeNull();
+      expect(canceled).toHaveBeenLastCalledWith(expect.objectContaining({
+        position: { row: 1, column: 0 }, reason: "column-unavailable",
+      }));
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("edits standard text and Boolean cells with the documented keyboard transitions", () => {
+    const name = property("Ada");
+    const active = property(true);
+    type Row = { name: typeof name; active: typeof active };
+    const rows = listProperty<Row>([{ name, active }]);
+    const started = vi.fn();
+    const committed = vi.fn();
+    const canceled = vi.fn();
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<Row>;
+    const app = mount(root, () => {
+      table = tableView(rows, [
+        textFieldColumn("Name", row => row.name, {
+          onEditStart: started, onEditCommit: committed, onEditCancel: canceled,
+        }),
+        checkBoxColumn("Active", row => row.active, {
+          onEditStart: started, onEditCommit: committed,
+        }),
+      ], { paging: true, editable: true, cellSelectionEnabled: true });
+    });
+    try {
+      const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+      const nameCell = root.querySelectorAll<HTMLElement>(".ui-table-cell")[0]!;
+
+      nameCell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      let editor = root.querySelector<HTMLInputElement>(".ui-table-text-field-cell__editor")!;
+      expect(editor.value).toBe("Ada");
+      expect(document.activeElement).toBe(editor);
+      editor.value = "Grace";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      expect(table.editingValue.get).toBe("Grace");
+      editor.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Enter", isComposing: true,
+      }));
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }));
+      expect(name.get).toBe("Ada");
+      expect(canceled).toHaveBeenLastCalledWith(expect.objectContaining({ reason: "explicit", draftValue: "Grace" }));
+      expect(document.activeElement).toBe(grid);
+
+      table.focusCell(0, 0);
+      grid.focus();
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F2" }));
+      editor = root.querySelector<HTMLInputElement>(".ui-table-text-field-cell__editor")!;
+      editor.value = "Augusta";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      editor.blur();
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      editor.focus();
+      editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab" }));
+      expect(name.get).toBe("Augusta");
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 1 });
+      expect(table.editingCell.get).toBeNull();
+      expect(document.activeElement).toBe(grid);
+
+      const checkBox = root.querySelector<HTMLInputElement>(".ui-table-check-box-cell__editor")!;
+      checkBox.click();
+      expect(active.get).toBe(false);
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 1 });
+      expect(table.editingCell.get).toBeNull();
+      expect(committed).toHaveBeenCalledWith(expect.objectContaining({ oldValue: true, newValue: false }));
+
+      grid.focus();
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      expect(table.editingCell.get).toEqual({ row: 0, column: 1 });
+      expect(document.activeElement).toBe(checkBox);
+      checkBox.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      expect(active.get).toBe(true);
+      expect(table.editingCell.get).toBeNull();
+
+      grid.focus();
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F2" }));
+      checkBox.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Tab", shiftKey: true,
+      }));
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 0 });
+      expect(document.activeElement).toBe(grid);
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      editor = root.querySelector<HTMLInputElement>(".ui-table-text-field-cell__editor")!;
+      editor.value = "Lovelace";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+      expect(name.get).toBe("Lovelace");
+      expect(document.activeElement).toBe(grid);
+      expect(started).toHaveBeenCalled();
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("edits selection cells and renders clamped progress through the standard factories", () => {
+    const role = property("missing");
+    const owner = property({ id: 1, name: "Alice" });
+    const progress = property(1.25);
+    const owners = [{ id: 1, name: "Alice" }, { id: 2, name: "Bob" }];
+    const roles = listProperty(["author", "editor"]);
+    type Row = { role: typeof role; owner: typeof owner; progress: typeof progress };
+    const rows = listProperty<Row>([{ role, owner, progress }]);
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<Row>;
+    const app = mount(root, () => component("viewport", {}, () => {
+      table = tableView(rows, [
+        choiceBoxColumn("Role", row => row.role, roles, {
+          converter: value => value.toUpperCase(),
+        }),
+        comboBoxColumn("Owner", row => row.owner, owners, {
+          converter: value => value.name,
+          identityBy: value => value.id,
+        }),
+        progressBarColumn("Progress", row => row.progress),
+      ], { paging: true, editable: true });
+    }));
+    try {
+      const cells = root.querySelectorAll<HTMLElement>(".ui-table-cell");
+      const progressBar = cells[2]!.querySelector<HTMLElement>("[role=progressbar]")!;
+      expect(progressBar.getAttribute("aria-valuenow")).toBe("100");
+      expect(progressBar.querySelector<HTMLElement>(".ui-table-progress-bar-cell__fill")!.style.width).toBe("100%");
+      progress.set(-0.5);
+      expect(progressBar.getAttribute("aria-valuenow")).toBe("0");
+      expect(progressBar.querySelector<HTMLElement>(".ui-table-progress-bar-cell__fill")!.style.width).toBe("0%");
+      expect(table.editCell(0, 2)).toBe(false);
+
+      cells[0]!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      const choice = root.querySelector<HTMLSelectElement>(".ui-table-choice-box-cell__editor")!;
+      expect(choice.getAttribute("aria-invalid")).toBe("true");
+      roles.add("reviewer");
+      expect(Array.from(choice.options, option => option.textContent)).toEqual(["AUTHOR", "EDITOR", "REVIEWER"]);
+      choice.selectedIndex = 1;
+      choice.dispatchEvent(new Event("change", { bubbles: true }));
+      expect(role.get).toBe("editor");
+      expect(table.editingCell.get).toBeNull();
+
+      cells[1]!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      let combo = root.querySelector<HTMLElement>(".ui-table-combo-box-cell__editor .ui-combo-box")!;
+      expect(combo.getAttribute("aria-expanded")).toBe("true");
+      combo.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }));
+      expect(combo.getAttribute("aria-expanded")).toBe("false");
+      expect(table.editingCell.get).toEqual({ row: 0, column: 1 });
+      combo.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }));
+      expect(table.editingCell.get).toBeNull();
+
+      cells[1]!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      combo = root.querySelector<HTMLElement>(".ui-table-combo-box-cell__editor .ui-combo-box")!;
+      const choices = root.querySelectorAll<HTMLElement>(".ui-combo-box__item");
+      choices[1]!.click();
+      expect(owner.get).toEqual(owners[1]);
+      expect(table.editingCell.get).toBeNull();
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("keeps converted text edits open and accessible until parsing succeeds", () => {
+    const age = property(42);
+    const note = property("ready");
+    const committed = vi.fn();
+    type Row = { age: typeof age; note: typeof note };
+    const rows = listProperty<Row>([{ age, note }]);
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<Row>;
+    const app = mount(root, () => {
+      table = tableView(rows, [
+        convertingTextFieldColumn("Age", row => row.age, text => {
+          if (text === "explode") throw new Error("Parser exploded");
+          const value = Number(text);
+          return Number.isInteger(value) && value >= 0
+            ? { ok: true, value }
+            : { ok: false, error: "Whole number required" };
+        }, { editOnBlur: "commit", onEditCommit: committed }),
+        textFieldColumn("Note", row => row.note),
+      ], { paging: true, editable: true, cellSelectionEnabled: true });
+    });
+    try {
+      const cell = root.querySelector<HTMLElement>(".ui-table-cell")!;
+      cell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      const editor = root.querySelector<HTMLInputElement>(".ui-table-text-field-cell__editor")!;
+      expect(editor.value).toBe("42");
+
+      editor.value = "not a number";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      expect(table.editingValue.get).toBe(42);
+      editor.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Enter",
+      }));
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      expect(editor.getAttribute("aria-invalid")).toBe("true");
+      editor.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Tab",
+      }));
+
+      expect(age.get).toBe(42);
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 0 });
+      expect(document.activeElement).toBe(editor);
+      expect(editor.getAttribute("aria-invalid")).toBe("true");
+      const errorId = editor.getAttribute("aria-errormessage")!;
+      expect(errorId).not.toBe("");
+      expect(root.querySelector<HTMLElement>(`#${errorId}`)!.textContent).toBe("Whole number required");
+      expect(cell.classList.contains("ui-table-cell-edit-error")).toBe(true);
+
+      editor.value = "explode";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      expect(root.querySelector<HTMLElement>(`#${errorId}`)!.textContent).toContain("Parser exploded");
+
+      editor.value = "43";
+      editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      expect(table.editingValue.get).toBe(43);
+      expect(editor.getAttribute("aria-invalid")).toBe("false");
+      expect(editor.hasAttribute("aria-errormessage")).toBe(false);
+      editor.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Tab",
+      }));
+
+      expect(age.get).toBe(43);
+      expect(table.editingCell.get).toBeNull();
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 1 });
+      expect(committed).toHaveBeenCalledOnce();
+      expect(committed).toHaveBeenCalledWith(expect.objectContaining({ oldValue: 42, newValue: 43 }));
+
+      cell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      const blurEditor = root.querySelector<HTMLInputElement>(".ui-table-text-field-cell__editor")!;
+      blurEditor.value = "invalid on blur";
+      blurEditor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      blurEditor.blur();
+      expect(age.get).toBe(43);
+      expect(table.editingCell.get).toEqual({ row: 0, column: 0 });
+      expect(blurEditor.getAttribute("aria-invalid")).toBe("true");
+      blurEditor.focus();
+      blurEditor.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true, cancelable: true, key: "Escape",
+      }));
+      expect(table.editingCell.get).toBeNull();
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("focuses remote gaps without fetching and uses paging navigation to materialize the focused row", async () => {
+    type Query = { offset: number; limit: number };
+    const requests: { query: Query; resolve: (page: RemotePage<string, Query>) => void }[] = [];
+    const source = remoteSource<string, Query>({
+      initialQuery: { offset: 0, limit: 10 }, initial: Array.from({ length: 10 }, (_, i) => `Row ${i}`),
+      totalCount: 100, rangeQuery: (query, offset, limit) => ({ offset, limit }),
+      load: query => new Promise(resolve => requests.push({ query, resolve })),
+    });
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(source, [valueColumn("ID", row => row)], { paging: true, pageSize: 10, rowHeight: 20 });
+    });
+    try {
+      measureTable(root);
+      table.focusIndex(55);
+      expect(table.focusedIndex.get).toBe(55); expect(table.focusedItem.get).toBeNull();
+      expect(table.selectedIndex.get).toBe(-1); expect(requests).toHaveLength(0);
+      const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+      grid.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "End" }));
+      expect(table.focusedIndex.get).toBe(99); expect(table.focusedItem.get).toBeNull();
+      expect(table.selectedIndex.get).toBe(99);
+      await vi.waitFor(() => expect(requests.some(r => r.query.offset <= 99 && r.query.offset + r.query.limit > 99)).toBe(true));
+      for (const request of requests.slice()) request.resolve({
+        items: Array.from({ length: request.query.limit }, (_, i) => `Row ${request.query.offset + i}`),
+        offset: request.query.offset, totalCount: 100,
+      });
+      await vi.waitFor(() => expect(table.focusedItem.get).toBe("Row 99"));
+      const active = document.getElementById(grid.getAttribute("aria-activedescendant")!);
+      expect(active?.textContent).toBe("Row 99");
+      expect(root.textContent).toContain("Page 10 of 10");
+      expect(root.querySelector(".ui-table-viewport")!.getAttribute("style")).toContain("overflow-y: hidden");
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("hydrates logical focus without stealing DOM focus and maintains unique active row IDs", async () => {
+    let table!: TableViewHandle<number>;
+    const build = (): void => {
+      table = tableView(listProperty([0, 1, 2]), [valueColumn("ID", row => row)], { paging: true });
+      table.focusIndex(1);
+    };
+    const rendered = await renderToString(build);
+    const root = document.createElement("div"); root.innerHTML = rendered.html; document.body.appendChild(root);
+    const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+    const row = root.querySelectorAll(".ui-table-row")[1];
+    expect(grid.hasAttribute("aria-activedescendant")).toBe(false);
+    const previousFocus = document.activeElement;
+    const app = await hydrate(root, build);
+    const second = document.createElement("div"); document.body.appendChild(second);
+    const other = mount(second, build);
+    try {
+      expect(root.querySelector("[role=grid]")).toBe(grid);
+      expect(root.querySelectorAll(".ui-table-row")[1]).toBe(row);
+      expect(document.activeElement).toBe(previousFocus);
+      expect(document.getElementById(grid.getAttribute("aria-activedescendant")!)).toBe(row);
+      expect(second.querySelector("[role=grid]")!.getAttribute("aria-activedescendant"))
+        .not.toBe(grid.getAttribute("aria-activedescendant"));
+    } finally { app.dispose(); other.dispose(); root.remove(); second.remove(); }
+  });
+
+  it("reveals visible columns using current widths/order without changing rows, editors or selection", () => {
+    const root = document.createElement("div"); document.body.appendChild(root);
+    const visible = property(true);
+    let table!: TableViewHandle<string>;
+    let builds = 0;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [
+        { text: "Editor", prefWidth: 200, cell: () => { builds++; element("input")(() => attr("value", "Ada")); } },
+        valueColumn("Hidden", row => row, { prefWidth: 900, visible: false }),
+        valueColumn("Middle", row => row, { prefWidth: 150, visible }),
+        valueColumn("Last", row => row, { prefWidth: 300 }),
+      ], { paging: true, columnResizePolicy: "unconstrained" });
+    });
+    try {
+      const viewport = measureTable(root);
+      Object.defineProperty(viewport, "clientWidth", { value: 250 });
+      const header = root.querySelector<HTMLElement>(".ui-table-header-content")!;
+      const editor = root.querySelector<HTMLInputElement>("input")!;
+      editor.focus(); editor.setSelectionRange(0, 2, "backward"); table.selectIndex(0);
+      viewport.scrollTop = 37;
+      table.scrollToColumnIndex(1);
+      expect(viewport.scrollLeft).toBe(100); // Hidden column does not contribute.
+      expect(header.style.transform).toMatch(/^translateX\(-100(?:\.0)?px\)$/);
+      table.scrollToColumnIndex(1); expect(viewport.scrollLeft).toBe(100);
+      table.scrollToColumnIndex(2); expect(viewport.scrollLeft).toBe(350); // Oversized: start aligned.
+      table.scrollToColumnIndex(0); expect(viewport.scrollLeft).toBe(0);
+      table.resizeColumn(0, 100);
+      table.scrollToColumnIndex(1); expect(viewport.scrollLeft).toBe(200);
+      table.moveColumn(2, 1);
+      table.scrollToColumnIndex(2); expect(viewport.scrollLeft).toBe(500); // Current visual order.
+      visible.set(false);
+      table.scrollToColumnIndex(1); expect(viewport.scrollLeft).toBe(300);
+      for (const invalid of [-1, 2, 0.5, NaN, Infinity, 2 ** 32]) table.scrollToColumnIndex(invalid);
+      expect(viewport.scrollLeft).toBe(300);
+      expect(viewport.scrollTop).toBe(37);
+      expect(table.selectedIndex.get).toBe(0);
+      expect(document.activeElement).toBe(editor);
+      expect([editor.selectionStart, editor.selectionEnd, editor.selectionDirection]).toEqual([0, 2, "backward"]);
+      expect(root.querySelector("input")).toBe(editor); expect(builds).toBe(1);
+      expect(viewport.style.overflowX).toBe("auto");
+      app.dispose(); table.scrollToColumnIndex(0); expect(viewport.scrollLeft).toBe(300);
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("mirrors RTL columns, scroll targets, focus, resize and keyboard reordering", () => {
+    const root = document.createElement("div"); document.body.appendChild(root);
+    const direction = property<TableDirection>("rtl");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(["Ada"]), [
+        valueColumn("A", row => row, { prefWidth: 200 }),
+        valueColumn("B", row => row, { prefWidth: 200 }),
+        valueColumn("C", row => row, { prefWidth: 200 }),
+      ], { paging: true, direction, columnResizePolicy: "unconstrained" });
+    });
+    try {
+      const grid = root.querySelector<HTMLElement>("[role=grid]")!;
+      const viewport = measureTable(root);
+      Object.defineProperty(viewport, "clientWidth", { configurable: true, value: 250 });
+      const headerContent = root.querySelector<HTMLElement>(".ui-table-header-content")!;
+      const tableContent = root.querySelector<HTMLElement>(".ui-table-content")!;
+      expect(grid.dir).toBe("rtl");
+      expect(viewport.style.direction).toBe("ltr");
+      expect(headerContent.style.direction).toBe("rtl");
+      expect(tableContent.style.direction).toBe("rtl");
+
+      table.scrollToColumnIndex(0);
+      expect(viewport.scrollLeft).toBe(350);
+      expect(headerContent.style.transform).toMatch(/^translateX\(-350(?:\.0)?px\)$/);
+      table.scrollToColumnIndex(1); expect(viewport.scrollLeft).toBe(200);
+      table.scrollToColumnIndex(2); expect(viewport.scrollLeft).toBe(0);
+
+      table.focusCell(0, 0);
+      grid.focus();
+      grid.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 1 });
+      grid.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      expect(table.focusedCell.get).toEqual({ row: 0, column: 0 });
+
+      const firstHandle = root.querySelector<HTMLElement>(".ui-table-column-resize-handle")!;
+      expect(firstHandle.style.left).toBe("0px");
+      expect(firstHandle.style.right).toBe("auto");
+      firstHandle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      expect(table.columnWidths.get[0]).toBe(210);
+      firstHandle.dispatchEvent(new PointerEvent("pointerdown", {
+        bubbles: true, clientX: 100, pointerId: 17,
+      }));
+      window.dispatchEvent(new PointerEvent("pointermove", { clientX: 80, pointerId: 17 }));
+      window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 17 }));
+      expect(table.columnWidths.get[0]).toBe(230);
+
+      const firstHeader = root.querySelector<HTMLElement>(".ui-table-header-cell-leaf")!;
+      firstHeader.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "ArrowLeft", altKey: true, shiftKey: true, bubbles: true,
+      }));
+      expect(Array.from(root.querySelectorAll(".ui-table-header-cell-leaf"), node => node.textContent))
+        .toEqual(["B", "A", "C"]);
+
+      table.scrollToColumnIndex(1);
+      expect(viewport.scrollLeft).toBe(200);
+      direction.set("ltr");
+      expect(grid.dir).toBe("ltr");
+      expect(tableContent.style.direction).toBe("ltr");
+      expect(viewport.scrollLeft).toBe(180); // Preserve the logical inline-start offset.
+      expect(headerContent.style.transform).toMatch(/^translateX\(-180(?:\.0)?px\)$/);
+      expect(firstHandle.style.left).toBe("auto");
+      expect(firstHandle.style.right).toBe("0px");
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("hydrates RTL at its logical start without replacing the server table", async () => {
+    const build = (): void => { tableView(listProperty(["Ada"]), [
+      valueColumn("A", row => row, { prefWidth: 200 }),
+      valueColumn("B", row => row, { prefWidth: 200 }),
+      valueColumn("C", row => row, { prefWidth: 200 }),
+    ], { paging: true, direction: "rtl", columnResizePolicy: "unconstrained" }); };
+    const root = document.createElement("div");
+    root.innerHTML = (await renderToString(build)).html;
+    const grid = root.querySelector<HTMLElement>(".ui-table-view")!;
+    const viewport = root.querySelector<HTMLElement>(".ui-table-viewport")!;
+    const header = root.querySelector<HTMLElement>(".ui-table-header-content")!;
+    Object.defineProperty(viewport, "clientWidth", { configurable: true, value: 250 });
+    expect(grid.dir).toBe("rtl"); expect(viewport.scrollLeft).toBe(0);
+    const app = await hydrate(root, build);
+    try {
+      expect(root.querySelector(".ui-table-view")).toBe(grid);
+      expect(root.querySelector(".ui-table-viewport")).toBe(viewport);
+      expect(viewport.scrollLeft).toBe(350);
+      expect(header.style.transform).toMatch(/^translateX\(-350(?:\.0)?px\)$/);
+    } finally { app.dispose(); }
+  });
+
+  it("navigates an empty headerless table and synchronizes native scroll clamping", () => {
+    const root = document.createElement("div");
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty<number>([]), [
+        valueColumn("A", row => row, { prefWidth: 200 }),
+        valueColumn("B", row => row, { prefWidth: 200 }),
+      ], { paging: true, showHeader: false, columnResizePolicy: "unconstrained" });
+    });
+    try {
+      const viewport = measureTable(root);
+      Object.defineProperty(viewport, "clientWidth", { value: 250 });
+      table.scrollToColumnIndex(1); expect(viewport.scrollLeft).toBe(150);
+      expect(root.querySelector(".ui-table-header-content")).toBeNull();
+      let nativeOffset = 0;
+      Object.defineProperty(viewport, "scrollLeft", {
+        get: () => nativeOffset, set: (value: number) => { nativeOffset = Math.min(125, Math.max(0, value)); },
+      });
+      table.scrollToColumnIndex(1); expect(nativeOffset).toBe(125);
+      table.scrollToColumnIndex(0); expect(nativeOffset).toBe(0);
+      expect(table.columnWidths.get).toEqual([200, 200]);
+    } finally { app.dispose(); }
+  });
+
+  it("does not fetch remote rows when only the column offset changes", async () => {
+    const load = vi.fn(async (query: { offset: number; limit: number }) => ({
+      items: Array.from({ length: query.limit }, (_, index) => `Row ${query.offset + index}`),
+      offset: query.offset, totalCount: 1000,
+    }));
+    const source = remoteSource({
+      load, initialQuery: { offset: 0, limit: 50 },
+      initial: Array.from({ length: 200 }, (_, index) => `Row ${index}`), totalCount: 1000,
+      rangeQuery: (query, offset, limit) => ({ ...query, offset, limit }),
+    });
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(source, [valueColumn("A", row => row, { prefWidth: 200 }),
+        valueColumn("B", row => row, { prefWidth: 200 })],
+        { paging: false, rowHeight: 20, columnResizePolicy: "unconstrained" });
+    });
+    try {
+      const viewport = measureTable(root);
+      Object.defineProperty(viewport, "clientWidth", { value: 250 });
+      await new Promise(resolve => setTimeout(resolve, 40));
+      const cells = Array.from(root.querySelectorAll(".ui-table-cell"));
+      table.scrollToColumnIndex(1); expect(viewport.scrollLeft).toBe(150);
+      viewport.dispatchEvent(new Event("scroll")); // The browser follows the programmatic write.
+      await new Promise(resolve => setTimeout(resolve, 40));
+      expect(load).not.toHaveBeenCalled();
+      expect(Array.from(root.querySelectorAll(".ui-table-cell"))).toEqual(cells);
+      expect(viewport.scrollTop).toBe(0);
+    } finally { app.dispose(); }
+  });
+
+  it("queues column identity through SSR/hydration and reordering, independently of row navigation", async () => {
+    let table!: TableViewHandle<number>;
+    const build = (): void => {
+      table = tableView(listProperty(Array.from({ length: 100 }, (_, id) => id)),
+        [valueColumn("A", row => row, { prefWidth: 200 }),
+          valueColumn("B", row => row, { prefWidth: 200 }),
+          valueColumn("C", row => row, { prefWidth: 200 })],
+        { paging: false, rowHeight: 20, columnResizePolicy: "unconstrained" });
+      table.scrollToColumnIndex(0);
+      table.scrollToColumnIndex(1); // B, even after B moves to the last position.
+      table.scrollToColumnIndex(-1);
+      table.moveColumn(1, 2);
+      table.scrollToIndex(50);
+      div(() => text("Sibling"));
+    };
+    const rendered = await renderToString(build);
+    const root = document.createElement("div"); root.innerHTML = rendered.html;
+    const viewport = measureTable(root);
+    Object.defineProperty(viewport, "clientWidth", { value: 250 });
+    const sibling = root.lastElementChild;
+    const header = root.querySelector<HTMLElement>(".ui-table-header-content")!;
+    expect(header.style.transform).toMatch(/^translateX\(-0(?:\.0)?px\)$/);
+    const app = await hydrate(root, build);
+    try {
+      expect(root.querySelector(".ui-table-viewport")).toBe(viewport);
+      expect(root.lastElementChild).toBe(sibling);
+      expect(viewport.scrollLeft).toBe(350);
+      expect(header.style.transform).toMatch(/^translateX\(-350(?:\.0)?px\)$/);
+      expect(viewport.scrollTop).toBe(920);
+      expect(table.selectedIndex.get).toBe(-1);
+      await new Promise(resolve => setTimeout(resolve, 40));
+      expect(viewport.scrollLeft).toBe(350);
+    } finally { app.dispose(); }
+  });
+
+  it.each(["reveal", "hide", "dispose"])("handles a column request pending in hidden layout: %s", async (action) => {
+    const root = document.createElement("div");
+    const visible = property(true);
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty([1]), [
+        valueColumn("A", row => row, { prefWidth: 200 }),
+        valueColumn("B", row => row, { prefWidth: 200, visible }),
+        valueColumn("C", row => row, { prefWidth: 200 }),
+      ], { paging: true, columnResizePolicy: "unconstrained" });
+      table.scrollToColumnIndex(2);
+      table.scrollToColumnIndex(1);
+    });
+    try {
+      const viewport = measureTable(root);
+      Object.defineProperty(viewport, "clientWidth", { value: 0 });
+      await new Promise(resolve => setTimeout(resolve, 40));
+      expect(viewport.scrollLeft).toBe(0);
+      if (action === "hide") visible.set(false);
+      if (action === "dispose") app.dispose();
+      Object.defineProperty(viewport, "clientWidth", { value: 250 });
+      window.dispatchEvent(new Event("resize"));
+      if (action === "reveal") await vi.waitFor(() => expect(viewport.scrollLeft).toBe(150));
+      else {
+        await new Promise(resolve => setTimeout(resolve, 40));
+        expect(viewport.scrollLeft).toBe(0);
+      }
+    } finally { app.dispose(); }
+  });
+
+  it("reveals rows and items with minimal movement, without changing selection or mode", () => {
+    const records = Array.from({ length: 100 }, (_, id) => ({ id }));
+    const root = document.createElement("div");
+    let table!: TableViewHandle<{ id: number }>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(records), [valueColumn("ID", row => row.id)], {
+        paging: false, rowHeight: 20, headerRows: 2, header: () => text("Content header"),
+      });
+    });
+    try {
+      const viewport = measureTable(root);
+      table.selectIndex(3);
+      table.scrollToIndex(50);
+      expect(viewport.scrollTop).toBe(960); // 40 header + 51 * 20 - 100 viewport
+      expect(root.querySelector(".ui-table-cell")!.textContent).not.toBe("0");
+      table.scrollToIndex(49);
+      expect(viewport.scrollTop).toBe(960);
+      for (const invalid of [-1, 100, 0.5, NaN, Infinity, 2 ** 32]) table.scrollToIndex(invalid);
+      table.scrollToItem({ id: 0 }); // A different object is not the loaded record.
+      expect(viewport.scrollTop).toBe(960);
+      table.scrollToItem(records[99]!);
+      expect(viewport.scrollTop).toBe(1940);
+      table.scrollToIndex(0);
+      expect(viewport.scrollTop).toBe(40);
+      expect(table.selectedIndex.get).toBe(3);
+      expect(viewport.style.overflowY).toBe("auto");
+      app.dispose();
+      table.scrollToIndex(90);
+      expect(viewport.scrollTop).toBe(40);
+    } finally { app.dispose(); }
+  });
+
+  it("reports only row and column scroll requests that reach the browser viewport", () => {
+    const records = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    const rows: number[] = [];
+    const columns: number[] = [];
+    const root = document.createElement("div");
+    let table!: TableViewHandle<{ id: number }>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(records), [
+        valueColumn("ID", row => row.id, { prefWidth: 200 }),
+        valueColumn("Again", row => row.id, { prefWidth: 200 }),
+      ], {
+        paging: true,
+        columnResizePolicy: "unconstrained",
+        onScrollTo: index => rows.push(index),
+        onScrollToColumn: index => columns.push(index),
+      });
+    });
+    try {
+      const viewport = measureTable(root);
+      Object.defineProperty(viewport, "clientWidth", { value: 250 });
+      table.scrollToIndex(2);
+      table.scrollToIndex(-1);
+      table.scrollToItem(records[0]!);
+      table.scrollToItem({ id: 2 });
+      table.scrollToColumnIndex(1);
+      table.scrollToColumnIndex(9);
+      expect(rows).toEqual([2, 0]);
+      expect(columns).toEqual([1]);
+      app.dispose();
+      table.scrollToIndex(1);
+      table.scrollToColumnIndex(0);
+      expect(rows).toEqual([2, 0]);
+      expect(columns).toEqual([1]);
+    } finally { app.dispose(); }
+  });
+
+  it("reveals the containing page and its clipped rows while keeping paging enabled", () => {
+    const root = document.createElement("div");
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(Array.from({ length: 100 }, (_, id) => id)),
+        [valueColumn("ID", row => row)], { paging: true, pageSize: 10, rowHeight: 20 });
+    });
+    try {
+      const viewport = measureTable(root);
+      table.scrollToIndex(57);
+      expect(Array.from(root.querySelectorAll(".ui-table-cell"), cell => cell.textContent))
+        .toEqual(Array.from({ length: 10 }, (_, id) => String(50 + id)));
+      expect(viewport.scrollTop).toBe(60);
+      expect(viewport.style.overflowY).toBe("hidden");
+      table.scrollToIndex(0);
+      expect(viewport.scrollTop).toBe(0);
+      expect(root.querySelector(".ui-table-cell")!.textContent).toBe("0");
+      expect(table.selectedIndex.get).toBe(-1);
+    } finally { app.dispose(); }
+  });
+
+  it.each([true, false, undefined])("defers render-time navigation until strict hydration completes (paging=%s)", async (paging) => {
+    let table!: TableViewHandle<number>;
+    const build = (): void => {
+      table = tableView(listProperty(Array.from({ length: 100 }, (_, id) => id)),
+        [valueColumn("ID", row => row)], {
+          ...(paging === undefined ? {} : { paging }), rowHeight: 20, crawlable: true, crawlId: `scroll-probe-${paging}`,
+        });
+      table.scrollToIndex(80);
+      table.scrollToIndex(60); // The last valid request wins.
+      div(() => text("Sibling after table"));
+    };
+    const rendered = await renderToString(build);
+    const root = document.createElement("div");
+    root.innerHTML = rendered.html;
+    expect(root.querySelector(".ui-table-cell")!.textContent).toBe("0");
+    const viewport = measureTable(root);
+    const sibling = root.lastElementChild;
+    const app = await hydrate(root, build);
+    try {
+      expect(root.querySelector(".ui-table-viewport")).toBe(viewport);
+      expect(root.lastElementChild).toBe(sibling);
+      expect(root.textContent).toContain("60");
+      expect(viewport.scrollTop).toBe(paging === true ? 0 : 1120);
+      expect(viewport.style.overflowY).toBe(paging === true ? "hidden" : "auto");
+      await new Promise(resolve => setTimeout(resolve, 40));
+      expect(viewport.scrollTop).toBe(paging === true ? 0 : 1120); // No late restore overrides it.
+    } finally { app.dispose(); }
+  });
+
+  it.each([true, false])("loads a remote target range without selecting it (paging=%s)", async (paging) => {
+    type Query = { offset: number; limit: number };
+    const load = vi.fn(async (query: Query) => ({
+      items: Array.from({ length: query.limit }, (_, i) => `Row ${query.offset + i}`),
+      offset: query.offset, totalCount: 1000,
+    }));
+    const source = remoteSource<string, Query>({
+      load, initialQuery: { offset: 0, limit: 20 },
+      initial: Array.from({ length: 20 }, (_, i) => `Row ${i}`), totalCount: 1000,
+      rangeQuery: (query, offset, limit) => ({ ...query, offset, limit }),
+    });
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(source, [valueColumn("Value", row => row)], { paging, rowHeight: 20 });
+    });
+    try {
+      const viewport = measureTable(root);
+      table.scrollToIndex(700);
+      await vi.waitFor(() => expect(root.textContent).toContain("Row 700"));
+      expect(load.mock.calls.some(([query]) => query.offset <= 700 && query.offset + query.limit > 700)).toBe(true);
+      expect(table.selectedIndex.get).toBe(-1);
+      const previous = viewport.scrollTop;
+      const calls = load.mock.calls.length;
+      table.scrollToItem("Not loaded anywhere");
+      expect(viewport.scrollTop).toBe(previous);
+      expect(load).toHaveBeenCalledTimes(calls);
+    } finally { app.dispose(); }
+  });
+
+  it("keeps hidden-layout requests pending and drops them on disposal", async () => {
+    const root = document.createElement("div");
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(Array.from({ length: 100 }, (_, id) => id)),
+        [valueColumn("ID", row => row)], { paging: false, rowHeight: 20 });
+      table.scrollToIndex(90);
+    });
+    const viewport = measureTable(root, 0);
+    expect(viewport.scrollTop).toBe(0);
+    app.dispose();
+    Object.defineProperty(viewport, "clientHeight", { value: 100 });
+    await new Promise(resolve => setTimeout(resolve, 40));
+    expect(viewport.scrollTop).toBe(0);
+  });
+
+  it("applies the latest hidden-layout request when the viewport becomes measurable", async () => {
+    const root = document.createElement("div");
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(listProperty(Array.from({ length: 100 }, (_, id) => id)),
+        [valueColumn("ID", row => row)], { paging: false, rowHeight: 20 });
+      table.scrollToIndex(90);
+      table.scrollToIndex(70);
+      table.scrollToIndex(-1);
+    });
+    try {
+      const viewport = measureTable(root, 0);
+      await new Promise(resolve => setTimeout(resolve, 40));
+      expect(viewport.scrollTop).toBe(0);
+      measureTable(root, 100);
+      window.dispatchEvent(new Event("resize"));
+      await vi.waitFor(() => expect(viewport.scrollTop).toBe(1320));
+    } finally { app.dispose(); }
+  });
+
+  it("exposes atomic multi-selection operations, independent snapshots and reactive modes", () => {
+    const source = listProperty([{ name: "a" }, { name: "b" }, { name: "c" }, { name: "d" }]);
+    const mode = property<TableSelectionMode>("multiple");
+    const root = document.createElement("div");
+    let table!: TableViewHandle<{ name: string }>;
+    const app = mount(root, () => {
+      table = tableView(source, [valueColumn("Name", (row) => row.name)], { paging: true, selectionMode: mode });
+    });
+    let notifications = 0;
+    const subscription = table.selectedIndices.observeWithoutInitial((indices) => {
+      notifications++;
+      expect(table.selectedItems.get).toEqual(indices.map((i) => source.get[i]));
+      expect(table.selectedItem.get).toBe(source.get[table.selectedIndex.get] ?? null);
+      if (table.selectionMode.get === "single") expect(indices.length).toBeLessThanOrEqual(1);
+    });
+    try {
+      table.selectIndices([3, 1, 1, -1, 99, 0.5, NaN, Infinity]);
+      expect(notifications).toBe(1);
+      expect(table.selectedIndices.get).toEqual([1, 3]);
+      expect(table.selectedIndex.get).toBe(1);
+      const copy = table.selectedIndices.get as number[];
+      copy.push(99);
+      expect(table.selectedIndices.get).toEqual([1, 3]);
+      table.selectIndex(2);
+      expect(table.selectedIndices.get).toEqual([1, 2, 3]);
+      table.clearIndex(2);
+      expect(table.selectedIndex.get).toBe(3);
+      mode.set("single");
+      expect(table.selectedIndices.get).toEqual([3]);
+      table.selectAll();
+      expect(table.selectedIndices.get).toEqual([3]);
+      table.setSelectionMode("multiple");
+      table.clearAndSelect(0);
+      table.selectRange(3, 0);
+      expect(table.selectedIndices.get).toEqual([0, 1, 2, 3]);
+      expect(table.selectedIndex.get).toBe(1);
+      table.selectRange(NaN, 3);
+      expect(table.selectedIndex.get).toBe(1);
+      table.clearAndSelect(2);
+      table.selectNext(); table.selectPrevious(); table.selectFirst(); table.selectLast();
+      expect(table.selectedIndices.get).toEqual([0, 2, 3]);
+      expect(table.isSelected(2)).toBe(true);
+      expect(table.isSelected(0.5)).toBe(false);
+    } finally { subscription.dispose(); app.dispose(); }
+    const before = table.selectedIndices.get;
+    mode.set("multiple");
+    table.selectAll(); table.clearAndSelect(0); table.clearIndex(3); table.clearSelection();
+    table.setSelectionMode("single");
+    expect(table.selectedIndices.get).toEqual(before);
+  });
+
+  it("handles Ctrl, Cmd and anchored Shift row clicks without recomposing custom rows", () => {
+    const source = listProperty(Array.from({ length: 8 }, (_, index) => ({ name: `row:${index}` })));
+    const root = document.createElement("div");
+    let table!: TableViewHandle<{ name: string }>;
+    let compositions = 0;
+    const app = mount(root, () => {
+      table = tableView(source, [valueColumn("Name", (row) => row.name)], {
+        paging: true, selectionMode: "multiple",
+        row: (row) => { compositions++; classIf("custom-chosen", row.selected); row.renderCells(); },
+      });
+    });
+    const rows = root.querySelectorAll(".ui-table-row");
+    const click = (index: number, options: MouseEventInit = {}): void => {
+      rows[index]!.dispatchEvent(new MouseEvent("click", { bubbles: true, ...options }));
+      expect(Array.from(root.querySelectorAll('.ui-table-row[aria-selected="true"]')).map(row => row.textContent))
+        .toEqual(table.selectedIndices.get.map(index => `row:${index}`));
+      expect(root.querySelectorAll(".custom-chosen")).toHaveLength(table.selectedIndices.get.length);
+    };
+    try {
+      click(1);
+      click(3, { ctrlKey: true });
+      expect(table.selectedIndices.get).toEqual([1, 3]);
+      click(5, { metaKey: true });
+      expect(table.selectedIndices.get).toEqual([1, 3, 5]);
+      click(7, { shiftKey: true });
+      expect(table.selectedIndices.get).toEqual([5, 6, 7]);
+      click(6, { shiftKey: true });
+      expect(table.selectedIndices.get).toEqual([5, 6]);
+      click(3, { shiftKey: true, ctrlKey: true });
+      expect(table.selectedIndices.get).toEqual([3, 4, 5, 6]);
+      click(3, { ctrlKey: true });
+      expect(table.selectedIndices.get).toEqual([4, 5, 6]);
+      click(2);
+      expect(table.selectedIndices.get).toEqual([2]);
+      expect(compositions).toBe(8);
+      expect(root.querySelectorAll(".ui-table-row")[0]).toBe(rows[0]);
+    } finally { app.dispose(); }
+  });
+
+  it("keeps a disabled row visible and keyboard-reachable but refuses to select or edit it (V05)", () => {
+    const lockedName = property("locked");
+    const openName = property("open");
+    type Row = { name: typeof lockedName };
+    const source = listProperty<Row>([{ name: lockedName }, { name: openName }]);
+    const root = document.createElement("div");
+    let table!: TableViewHandle<Row>;
+    const app = mount(root, () => {
+      table = tableView(source, [textFieldColumn("Name", (row) => row.name)], {
+        paging: true,
+        editable: true,
+        selectionMode: "multiple",
+        rowDisabled: (row) => row.name.get === "locked",
+      });
+    });
+    try {
+      const rows = root.querySelectorAll(".ui-table-row");
+      expect(rows[0]!.classList.contains("ui-table-row-disabled")).toBe(true);
+      expect(rows[0]!.getAttribute("aria-disabled")).toBe("true");
+      expect(rows[1]!.classList.contains("ui-table-row-disabled")).toBe(false);
+      expect(rows[1]!.getAttribute("aria-disabled")).toBe("false");
+
+      table.focusIndex(0); // disabled is not the same as unreachable: logical focus still lands
+      expect(table.focusedIndex.get).toBe(0);
+
+      rows[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(table.selectedIndices.get).toEqual([]);
+      rows[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(table.selectedIndices.get).toEqual([1]);
+
+      const lockedCell = root.querySelectorAll(".ui-table-cell")[0]!;
+      lockedCell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      expect(root.querySelector(".ui-table-text-field-cell__editor")).toBeNull();
+      expect(table.getCellData(0, 0)).toBe("locked"); // still readable, just not editable
+
+      const openCell = root.querySelectorAll(".ui-table-cell")[1]!;
+      openCell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      expect(root.querySelector(".ui-table-text-field-cell__editor")).not.toBeNull();
+    } finally { app.dispose(); }
+  });
+
+  it("hydrates a multi-selected table and preserves selections when columns are hidden", async () => {
+    const source = listProperty(["a", "b", "c"]);
+    const shown = property(true);
+    let table!: TableViewHandle<string>;
+    const build = (): void => {
+      table = tableView(source, [valueColumn("Name", row => row, { visible: shown })], {
+        paging: true, selectionMode: "multiple",
+      });
+      table.selectIndices([0, 2]);
+    };
+    const rendered = await renderToString(build);
+    const root = document.createElement("div");
+    root.innerHTML = rendered.html;
+    const rows = Array.from(root.querySelectorAll(".ui-table-row"));
+    const app = await hydrate(root, build);
+    try {
+      root.querySelectorAll(".ui-table-row").forEach((row, index) => expect(row).toBe(rows[index]));
+      expect(root.querySelectorAll('[aria-selected="true"]')).toHaveLength(2);
+      shown.set(false);
+      expect(table.selectedIndices.get).toEqual([0, 2]);
+      shown.set(true);
+      expect(root.querySelectorAll('[aria-selected="true"]')).toHaveLength(2);
+      source.removeAt(0);
+      expect(table.selectedIndices.get).toEqual([1]);
+      expect(table.selectedItems.get).toEqual(["c"]);
+    } finally { app.dispose(); }
+  });
+
+  it("keeps unloaded remote selections out of the selected-item snapshot without fetching", async () => {
+    const load = vi.fn(async () => ({ items: ["later"], offset: 0, totalCount: 100 }));
+    const source = remoteSource<string, { offset: number }>({
+      load, initialQuery: { offset: 50 }, initial: ["fifty", "fifty-one"], initialOffset: 50, totalCount: 100,
+    });
+    await renderToString(() => {
+      const table = tableView(source, [valueColumn("Value", row => row)], { paging: true, selectionMode: "multiple" });
+      table.selectIndices([50, 80]);
+      expect(table.selectedIndices.get).toEqual([50, 80]);
+      expect(table.selectedItems.get).toEqual(["fifty"]);
+      expect(table.selectedItem.get).toBeNull();
+      table.selectAll();
+      expect(table.selectedIndices.get).toHaveLength(100);
+      expect(table.selectedItems.get).toEqual(["fifty", "fifty-one"]);
+    });
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it("exposes coherent selection and follows a duplicate occurrence through list mutations", () => {
+    const same = { name: "Same" };
+    const rows = listProperty([same, same, { name: "Last" }]);
+    const root = document.createElement("div");
+    let table!: TableViewHandle<{ name: string }>;
+    const app = mount(root, () => {
+      table = tableView(rows, [valueColumn("Name", (row) => row.name)], { paging: true });
+    });
+    const observations: number[] = [];
+    const subscription = table.selectedIndex.observe((index) => {
+      expect(table.selectedItem.get).toBe(index < 0 ? null : rows.get[index]);
+      observations.push(index);
+    });
+    table.selectIndex(1);
+    rows.insert(0, { name: "Before" });
+    expect(table.selectedIndex.get).toBe(2);
+    expect(table.selectedItem.get).toBe(same);
+    rows.removeAt(1);
+    expect(table.selectedIndex.get).toBe(1);
+    const selectedRows = root.querySelectorAll('.ui-table-row[aria-selected="true"]');
+    expect(selectedRows).toHaveLength(1);
+    expect(selectedRows[0]!.textContent).toBe("Same");
+    rows.removeAt(1);
+    expect(table.selectedIndex.get).toBe(-1);
+    expect(observations).toEqual([-1, 1, 2, 1, -1]);
+    subscription.dispose();
+    app.dispose();
+  });
+
+  it("supports item selection, reset identity, invalid indices and disposal through the typed handle", () => {
+    const first = { name: "Same" };
+    const second = { name: "Same" };
+    const rows = listProperty([first, second]);
+    const root = document.createElement("div");
+    let table!: TableViewHandle<{ name: string }>;
+    const app = mount(root, () => {
+      table = tableView(rows, [valueColumn("Name", (row) => row.name)], { paging: true });
+    });
+    table.selectItem(second);
+    rows.setAll([second, first]);
+    expect(table.selectedIndex.get).toBe(0);
+    expect(table.selectedItem.get).toBe(second);
+    rows.setAll([{ name: "Same" }, first]);
+    expect(table.selectedIndex.get).toBe(-1);
+    for (const index of [-2, 999, 0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      table.selectIndex(0);
+      table.selectIndex(index);
+      expect(table.selectedIndex.get).toBe(-1);
+    }
+    table.selectItem(first);
+    table.clearSelection();
+    expect(table.selectedItem.get).toBeNull();
+    app.dispose();
+    table.selectIndex(0);
+    table.selectItem(first);
+    expect(table.selectedIndex.get).toBe(-1);
+  });
+
+  it("keeps remote selection while filling a gap and clears it only after a successful sort reload", async () => {
+    type Row = { name: string };
+    type Query = { offset: number; limit: number };
+    const requests: { query: Query; resolve: (page: RemotePage<Row, Query>) => void }[] = [];
+    const source = remoteSource<Row, Query>({
+      initialQuery: { offset: 50, limit: 10 },
+      initial: Array.from({ length: 10 }, (_, index) => ({ name: `Member ${index + 50}` })),
+      initialOffset: 50,
+      totalCount: 100,
+      rangeQuery: (query, offset, limit) => ({ offset, limit }),
+      sortQuery: (query) => ({ ...query, offset: 0 }),
+      load: (query) => new Promise((resolve) => requests.push({ query, resolve })),
+    });
+    const root = document.createElement("div");
+    let table!: TableViewHandle<Row>;
+    const app = mount(root, () => {
+      table = tableView(source, [valueColumn("Name", (row) => row.name, {
+        sortable: true, sortKey: "name",
+      })], { paging: true, pageSize: 10 });
+    });
+    try {
+      table.selectIndex(55);
+      table.focusIndex(55);
+      const selected = table.selectedItem.get;
+      await vi.waitFor(() => expect(requests.some(({ query }) => query.offset === 0)).toBe(true));
+      // Query objects are application-defined; multiple initial range requests may be in flight.
+      for (const request of requests.slice()) {
+        request.resolve({ items: Array.from({ length: request.query.limit }, (_, i) => ({ name: `Prefix ${i}` })),
+          offset: request.query.offset, totalCount: 100 });
+      }
+      await vi.waitFor(() => expect(root.textContent).toContain("Prefix 0"));
+      expect(table.selectedIndex.get).toBe(55);
+      expect(table.selectedItem.get).toBe(selected);
+      const beforeSort = requests.length;
+      expect(table.focusedIndex.get).toBe(55); expect(table.focusedItem.get).toBe(selected);
+      root.querySelector(".ui-table-header-cell")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await vi.waitFor(() => expect(requests.length).toBeGreaterThan(beforeSort));
+      expect(table.selectedItem.get).toBe(selected);
+      for (const request of requests.slice(beforeSort)) {
+        request.resolve({ items: [{ name: "Sorted" }], offset: 0, totalCount: 1 });
+      }
+      await vi.waitFor(() => expect(root.textContent).toContain("Sorted"));
+      expect(table.selectedIndex.get).toBe(-1);
+      expect(table.selectedItem.get).toBeNull();
+      expect(table.focusedIndex.get).toBe(-1); expect(table.focusedItem.get).toBeNull();
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("restores selection and focus by rowKey after a remote sort replacement", async () => {
+    type Row = { id: number; name: string };
+    type Query = { sorting: readonly SortSpec[] };
+    let resolve!: (page: RemotePage<Row, Query>) => void;
+    const source = remoteSource<Row, Query>({
+      initialQuery: { sorting: [] },
+      initial: [{ id: 1, name: "one" }, { id: 2, name: "two" }],
+      totalCount: 2,
+      sortQuery: (query, sorting) => ({ ...query, sorting }),
+      load: () => new Promise(done => { resolve = done; }),
+    });
+    const root = document.createElement("div");
+    let table!: TableViewHandle<Row>;
+    const app = mount(root, () => {
+      table = tableView(source, [valueColumn("Name", row => row.name, {
+        sortable: true, sortKey: "name",
+      })], { paging: true, rowKey: row => row.id });
+    });
+    try {
+      table.selectIndex(1);
+      table.focusIndex(1);
+      expect(table.toggleSort(0)).toBe(true);
+      resolve({
+        items: [{ id: 2, name: "new two" }, { id: 1, name: "new one" }],
+        totalCount: 2,
+      });
+      await vi.waitFor(() => expect(table.selectedIndex.get).toBe(0));
+      expect(table.selectedItem.get?.name).toBe("new two");
+      expect(table.focusedIndex.get).toBe(0);
+      expect(table.focusedItem.get?.name).toBe("new two");
+    } finally { app.dispose(); }
+  });
+
+  it("preserves a focused editor when another column is hidden or shown", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const shown = property(true);
+    let compositions = 0;
+    const app = mount(root, () => {
+      tableView(listProperty(["Ada"]), [
+        { text: "Optional", visible: shown, cell: (row) => text(`optional:${row}`) },
+        { text: "Editor", cell: () => element("input")(() => { compositions++; }) },
+      ], { paging: true, columnResizePolicy: "flex-last-column" });
+    });
+    try {
+      const editor = root.querySelector<HTMLInputElement>("input")!;
+      const cell = editor.closest<HTMLElement>(".ui-table-cell")!;
+      editor.focus();
+      editor.value = "draft text";
+      editor.setSelectionRange(2, 7);
+      const header = root.querySelectorAll(".ui-table-header-cell")[1];
+      shown.set(false);
+      expect(root.querySelectorAll(".ui-table-header-cell")).toHaveLength(1);
+      expect(root.querySelector(".ui-table-header-cell")).toBe(header);
+      expect(root.textContent).not.toContain("optional:Ada");
+      expect(root.querySelector("input")).toBe(editor);
+      expect(document.activeElement).toBe(editor);
+      expect([editor.selectionStart, editor.selectionEnd]).toEqual([2, 7]);
+      expect(cell.style.width).toBe("800px");
+      shown.set(true);
+      expect(root.querySelectorAll(".ui-table-header-cell")).toHaveLength(2);
+      expect(root.querySelector("input")).toBe(editor);
+      expect(document.activeElement).toBe(editor);
+      expect(editor.value).toBe("draft text");
+      expect(cell.style.width).toBe("400px");
+      expect(compositions).toBe(1);
+      expect(root.querySelectorAll(".ui-table-cell-last")).toHaveLength(1);
+      expect(root.querySelector(".ui-table-cell-last")).toBe(cell);
+    } finally {
+      app.dispose();
+      root.remove();
+    }
+  });
+
+  it("hydrates initially hidden columns and switches the no-visible-columns placeholder", async () => {
+    const shown = property(false);
+    let hiddenRenders = 0;
+    const build = (): void => {
+      tableView(listProperty(["Ada"]), [
+        { text: "Name", visible: shown, cell: (row) => { hiddenRenders++; text(row); } },
+      ], { paging: true, placeholder: () => text("No visible columns") });
+    };
+    const rendered = await renderToString(build);
+    expect(rendered.html).toContain("No visible columns");
+    const root = document.createElement("div");
+    root.innerHTML = rendered.html;
+    document.body.appendChild(root);
+    const placeholder = root.querySelector(".ui-table-placeholder");
+    const app = await hydrate(root, build);
+    expect(root.querySelector(".ui-table-placeholder")).toBe(placeholder);
+    expect(root.querySelectorAll(".ui-table-cell")).toHaveLength(0);
+    expect(hiddenRenders).toBe(0);
+    shown.set(true);
+    expect(root.querySelector(".ui-table-placeholder")).toBeNull();
+    expect(root.querySelector(".ui-table-cell")!.textContent).toBe("Ada");
+    shown.set(false);
+    expect(root.textContent).toContain("No visible columns");
+    app.dispose();
+    const previousRenders = hiddenRenders;
+    shown.set(true);
+    expect(hiddenRenders).toBe(previousRenders);
+    root.remove();
+  });
+
+  it("composes typed custom rows in their own scope with standard cells and managed subscriptions", () => {
+    const root = document.createElement("div");
+    const source = listProperty([{ name: "Ada" }, { name: "Grace" }]);
+    const showName = property(true);
+    const signal = property(0);
+    const contexts: TableRowContext<{ name: string }>[] = [];
+    let updates = 0;
+    let clicks = 0;
+    let table!: TableViewHandle<{ name: string }>;
+    const app = mount(root, () => {
+      table = tableView(source, [valueColumn("Name", (person) => person.name, { visible: showName })], {
+        paging: true,
+        row: (row) => {
+          contexts.push(row);
+          classes("custom-row");
+          classIf("chosen", row.selected);
+          attr("data-row", String(row.index.get));
+          onClick(() => { clicks++; });
+          disposeWith(signal.observeWithoutInitial(() => { updates++; }));
+          div(() => { classes("cell-wrapper"); row.renderCells(); });
+        },
+      });
+    });
+    try {
+      const rows = root.querySelectorAll(".custom-row");
+      expect(rows).toHaveLength(2);
+      expect(rows[1]!.querySelector(".cell-wrapper > .ui-table-column-slot > .ui-table-cell")!.textContent).toBe("Grace");
+      rows[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(clicks).toBe(1);
+      expect(table.selectedItem.get).toBe(source.get[1]);
+      expect(contexts[1]!.selected.get).toBe(true);
+      expect(rows[1]!.classList.contains("chosen")).toBe(true);
+      expect(rows[1]!.getAttribute("aria-selected")).toBe("true");
+      table.clearSelection();
+      expect(rows[1]!.classList.contains("chosen")).toBe(false);
+      signal.set(1);
+      expect(updates).toBe(2);
+      showName.set(false);
+      expect(root.querySelectorAll(".custom-row")).toHaveLength(0);
+      signal.set(2);
+      expect(updates).toBe(2);
+      showName.set(true);
+      expect(root.querySelectorAll(".custom-row")).toHaveLength(2);
+    } finally { app.dispose(); }
+    signal.set(3);
+    expect(updates).toBe(2);
+  });
+
+  it("exposes the enclosing cell's own index/selected/focused state to cell and valueCell renderers (D05)", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const source = listProperty(["Ada", "Grace"]);
+    const contexts: TableCellContext[] = [];
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(
+        source,
+        [
+          valueColumn("Name", (row) => row, {
+            cell: (value, row, context) => {
+              contexts.push(context);
+              div(() => {
+                classes("cell-state");
+                attr("data-index", context.index.map(String));
+                attr("data-selected", context.selected.map(String));
+                attr("data-focused", context.focused.map(String));
+                text(String(value.get ?? ""));
+              });
+            },
+          }),
+        ],
+        { cellSelectionEnabled: true }
+      );
+    });
+    try {
+      const cells = root.querySelectorAll<HTMLElement>(".cell-state");
+      expect(cells).toHaveLength(2);
+      expect(cells[0]!.getAttribute("data-index")).toBe("0");
+      expect(cells[1]!.getAttribute("data-index")).toBe("1");
+      expect(cells[0]!.getAttribute("data-selected")).toBe("false");
+      expect(cells[0]!.getAttribute("data-focused")).toBe("false");
+      expect(contexts[0]!.empty.get).toBe(false);
+
+      table.selectCell(0, 0);
+      expect(cells[0]!.getAttribute("data-selected")).toBe("true");
+      expect(cells[1]!.getAttribute("data-selected")).toBe("false");
+
+      table.focusCell(1, 0);
+      expect(cells[1]!.getAttribute("data-focused")).toBe("true");
+      expect(cells[0]!.getAttribute("data-focused")).toBe("false");
+    } finally {
+      app.dispose();
+      root.remove();
+    }
+  });
+
+  it("hydrates custom row content with DOM identity and refreshes snapshots", async () => {
+    const person = { name: "Ada" };
+    const source = listProperty([person]);
+    let table!: TableViewHandle<typeof person>;
+    const build = (): void => {
+      table = tableView(source, [valueColumn("Unused", (row) => row.name)], {
+        paging: true,
+        row: (row) => { classes("summary-row"); text(`Person: ${row.item.get!.name}`); },
+      });
+    };
+    const rendered = await renderToString(build);
+    const root = document.createElement("div");
+    root.innerHTML = rendered.html;
+    document.body.appendChild(root);
+    const before = root.querySelector(".summary-row");
+    const app = await hydrate(root, build);
+    try {
+      expect(root.querySelector(".summary-row")).toBe(before);
+      expect(root.querySelector(".ui-table-cell")).toBeNull();
+      person.name = "Grace";
+      table.refresh();
+      expect(root.querySelector(".summary-row")).not.toBe(before);
+      expect(root.querySelector(".summary-row")!.textContent).toBe("Person: Grace");
+    } finally { app.dispose(); root.remove(); }
+  });
+
+  it("binds custom placeholder rows and replaces them after a remote range arrives", async () => {
+    const requests: Array<{ offset: number; limit: number; resolve: (page: RemotePage<string, { offset: number; limit: number }>) => void }> = [];
+    const source = remoteSource<string, { offset: number; limit: number }>({
+      initialQuery: { offset: 0, limit: 3 }, initial: ["loaded"], totalCount: 3,
+      rangeQuery: (_query, offset, limit) => ({ offset, limit }),
+      load: (query) => new Promise((resolve) => requests.push({ ...query, resolve })),
+    });
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(source, [valueColumn("Value", (row) => row)], {
+        paging: true, pageSize: 3,
+        row: (row) => {
+          attr("data-empty", String(row.empty.get));
+          text(row.empty.get ? `pending:${row.index.get}` : row.item.get!);
+        },
+      });
+    });
+    try {
+      const pending = root.querySelector('[data-empty="true"]');
+      expect(pending).not.toBeNull();
+      table.selectIndex(1);
+      expect(pending!.getAttribute("aria-selected")).toBe("false");
+      await vi.waitFor(() => expect(requests.length).toBeGreaterThan(0));
+      for (const request of [...requests]) request.resolve({
+        items: Array.from({ length: Math.min(request.limit, 3 - request.offset) }, (_, i) => `item:${request.offset + i}`),
+        offset: request.offset, totalCount: 3,
+      });
+      await vi.waitFor(() => expect(root.querySelector('[data-empty="true"]')).toBeNull());
+      expect(root.contains(pending)).toBe(false);
+      expect(table.selectedItem.get).toBe("item:1");
+      expect(root.querySelector('[aria-selected="true"]')!.textContent).toBe("item:1");
+    } finally { app.dispose(); }
+  });
+
+  it("rejects duplicate and delayed standard-cell composition", () => {
+    const root = document.createElement("div");
+    let delayed!: () => void;
+    const app = mount(root, () => tableView(listProperty(["Ada"]), [valueColumn("Name", (row) => row)], {
+      row: (row) => {
+        row.renderCells();
+        expect(() => row.renderCells()).toThrow(/only be rendered once/);
+        const runInRow = capture();
+        delayed = () => runInRow(() => row.renderCells());
+      },
+    }));
+    try { expect(() => delayed()).toThrow(/synchronously inside the row renderer/); }
+    finally { app.dispose(); }
+  });
+
+  it("returns a refresh handle that cannot mutate the disposed table", () => {
+    const root = document.createElement("div");
+    const row = { name: "Ada" };
+    let refresh: (() => void) | undefined;
+    let disposed: (() => boolean) | undefined;
+    let compositions = 0;
+    const app = mount(root, () => {
+      const table = tableView(listProperty([row]), [
+        valueColumn("Name", (person) => person.name),
+        { text: "Legacy", cell: (person) => { compositions++; text(person.name); } },
+      ]);
+      refresh = () => table.refresh();
+      disposed = () => table.isDisposed;
+    });
+    expect(disposed!()).toBe(false);
+    row.name = "Grace";
+    expect(root.textContent).not.toContain("Grace");
+    refresh!();
+    expect(root.querySelectorAll(".ui-table-cell")[0]!.textContent).toBe("Grace");
+    expect(root.querySelectorAll(".ui-table-cell")[1]!.textContent).toBe("Grace");
+    app.dispose();
+    expect(disposed!()).toBe(true);
+    const previousCompositions = compositions;
+    expect(() => refresh!()).not.toThrow();
+    expect(compositions).toBe(previousCompositions);
+  });
+
+  it("updates typed default and custom value cells without recomposing them", () => {
+    const root = document.createElement("div");
+    const name = property("Ada");
+    const rows = listProperty([{ name, year: 1815 }]);
+    let compositions = 0;
+    const app = mount(root, () => tableView(rows, [
+      valueColumn("Name", (row) => row.name),
+      valueColumn("Formatted", (row) => row.name, {
+        cell: (value) => {
+          compositions++;
+          text(value.map((name) => `Hello ${name ?? ""}`));
+        },
+      }),
+      valueColumn("Year", (row) => row.year),
+    ]));
+    const cells = Array.from(root.querySelectorAll(".ui-table-cell"));
+    expect(cells.map((cell) => cell.textContent)).toEqual(["Ada", "Hello Ada", "1815"]);
+    name.set("Grace");
+    expect(cells.map((cell) => cell.textContent)).toEqual(["Grace", "Hello Grace", "1815"]);
+    root.querySelectorAll(".ui-table-cell").forEach((cell, index) => expect(cell).toBe(cells[index]));
+    expect(compositions).toBe(1);
+    app.dispose();
+    name.set("Detached");
+    expect(cells[0]!.textContent).not.toContain("Detached");
+  });
+
+  it("preserves an embedded editor's identity, focus, selection and binding in overlapping scroll windows", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    const records = Array.from({ length: 60 }, (_, id) => ({ id, name: property(`Person ${id}`) }));
+    const rows = listProperty(records);
+    const app = mount(root, () => tableView(rows, [{
+      text: "Editor",
+      cell: (row) => element("input")(() => {
+        attr("data-row", String(row.id));
+        const field = self();
+        field.addDisposable(row.name.observe((value) => field.setDomProperty("value", value)));
+        onInput((event) => row.name.set((event.target as HTMLInputElement).value));
+      }),
+    }], { paging: false, rowHeight: 32, columnResizePolicy: "flex-last-column" }));
+    try {
+      const viewport = root.querySelector<HTMLElement>(".ui-table-viewport")!;
+      Object.defineProperties(viewport, {
+        clientHeight: { configurable: true, value: 64 },
+        clientWidth: { configurable: true, value: 800 },
+      });
+      viewport.dispatchEvent(new Event("scroll"));
+      const editor = root.querySelector<HTMLInputElement>('input[data-row="3"]')!;
+      editor.focus();
+      editor.value = "Edited person";
+      editor.dispatchEvent(new Event("input", { bubbles: true }));
+      editor.setSelectionRange(2, 6);
+      viewport.scrollTop = 256;
+      viewport.dispatchEvent(new Event("scroll"));
+      expect(root.querySelector('input[data-row="0"]')).toBeNull();
+      expect(root.querySelector('input[data-row="14"]')).not.toBeNull();
+      expect(root.querySelector('input[data-row="3"]')).toBe(editor);
+      expect(document.activeElement).toBe(editor);
+      expect([editor.selectionStart, editor.selectionEnd]).toEqual([2, 6]);
+      expect(records[3]!.name.get).toBe("Edited person");
+      Object.defineProperty(viewport, "clientWidth", { value: 1000 });
+      viewport.dispatchEvent(new Event("scroll"));
+      expect(document.activeElement).toBe(editor);
+      expect(editor.closest<HTMLElement>(".ui-table-cell")!.style.width).toBe("1000px");
+      records[3]!.name.set("Model update");
+      expect(editor.value).toBe("Model update");
+    } finally {
+      app.dispose();
+      root.remove();
+    }
+  });
+
+  it("hydrates typed and legacy cells with their server DOM identity", async () => {
+    const build = (): void => { tableView(listProperty([{ name: property("Ada") }]), [
+      valueColumn("Name", (row) => row.name),
+      { text: "Legacy", cell: (row) => text(row.name) },
+    ], { paging: true }); };
+    const rendered = await renderToString(build);
+    const root = document.createElement("div");
+    root.innerHTML = rendered.html;
+    document.body.appendChild(root);
+    const before = Array.from(root.querySelectorAll(".ui-table-cell"));
+    const app = await hydrate(root, build);
+    expect(before).toHaveLength(2);
+    root.querySelectorAll(".ui-table-cell").forEach((cell, index) => expect(cell).toBe(before[index]));
+    expect(before.map((cell) => cell.textContent)).toEqual(["Ada", "Ada"]);
+    app.dispose();
+    root.remove();
+  });
+
+  it("does not sort a remote column whose sortable flag is false", () => {
+    let sorts = 0;
+    const source = remoteSource({
+      initialQuery: { offset: 0, limit: 10 },
+      initial: ["Ada"],
+      totalCount: 1,
+      rangeQuery: (query, offset, limit) => ({ ...query, offset, limit }),
+      sortQuery: (query) => { sorts++; return query; },
+      load: async () => ({ items: ["Ada"], offset: 0, totalCount: 1 }),
+    });
+    const root = document.createElement("div");
+    const app = mount(root, () => tableView(source, [
+      { text: "Name", cell: (row) => text(row), sortable: false, sortKey: "name" },
+    ]));
+    const header = root.querySelector(".ui-table-header-cell")!;
+    expect(header).not.toBeNull();
+    header.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(sorts).toBe(0);
+    app.dispose();
+  });
+
+  it("sets an explicit remote order in one request and resolves indices against the current columns", async () => {
+    type Query = { sorting: readonly SortSpec[] };
+    const load = vi.fn(async (_query: Query) => ({ items: ["Ada"], totalCount: 1 }));
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(remoteSource({ initialQuery: { sorting: [] } as Query, initial: ["Ada"],
+        totalCount: 1, load, sortQuery: (q, sorting) => ({ ...q, sorting }) }), [
+        valueColumn("Author", row => row, { sortable: true, sortKey: "author" }),
+        valueColumn("Year", row => row, { sortable: true, sortKey: "year" }),
+      ], { paging: true });
+    });
+    const order = [{ columnIndex: 1, ascending: false }, { columnIndex: 0, ascending: true }];
+    try {
+      expect(table.setSortOrder(order)).toBe(true);
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(table.sorting.get).toEqual([{ field: "year", ascending: false }, { field: "author", ascending: true }]);
+      order[0]!.ascending = true; // Input is a command snapshot, not a live binding.
+      expect(table.sorting.get[0]?.ascending).toBe(false);
+      expect(root.querySelector('[aria-sort="descending"]')?.textContent).toBe("Year");
+      expect(table.moveColumn(0, 1)).toBe(true);
+      expect(table.sorting.get[0]?.field).toBe("year");
+      await vi.waitFor(() => expect(root.querySelector("[role=grid]")?.getAttribute("aria-busy")).toBe("false"));
+      expect(table.setSortOrder([{ columnIndex: 0, ascending: true }])).toBe(true);
+      expect(table.sorting.get).toEqual([{ field: "year", ascending: true }]);
+      expect(load).toHaveBeenCalledTimes(2);
+      await vi.waitFor(() => expect(root.querySelector("[role=grid]")?.getAttribute("aria-busy")).toBe("false"));
+      expect(table.setSortOrder([])).toBe(true);
+      expect(table.sorting.get).toEqual([]);
+      expect(load).toHaveBeenCalledTimes(3);
+    } finally { app.dispose(); }
+    expect(table.setSortOrder(order)).toBe(false);
+    expect(table.sort()).toBe(false);
+  });
+
+  it("rejects the entire explicit order for invalid JS values, duplicate keys and unavailable columns", () => {
+    const load = vi.fn(async () => ({ items: ["Ada"], totalCount: 1 }));
+    let table!: TableViewHandle<string>;
+    const root = document.createElement("div");
+    const app = mount(root, () => {
+      table = tableView(remoteSource({ initialQuery: {}, initial: ["Ada"], totalCount: 1,
+        load, sortQuery: (q, _sorting) => q }), [
+        valueColumn("Author", row => row, { sortable: true, sortKey: "author" }),
+        valueColumn("Alias", row => row, { sortable: true, sortKey: " author " }),
+        valueColumn("Locked", row => row, { sortable: false, sortKey: "locked" }),
+        valueColumn("Unkeyed", row => row, { sortable: true, sortKey: " " }),
+        valueColumn("Hidden", row => row, { sortable: true, sortKey: "hidden", visible: false }),
+      ], { paging: true });
+    });
+    try {
+      table.selectIndex(0);
+      const first = { columnIndex: 0, ascending: true };
+      const invalid: unknown[] = [null, undefined, {}, "bad", [null], [undefined], Array(1),
+        [{ columnIndex: 0 }], [{ columnIndex: 0, ascending: "false" }],
+        [{ columnIndex: "0", ascending: true }], [first, first],
+        ...[-1, 0.5, Infinity, NaN, 1, 2, 3, 4, 99].map(columnIndex => [first, { columnIndex, ascending: false }]),
+      ];
+      for (const request of invalid)
+        expect(table.setSortOrder(request as readonly TableSort[]), JSON.stringify(request)).toBe(false);
+      expect(load).not.toHaveBeenCalled();
+      expect(table.sorting.get).toEqual([]);
+      expect(table.selectedIndex.get).toBe(0);
+      expect(root.querySelector("[aria-sort]")).toBeNull();
+    } finally { app.dispose(); }
+  });
+
+  it("retries a failed order without cycling its direction, including hidden terms", async () => {
+    type Query = { sorting: readonly SortSpec[] };
+    const visible = property(true);
+    const load = vi.fn<(q: Query) => Promise<RemotePage<string, Query>>>()
+      .mockRejectedValueOnce(new Error("Temporary outage"))
+      .mockResolvedValue({ items: ["Grace"], totalCount: 1 });
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(remoteSource({ initialQuery: { sorting: [] } as Query, initial: ["Ada"],
+        totalCount: 1, load, sortQuery: (q, sorting) => ({ ...q, sorting }) }), [
+        valueColumn("Author", row => row, { sortable: true, sortKey: "author", visible }),
+        valueColumn("Other", row => row),
+      ], { paging: true });
+    });
+    try {
+      table.selectIndex(0); table.focusIndex(0);
+      expect(table.setSortOrder([{ columnIndex: 0, ascending: false }])).toBe(true);
+      await vi.waitFor(() => expect(root.querySelector(".ui-table-view-error")).not.toBeNull());
+      expect(table.selectedItem.get).toBe("Ada");
+      expect(table.focusedItem.get).toBe("Ada");
+      visible.set(false);
+      expect(table.sort()).toBe(true);
+      expect(load.mock.calls[1]?.[0]).toEqual(load.mock.calls[0]?.[0]);
+      await vi.waitFor(() => expect(root.querySelector(".ui-table-view-error")).toBeNull());
+      await vi.waitFor(() => expect(table.selectedIndex.get).toBe(-1));
+      expect(table.focusedIndex.get).toBe(-1);
+      expect(table.sorting.get).toEqual([{ field: "author", ascending: false }]);
+      visible.set(true);
+      expect(root.textContent).toContain("Grace");
+      expect(root.querySelector("[aria-sort]")?.getAttribute("aria-sort")).toBe("descending");
+    } finally { app.dispose(); }
+  });
+
+  it("keeps the latest explicit order and result when an older request finishes last", async () => {
+    type Query = { sorting: readonly SortSpec[] };
+    const pending: ((page: RemotePage<string, Query>) => void)[] = [];
+    const root = document.createElement("div");
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(remoteSource({ initialQuery: { sorting: [] } as Query, initial: ["initial"], totalCount: 1,
+        load: () => new Promise<RemotePage<string, Query>>(resolve => pending.push(resolve)),
+        sortQuery: (q, sorting) => ({ ...q, sorting }) }), [
+        valueColumn("Value", row => row, { sortable: true, sortKey: "value" }),
+      ], { paging: true });
+    });
+    try {
+      table.setSortOrder([{ columnIndex: 0, ascending: true }]);
+      table.setSortOrder([{ columnIndex: 0, ascending: false }]);
+      pending[1]!({ items: ["latest"], totalCount: 1 });
+      await vi.waitFor(() => expect(root.textContent).toContain("latest"));
+      pending[0]!({ items: ["stale"], totalCount: 1 });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(root.textContent).not.toContain("stale");
+      expect(table.sorting.get).toEqual([{ field: "value", ascending: false }]);
+    } finally { app.dispose(); }
+  });
+
+  it("shares additive remote sorting between pointer, keyboard and handle with stable priorities", async () => {
+    type Query = { sorting: readonly SortSpec[] };
+    const load = vi.fn(async (_query: Query) => ({ items: ["Ada"], totalCount: 1 }));
+    const visible = property(true);
+    const root = document.createElement("div"); document.body.appendChild(root);
+    let table!: TableViewHandle<string>;
+    const app = mount(root, () => {
+      table = tableView(remoteSource({ initialQuery: { sorting: [] } as Query, initial: ["Ada"], totalCount: 1,
+        load, sortQuery: (query, sorting) => ({ ...query, sorting }) }), [
+        valueColumn("Author", row => row, { sortKey: "author", sortable: true, visible }),
+        valueColumn("Year", row => row, { sortKey: "year", sortable: true }),
+      ], { paging: true });
+    });
+    const headers = Array.from(root.querySelectorAll<HTMLElement>("[role=columnheader]"));
+    const author = { field: "author", ascending: true };
+    const year = { field: "year", ascending: true };
+    try {
+      headers[0]!.click();
+      headers[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+      expect(table.sorting.get).toEqual([author, year]);
+      expect(headers.map(h => h.getAttribute("data-sort-priority"))).toEqual(["1", "2"]);
+      expect(root.querySelectorAll("[aria-sort]")).toHaveLength(1);
+      expect(headers[0]!.getAttribute("aria-sort")).toBe("ascending");
+      expect(headers[1]!.getAttribute("aria-description")).toBe("Ascending, 2/2");
+      headers[1]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
+      expect(table.sorting.get).toEqual([author, { ...year, ascending: false }]);
+      expect(table.toggleSort(1, true)).toBe(true);
+      expect(table.sorting.get).toEqual([author]);
+      expect(headers[1]!.hasAttribute("data-sort-priority")).toBe(false);
+      expect(table.toggleSort(1, true)).toBe(true);
+      expect(table.moveColumn(0, 1)).toBe(true);
+      expect(Array.from(root.querySelectorAll("[role=columnheader]"))).toEqual([headers[1], headers[0]]);
+      expect(table.sorting.get).toEqual([author, year]);
+      visible.set(false); // Visibility does not silently alter the remote query.
+      expect(table.sorting.get).toEqual([author, year]);
+      expect(headers[1]!.getAttribute("data-sort-priority")).toBe("2");
+      expect(table.clearSort()).toBe(true);
+      expect(table.sorting.get).toEqual([]);
+      expect(table.clearSort()).toBe(false);
+      await vi.waitFor(() => expect(root.querySelector("[role=grid]")?.getAttribute("aria-busy")).toBe("false"));
+      expect(load.mock.calls.at(-1)?.[0].sorting).toEqual([]);
+    } finally { app.dispose(); root.remove(); }
+    expect(table.toggleSort(0)).toBe(false);
+    expect(table.clearSort()).toBe(false);
+  });
+
+  it("guards sort keyboard commands and resets paging through the same remote command", async () => {
+    type Query = { offset: number; limit: number; sorting: readonly SortSpec[] };
+    const rows = Array.from({ length: 10 }, (_, i) => i);
+    const load = vi.fn(async (query: Query) => ({ items: rows.slice(query.offset, query.offset + query.limit), offset: query.offset, totalCount: 10 }));
+    const root = document.createElement("div");
+    let table!: TableViewHandle<number>;
+    const app = mount(root, () => {
+      table = tableView(remoteSource({ initialQuery: { offset: 0, limit: 5, sorting: [] } as Query,
+        initial: rows, totalCount: 10, load,
+        rangeQuery: (q, offset, limit) => ({ ...q, offset, limit }),
+        sortQuery: (q, sorting) => ({ ...q, offset: 0, sorting }) }), [
+        valueColumn("Value", row => row, { sortKey: "value", sortable: true }),
+        valueColumn("Locked", row => row, { sortKey: "locked", sortable: false }),
+      ], { paging: true, pageSize: 5 });
+    });
+    try {
+      const header = root.querySelector<HTMLElement>("[role=columnheader]")!;
+      for (const init of [{ isComposing: true }, { repeat: true }, { ctrlKey: true }, { altKey: true }])
+        header.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, ...init }));
+      const canceled = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+      canceled.preventDefault(); header.dispatchEvent(canceled);
+      for (const index of [-1, 0.5, Infinity, NaN, 1, 2]) expect(table.toggleSort(index)).toBe(false);
+      expect(load).not.toHaveBeenCalled();
+      root.querySelectorAll<HTMLAnchorElement>("a.ui-virtualized-page-button")[1]!.click();
+      expect(root.textContent).toContain("Page 2 of 2");
+      const space = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+      header.dispatchEvent(space);
+      expect(space.defaultPrevented).toBe(true);
+      expect(root.textContent).toContain("Page 1 of 2");
+      expect(table.sorting.get).toEqual([{ field: "value", ascending: true }]);
+      await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+      header.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      expect(table.sorting.get).toEqual([{ field: "value", ascending: false }]);
+    } finally { app.dispose(); }
+  });
+
+  it("sorts while a missing scroll range is loading without reentrant loading notifications", () => {
+    type Query = { offset: number; limit: number; sorting: readonly SortSpec[] };
+    const load = vi.fn((_query: Query) => new Promise<RemotePage<number, Query>>(() => {}));
+    let table!: TableViewHandle<number>;
+    const root = document.createElement("div");
+    const app = mount(root, () => {
+      table = tableView(remoteSource({ initialQuery: { offset: 90, limit: 10, sorting: [] } as Query,
+        initial: [90, 91], initialOffset: 90, totalCount: 100, load,
+        rangeQuery: (q, offset, limit) => ({ ...q, offset, limit }),
+        sortQuery: (q, sorting) => ({ ...q, offset: 0, sorting }) }), [
+        valueColumn("ID", row => row, { sortKey: "id", sortable: true }),
+      ], { paging: false, rowHeight: 20 });
+    });
+    try {
+      expect(load).toHaveBeenCalled();
+      expect(table.toggleSort(0)).toBe(true);
+      expect(load.mock.calls.at(-1)?.[0].sorting).toEqual([{ field: "id", ascending: true }]);
+      expect(root.querySelector("[role=grid]")?.getAttribute("aria-busy")).toBe("true");
+    } finally { app.dispose(); }
+  });
+
+  it("keeps sort commands inert during SSR/hydration and on local sources", async () => {
+    const load = vi.fn(async () => ({ items: ["Ada"], totalCount: 1 }));
+    let table!: TableViewHandle<string>;
+    const build = (): void => {
+      table = tableView(remoteSource({ initialQuery: {}, initial: ["Ada"], totalCount: 1, load,
+        sortQuery: (q, _sorting) => q }), [valueColumn("Author", row => row, { sortable: true, sortKey: "author" })]);
+      expect(table.toggleSort(0)).toBe(false);
+      expect(table.clearSort()).toBe(false);
+      expect(table.setSortOrder([{ columnIndex: 0, ascending: true }])).toBe(false);
+      expect(table.sort()).toBe(false);
+    };
+    const root = document.createElement("div");
+    root.innerHTML = (await renderToString(build)).html;
+    const header = root.querySelector("[role=columnheader]");
+    const app = await hydrate(root, build);
+    try {
+      expect(root.querySelector("[role=columnheader]")).toBe(header);
+      expect(load).not.toHaveBeenCalled();
+    } finally { app.dispose(); }
+    const local = mount(document.createElement("div"), () => {
+      table = tableView(listProperty(["Ada"]), [valueColumn("Author", row => row, { sortable: true, sortKey: "author" })]);
+    });
+    try {
+      expect(table.toggleSort(0)).toBe(false); expect(table.sorting.get).toEqual([]);
+      expect(table.setSortOrder([{ columnIndex: 0, ascending: true }])).toBe(false);
+      expect(table.sort()).toBe(false);
+    }
+    finally { local.dispose(); }
+  });
+
+  interface Book {
+    readonly title: string;
+    readonly author: string;
+  }
+
+  it("server-renders one row per item of a local source, through the column cells", async () => {
+    const build = (): void => {
+      const books = listProperty<Book>([
+        { title: "1984", author: "Orwell" },
+        { title: "Siddhartha", author: "Hesse" },
+      ]);
+      tableView(
+        books,
+        [
+          { text: "Title", cell: (book) => text(book.title) },
+          { text: "Author", cell: (book) => text(book.author) },
+        ],
+        {
+          crawlable: true,
+          crawlId: "books",
+          rowHeight: 40,
+          headerRows: 2,
+          header: () => div(() => text("book introduction")),
+        }
+      );
+    };
+
+    const result = await renderToString(build);
+    const html = withoutAnchors(result.html);
+    expect(html).toContain("ui-table-view");
+    expect(html).toContain("book introduction");
+    expect(html).toContain("min-height: 80px");
+    expect(html).toContain("Title");
+    expect(html).toContain("1984");
+    expect(html).toContain("Orwell");
+    expect(html).toContain("Siddhartha");
+  });
+
+  it("server-renders the first page of a remote source", async () => {
+    interface Query {
+      readonly offset: number;
+      readonly limit: number;
+    }
+    const catalog: Book[] = Array.from({ length: 12 }, (_, i) => ({
+      title: `Remote #${i + 1}`,
+      author: "Generated",
+    }));
+
+    const build = (): void => {
+      const source = remoteSource<Book, Query>({
+        initialQuery: { offset: 0, limit: 5 },
+        initial: catalog.slice(0, 5),
+        totalCount: catalog.length,
+        rangeQuery: (query, offset, limit) => ({ ...query, offset, limit }),
+        load: (query) =>
+          Promise.resolve({
+            items: catalog.slice(query.offset, query.offset + query.limit),
+            offset: query.offset,
+            totalCount: catalog.length,
+          }),
+      });
+      tableView(source, [{ text: "Title", cell: (book) => text(book.title) }], {
+        crawlable: true,
+        crawlId: "remote",
+      });
+    };
+
+    const result = await renderToString(build);
+    const html = withoutAnchors(result.html);
+    expect(html).toContain("Remote #1");
+    expect(html).toContain("Remote #5");
+  });
+
+  it("hydrates a saved remote crawl window beyond the initial data without replacing server nodes", async () => {
+    const cookie = `ui-crawl-reload=${encodeURIComponent("60:5:")}`;
+    const catalog = Array.from({ length: 100 }, (_, index) => `Reload row ${index}`);
+    let finishLoad!: () => void;
+    const load = vi.fn((query: { offset: number; limit: number }) =>
+      new Promise<RemotePage<string, { offset: number; limit: number }>>(resolve => {
+        finishLoad = () => resolve({
+          items: catalog.slice(query.offset, query.offset + query.limit),
+          offset: query.offset,
+          totalCount: catalog.length,
+        });
+      }));
+    const build = (): void => {
+      const source = remoteSource({
+        initialQuery: { offset: 0, limit: 5 }, initial: catalog.slice(0, 5),
+        totalCount: catalog.length,
+        rangeQuery: (query, offset, limit) => ({ ...query, offset, limit }), load,
+      });
+      tableView(source, [valueColumn("Title", row => row)], {
+        crawlable: true, crawlId: "reload", pageSize: 5, rowHeight: 20,
+      });
+    };
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    document.cookie = `${cookie}; Path=/`;
+    try {
+      const rendered = await renderToString(build, { requestHeaders: { Cookie: cookie } });
+      expect(load).not.toHaveBeenCalled();
+      root.innerHTML = rendered.html;
+      const rows = Array.from(root.querySelectorAll(".ui-table-row"));
+      expect(rows).toHaveLength(5);
+      expect(rows[0]?.getAttribute("aria-rowindex")).toBe("62");
+      expect(root.textContent).not.toContain("Reload row 0");
+      const app = await hydrate(root, build);
+      try {
+        expect(Array.from(root.querySelectorAll(".ui-table-row"))).toEqual(rows);
+        expect(load).toHaveBeenCalledWith({ offset: 60, limit: 5 });
+        finishLoad();
+        await vi.waitFor(() => expect(root.textContent).toContain("Reload row 60"));
+        expect(root.textContent).not.toContain("Reload row 0");
+      } finally { app.dispose(); }
+    } finally {
+      root.remove();
+      document.cookie = "ui-crawl-reload=; Max-Age=0; Path=/";
+    }
+  });
+
+  it("pages locally without native navigation after browser enhancement", () => {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+
+    const build = (): void => {
+      const books = listProperty<Book>(
+        Array.from({ length: 25 }, (_, index) => ({
+          title: `Book ${index}`,
+          author: "Author",
+        }))
+      );
+      tableView(books, [{ text: "Title", cell: (book) => text(book.title) }], {
+        paging: true,
+        pageSize: 10,
+      });
+    };
+
+    const app = mount(root, build);
+    const pageButtons = root.querySelectorAll<HTMLAnchorElement>("a.ui-virtualized-page-button");
+    expect(pageButtons).toHaveLength(2);
+    const previous = pageButtons[0]!;
+    const next = pageButtons[1]!;
+
+    expect(previous.getAttribute("aria-disabled")).toBe("true");
+    expect(next.getAttribute("aria-disabled")).toBe("false");
+    expect(next.hasAttribute("href")).toBe(false);
+    expect(root.textContent).toContain("Book 0");
+
+    const stayedOnPage = !next.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true })
+    );
+
+    expect(stayedOnPage).toBe(true);
+    expect(window.location.pathname).toBe("/");
+    expect(root.textContent).not.toContain("Book 0");
+    expect(root.textContent).toContain("Book 10");
+    expect(previous.getAttribute("aria-disabled")).toBe("false");
+
+    const stayedOnSecondPage = !previous.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true })
+    );
+
+    expect(stayedOnSecondPage).toBe(true);
+    expect(root.textContent).toContain("Book 0");
+    app.dispose();
+  });
+});
+
+describe("data-grid and virtual-list-view", () => {
+  it("server-render their cells through the renderer", async () => {
+    const grid = (): void => {
+      const items = listProperty<string>(["alpha", "beta", "gamma"]);
+      dataGrid(items, (item) => div(() => text(`cell:${String(item)}`)), {
+        crawlable: true,
+        crawlId: "grid",
+        headerRows: 2,
+        toolbar: () => div(() => text("grid controls")),
+        header: () => div(() => text("grid introduction")),
+      });
+    };
+    const list = (): void => {
+      const items = listProperty<string>(["one", "two", "three"]);
+      virtualList(items, (item) => div(() => text(`row:${String(item)}`)), {
+        headerRows: 2,
+        crawlable: true,
+        crawlId: "list",
+        header: () => div(() => text("list introduction")),
+      });
+    };
+
+    const gridHtml = withoutAnchors((await renderToString(grid)).html);
+    expect(gridHtml).toContain("ui-data-grid");
+    expect(gridHtml).toContain("ui-data-grid-toolbar-slot");
+    expect(gridHtml).toContain("grid controls");
+    expect(gridHtml.indexOf("grid controls")).toBeLessThan(gridHtml.indexOf("grid introduction"));
+    expect(gridHtml).toContain("min-height: 456px");
+    expect(gridHtml).toContain("cell:alpha");
+    expect(gridHtml).toContain("cell:gamma");
+
+    const listHtml = withoutAnchors((await renderToString(list)).html);
+    expect(listHtml).toContain("ui-virtual-list");
+    expect(listHtml).toContain("list introduction");
+    expect(listHtml).toContain("min-height: 88px");
+    expect(listHtml).toContain("row:one");
+    expect(listHtml).toContain("row:three");
+  });
+});

@@ -1,0 +1,618 @@
+/**
+ * A virtualized table with a column model. Mirrors `ui.control.table.TableView`.
+ *
+ * Virtualization, row measurement, the sortable header, range loading and the
+ * stable SSR / hydration structure stay in the Scala.js component. This is the
+ * shape of a table declaration in TypeScript: a data source, a list of columns,
+ * a few options. `table-view` is a registry entry in `scalajs-ui-bridge`
+ * (`ControlFactories.scala`).
+ */
+import { component, currentScope, withScope } from "@anjunar/scalajs-ui-core";
+import type { ComponentHandle, ListProperty, Reactive, ReadOnlyProperty, ScopeHandle } from "@anjunar/scalajs-ui-core";
+import { body, defined, rowBody, stateBody, valueCellBody } from "./internal.js";
+import type { Source, SortSpec } from "./data-source.js";
+
+type TableEditHandler<E> = { bivarianceHack(event: E): void }["bivarianceHack"];
+
+/** A leaf column's own current position in the requested remote sort, for `sortIndicator`.
+ * `ascending`/`priority` are meaningless when `sorted` is false; `priority` is one-based,
+ * matching the header's own `data-sort-priority`/`aria-description`. */
+export interface SortIndicatorState {
+  readonly sorted: boolean;
+  readonly ascending: boolean;
+  readonly priority: number;
+}
+
+/** A cell's own state (D05) -- the same properties a `TableCell` subclass's `renderContent`
+ * already has via `this` in Scala, reaching the lighter-weight `cell`/`valueCell` renderers too.
+ */
+export interface TableCellContext {
+  readonly index: ReadOnlyProperty<number>;
+  /** Always false when `cell`/`valueCell` actually run: an unloaded remote placeholder renders
+   * the default loading cell instead, without calling either renderer. Kept for parity with the
+   * row context and a `TableCell` subclass's own `emptyProperty`. */
+  readonly empty: ReadOnlyProperty<boolean>;
+  readonly selected: ReadOnlyProperty<boolean>;
+  /** Logical focus; independent of selection and whether the grid owns DOM focus. */
+  readonly focused: ReadOnlyProperty<boolean>;
+  readonly editing: ReadOnlyProperty<boolean>;
+}
+
+export interface ColumnDef<T> {
+  readonly text: string;
+  /** Nested columns form a group header. Only leaves render cells and participate in layout. */
+  readonly columns?: readonly ColumnDef<T>[];
+  readonly prefWidth?: number;
+  readonly minWidth?: number;
+  readonly maxWidth?: number;
+  /** Disables pointer/API resizing and automatic width compensation. Defaults to true. */
+  readonly resizable?: Reactive<boolean>;
+  /** Disables header drag/keyboard reordering, not programmatic moves. Defaults to true. */
+  readonly reorderable?: Reactive<boolean>;
+  /** Participates in table-managed editing. Defaults to true. */
+  readonly editable?: Reactive<boolean>;
+  /** Removes the column from layout and rendering without removing its definition. Defaults to true. */
+  readonly visible?: Reactive<boolean>;
+  /** Observes changes, not the initial value; use to write menu changes back to app state. */
+  readonly onVisibilityChange?: (visible: boolean) => void;
+  /** Enables the sort toggle in this column's header. Needs `sortKey` and a `sortQuery` on the source. */
+  readonly sortable?: boolean;
+  /** The field name passed back to the source's `sortQuery`. */
+  readonly sortKey?: string;
+  /** Extra classes on this column's header cell, in addition to the framework's own ui-table-* classes. */
+  readonly headerClass?: Reactive<readonly string[]>;
+  /** Extra classes on every data cell of this column, in addition to the framework's own ui-table-* classes. */
+  readonly cellClass?: Reactive<readonly string[]>;
+  /** Replaces the default header text entirely: an icon next to the label, a badge, or any other
+   * composed content. A right-click menu on a header is just `on("contextmenu", ...)` inside this
+   * body opening the app's own viewport overlay -- no separate context-menu API. */
+  readonly headerCell?: () => void;
+  /** Replaces the default CSS-only sort arrow for a leaf, sortable column. `state` is reactive;
+   * bind to it declaratively (e.g. `text(state.map(s => s.sorted ? (s.ascending ? "▲" : "▼") : ""))`)
+   * rather than expecting this body to be re-invoked on every sort change. */
+  readonly sortIndicator?: (state: ReadOnlyProperty<SortIndicatorState>) => void;
+  /** Composes one cell's content for `row`, with the core DSL. `context` is this cell's own
+   * index/selected/focused/editing state (D05) -- the same state a custom `row` renderer already
+   * gets for the whole row. */
+  readonly cell?: (row: T, context: TableCellContext) => void;
+  /** A snapshot or observed cell value. Used by the default text cell when `cell` is absent. */
+  readonly value?: (row: T) => Reactive<unknown>;
+  /** Prefer `valueColumn` for a renderer whose observed value retains its concrete type. */
+  readonly valueCell?: (value: ReadOnlyProperty<unknown>, row: T, context: TableCellContext) => void;
+  readonly onEditStart?: TableEditHandler<TableEditStartEvent<T, unknown>>;
+  /** Replaces default write-back through a writable value property. */
+  readonly editCommitHandler?: TableEditHandler<TableEditCommitEvent<T, unknown>>;
+  /** Observes successful default or custom commits. */
+  readonly onEditCommit?: TableEditHandler<TableEditCommitEvent<T, unknown>>;
+  readonly onEditCancel?: TableEditHandler<TableEditCancelEvent<T, unknown>>;
+}
+
+export interface ValueColumnOptions<S, V> extends Omit<ColumnDef<S>,
+  "text" | "cell" | "value" | "valueCell" | "onEditStart" | "editCommitHandler" |
+  "onEditCommit" | "onEditCancel"> {
+  readonly cell?: (value: ReadOnlyProperty<V | null>, row: S, context: TableCellContext) => void;
+  readonly onEditStart?: (event: TableEditStartEvent<S, V>) => void;
+  readonly editCommitHandler?: (event: TableEditCommitEvent<S, V>) => void;
+  readonly onEditCommit?: (event: TableEditCommitEvent<S, V>) => void;
+  readonly onEditCancel?: (event: TableEditCancelEvent<S, V>) => void;
+}
+
+export type TextFieldBlurPolicy = "keep" | "commit" | "cancel";
+
+export interface TextFieldColumnOptions<S> extends Omit<ValueColumnOptions<S, string>, "cell"> {
+  /** What losing DOM focus does while editing. Defaults to keep; Enter and Tab still commit. */
+  readonly editOnBlur?: TextFieldBlurPolicy;
+}
+
+export type TableTextParseResult<V> =
+  | { readonly ok: true; readonly value: V }
+  | { readonly ok: false; readonly error: string };
+
+export interface ConvertingTextFieldColumnOptions<S, V> extends Omit<ValueColumnOptions<S, V>, "cell"> {
+  /** Text shown outside editing and used as the initial editor value. Defaults to String(value). */
+  readonly formatter?: (value: V) => string;
+  /** What losing DOM focus does while editing. Invalid commits keep the session open. */
+  readonly editOnBlur?: TextFieldBlurPolicy;
+}
+
+export type CheckBoxColumnOptions<S> = Omit<ValueColumnOptions<S, boolean>, "cell">;
+
+export interface SelectionColumnOptions<S, V> extends Omit<ValueColumnOptions<S, V>, "cell"> {
+  /** Text shown for an item in the cell and selection control. */
+  readonly converter?: (value: V) => string;
+  /** Stable identity used when item instances are replaced. Defaults to the value itself. */
+  readonly identityBy?: (value: V) => unknown;
+}
+
+export type ProgressBarColumnOptions<S> = Omit<ValueColumnOptions<S, number>,
+  "cell" | "editable" | "onEditStart" | "editCommitHandler" | "onEditCommit" | "onEditCancel">;
+
+type StandardColumnDef<T> = ColumnDef<T> & {
+  readonly standardCell: "text-field" | "converting-text-field" | "check-box" | "choice-box" | "combo-box" | "progress-bar";
+  readonly editOnBlur?: TextFieldBlurPolicy;
+  readonly standardItems?: ListProperty<unknown> | readonly unknown[];
+  readonly standardConverter?: (value: unknown) => string;
+  readonly standardIdentityBy?: (value: unknown) => unknown;
+  readonly standardTextFormatter?: (value: unknown) => string;
+  readonly standardTextParser?: (text: string) => TableTextParseResult<unknown>;
+};
+
+export type ColumnGroupOptions<T> = Pick<ColumnDef<T>, "visible" | "onVisibilityChange" | "editable">;
+
+/** Builds a nested header whose width is the sum of its visible leaf columns. */
+export function columnGroup<T>(
+  text: string,
+  columns: readonly ColumnDef<T>[],
+  options: ColumnGroupOptions<T> = {}
+): ColumnDef<T> {
+  return { text, columns, ...options };
+}
+
+/** A typed value column backed by the runtime's observed TableCell binding. */
+export function valueColumn<S, V>(
+  text: string,
+  value: (row: S) => Reactive<V>,
+  options: ValueColumnOptions<S, V> = {}
+): ColumnDef<S> {
+  const { cell, ...metadata } = options;
+  const result: ColumnDef<S> = {
+    text,
+    value,
+    ...metadata,
+  };
+  return cell
+    ? {
+        ...result,
+        valueCell: (observed, row, context) =>
+          cell(observed as ReadOnlyProperty<V | null>, row, context),
+      }
+    : result;
+}
+
+/** A String value column with a table-managed native text editor. */
+export function textFieldColumn<S>(
+  text: string,
+  value: (row: S) => Reactive<string>,
+  options: TextFieldColumnOptions<S> = {}
+): ColumnDef<S> {
+  const { editOnBlur, ...metadata } = options;
+  return {
+    ...valueColumn(text, value, metadata),
+    standardCell: "text-field",
+    editOnBlur,
+  } as StandardColumnDef<S>;
+}
+
+/** A typed text column whose parser reports conversion or validation failures explicitly. */
+export function convertingTextFieldColumn<S, V>(
+  text: string,
+  value: (row: S) => Reactive<V>,
+  parser: (text: string) => TableTextParseResult<V>,
+  options: ConvertingTextFieldColumnOptions<S, V> = {}
+): ColumnDef<S> {
+  const { formatter, editOnBlur, ...metadata } = options;
+  return {
+    ...valueColumn(text, value, metadata),
+    standardCell: "converting-text-field",
+    standardTextFormatter: formatter,
+    standardTextParser: parser,
+    editOnBlur,
+  } as StandardColumnDef<S>;
+}
+
+/** A Boolean value column whose checkbox commits every user toggle atomically. */
+export function checkBoxColumn<S>(
+  text: string,
+  value: (row: S) => Reactive<boolean>,
+  options: CheckBoxColumnOptions<S> = {}
+): ColumnDef<S> {
+  return {
+    ...valueColumn(text, value, options),
+    standardCell: "check-box",
+  } as StandardColumnDef<S>;
+}
+
+/** A value column edited with a compact native select. */
+export function choiceBoxColumn<S, V>(
+  text: string,
+  value: (row: S) => Reactive<V>,
+  items: ListProperty<V> | readonly V[],
+  options: SelectionColumnOptions<S, V> = {}
+): ColumnDef<S> {
+  const { converter, identityBy, ...metadata } = options;
+  return {
+    ...valueColumn(text, value, metadata),
+    standardCell: "choice-box",
+    standardItems: items,
+    standardConverter: converter,
+    standardIdentityBy: identityBy,
+  } as StandardColumnDef<S>;
+}
+
+/** A value column edited with the Forms ComboBox and its viewport overlay. */
+export function comboBoxColumn<S, V>(
+  text: string,
+  value: (row: S) => Reactive<V>,
+  items: ListProperty<V> | readonly V[],
+  options: SelectionColumnOptions<S, V> = {}
+): ColumnDef<S> {
+  const { converter, identityBy, ...metadata } = options;
+  return {
+    ...valueColumn(text, value, metadata),
+    standardCell: "combo-box",
+    standardItems: items,
+    standardConverter: converter,
+    standardIdentityBy: identityBy,
+  } as StandardColumnDef<S>;
+}
+
+/** A read-only value column rendering numbers as progress from 0 to 1. */
+export function progressBarColumn<S>(
+  text: string,
+  value: (row: S) => Reactive<number>,
+  options: ProgressBarColumnOptions<S> = {}
+): ColumnDef<S> {
+  return {
+    ...valueColumn(text, value, { ...options, editable: false }),
+    standardCell: "progress-bar",
+  } as StandardColumnDef<S>;
+}
+
+/** Builds one {@link ColumnDef}. */
+export function column<T>(
+  text: string,
+  cell: (row: T) => void,
+  options: Omit<ColumnDef<T>, "text" | "cell"> = {}
+): ColumnDef<T> {
+  return { text, cell, ...options };
+}
+
+/** State of one mounted row, including unloaded remote placeholders. */
+export interface TableRowContext<T> {
+  readonly item: ReadOnlyProperty<T | null>;
+  readonly index: ReadOnlyProperty<number>;
+  readonly empty: ReadOnlyProperty<boolean>;
+  readonly selected: ReadOnlyProperty<boolean>;
+  /** Logical row focus; independent of selection and whether the grid owns DOM focus. */
+  readonly focused: ReadOnlyProperty<boolean>;
+  /** Stays visible and keyboard-reachable but cannot be selected or edited (V05, `rowDisabled`). */
+  readonly disabled: ReadOnlyProperty<boolean>;
+  /** Optional standard cells. Call at most once, synchronously in this row body or a nested element. */
+  renderCells(): void;
+}
+
+export type TableSelectionMode = "single" | "multiple";
+export type TableDirection = "ltr" | "rtl";
+
+/** Absolute row plus current visible-leaf column index. A row-only focus uses column -1. */
+export interface TablePosition {
+  readonly row: number;
+  readonly column: number;
+}
+export interface TableEditStartEvent<T, V = unknown> {
+  readonly position: TablePosition;
+  readonly rowItem: T;
+  readonly oldValue: V;
+}
+export interface TableEditCommitEvent<T, V = unknown> extends TableEditStartEvent<T, V> {
+  readonly newValue: V;
+}
+export type TableEditCancelReason = "explicit" | "replaced" | "table-disabled" |
+  "column-disabled" | "row-removed" | "row-replaced" | "source-reset" |
+  "column-unavailable" | "cell-unavailable" | "disposed";
+export interface TableEditCancelEvent<T, V = unknown> extends TableEditStartEvent<T, V> {
+  readonly draftValue: V;
+  readonly reason: TableEditCancelReason;
+}
+/** One term in an explicit remote sort order, resolved against the current visible columns. */
+export interface TableSort {
+  readonly columnIndex: number;
+  readonly ascending: boolean;
+}
+export type ColumnResizePolicy = "unconstrained" | "all-columns" | "last-column" | "next-column"
+  | "subsequent-columns" | "flex-next-column" | "flex-last-column";
+
+/** One column's resize bounds, as seen by a {@link CustomColumnResizePolicy}. */
+export interface ColumnResizeSpec {
+  readonly min: number;
+  readonly max: number;
+  readonly preferred: number;
+  readonly resizable: boolean;
+}
+/** The inputs to one custom-policy invocation. `columns`/`widths` describe every currently
+ * visible leaf column, in visible order. `targetIndices`/`targetDelta` are both present for a
+ * user/API resize -- one index for an ordinary column, every visible leaf of a group for a group
+ * resize -- and both absent for a pure re-layout with no specific target (a viewport size change
+ * or a column list change).
+ */
+export interface ColumnResizeRequest {
+  readonly columns: readonly ColumnResizeSpec[];
+  readonly widths: readonly number[];
+  readonly viewport: number;
+  readonly targetIndices?: readonly number[];
+  readonly targetDelta?: number;
+}
+/** A pluggable alternative to the seven built-in {@link ColumnResizePolicy} strategies (C05).
+ * Must return an array the same length as `request.columns`; anything else is rejected and the
+ * previous widths are kept. Not reactive: set once when the table is created.
+ */
+export type CustomColumnResizePolicy = (request: ColumnResizeRequest) => readonly number[];
+
+export interface TableViewOptions<T = unknown> {
+  /** Inline layout direction. Mirrors column placement, horizontal navigation, resizing,
+   * reordering and menu alignment. Defaults to ltr.
+   */
+  readonly direction?: Reactive<TableDirection>;
+  /** Enables table-managed editing. Defaults to false. */
+  readonly editable?: Reactive<boolean>;
+  /** Stable, unique entity identity. Preserves loaded selection/focus across accepted remote
+   * replacements and local resets. Duplicate or currently unloaded keys are not guessed or fetched.
+   */
+  readonly rowKey?: (row: T) => unknown;
+  /** A disabled row and its cells stay visible and keyboard-reachable -- disabled is not the same
+   * as absent -- but cannot be selected, edited, or fire the row double-click event. Projected as
+   * `ui-table-row-disabled`/`ui-table-cell-disabled` and `aria-disabled`. Not reactive as a whole
+   * function, but re-evaluated per row whenever that row's own value changes.
+   */
+  readonly rowDisabled?: (row: T) => boolean;
+  /** Runs once after an accepted row request is applied to a measurable browser viewport. */
+  readonly onScrollTo?: (absoluteIndex: number) => void;
+  /** Runs once after an accepted column request is applied; index uses the then-current visible order. */
+  readonly onScrollToColumn?: (visibleColumnIndex: number) => void;
+  /** Optional column chooser above the header. Requires a surrounding viewport. Default false. */
+  readonly tableMenuButtonVisible?: Reactive<boolean>;
+  /** Trigger text and menu accessible label. Default Columns. */
+  readonly columnMenuText?: Reactive<string>;
+  /** Defaults to unconstrained: resizing leaves neighboring widths unchanged and allows horizontal
+   * scrolling. Constrained policies fit the viewport where column bounds permit. */
+  readonly columnResizePolicy?: Reactive<ColumnResizePolicy>;
+  /** Replaces columnResizePolicy entirely when set, for both layout and every resize -- including
+   * a group column's, which reaches this as every one of its visible leaves at once (C05).
+   */
+  readonly customResizePolicy?: CustomColumnResizePolicy;
+  /** Defaults to single selection. Changes to single retain the lead selection. */
+  readonly selectionMode?: Reactive<TableSelectionMode>;
+  /** Select individual cells instead of whole rows. Existing row selections are projected onto
+   * the focused or first visible column. Default false.
+   */
+  readonly cellSelectionEnabled?: Reactive<boolean>;
+  /** Replaces row content. Styles/events apply to the row; call row.renderCells() for standard columns. */
+  readonly row?: (row: TableRowContext<T>) => void;
+  readonly rowHeight?: number;
+  /** Measure rendered row content. rowHeight becomes the minimum height and estimate for
+   * unmeasured rows. Defaults to false; may change reactively.
+   */
+  readonly variableRowHeight?: Reactive<boolean>;
+  readonly showHeader?: boolean;
+  readonly showFooter?: boolean;
+  /** Keep paging after hydration. Omit or set to false to use browser scrolling. */
+  readonly paging?: boolean;
+  readonly pageSize?: number;
+  /** Minimum content-header height in table rows. */
+  readonly headerRows?: number;
+  /**
+   * Render a fixed slice on the server with a pager link, so a crawler can reach
+   * past the first screen. Needs `crawlId`. Only meaningful for a table rendered
+   * inside a `router()` shell, which provides the current URL.
+   */
+  readonly crawlable?: boolean;
+  readonly crawlId?: string;
+  /** A content header that scrolls with the rows, below the fixed column header. */
+  readonly header?: () => void;
+  /** Shown while the table has no rows or no visible columns. */
+  readonly placeholder?: () => void;
+}
+
+/** Runtime-owned row/cell selection, row/cell focus, navigation and refresh. */
+export interface TableViewHandle<T = unknown> {
+  /** Number of visible leaf columns; groups never count as data columns. */
+  readonly visibleColumnCount: ReadOnlyProperty<number>;
+  /** Snapshot value at an absolute row/current visible-leaf coordinate, or null when unavailable. */
+  getCellData(rowIndex: number, visibleColumnIndex: number): unknown | null;
+  /** The underlying observed cell value, or null for invalid/unloaded/non-value cells. */
+  getCellObservableValue(
+    rowIndex: number,
+    visibleColumnIndex: number
+  ): ReadOnlyProperty<unknown> | null;
+  /** Atomically replaces the whole remote order. Invalid, hidden, unsortable or duplicate
+   * sort keys reject the whole command without changing state. Empty order requests unsorted.
+   * Indices resolve at call time; the resulting field keys survive later column reordering.
+   * Browser-only, with the same guards and return semantics as toggleSort.
+   */
+  setSortOrder(order: readonly TableSort[]): boolean;
+  /** Reissues the current remote order (also empty/hidden/external terms), e.g. after a load failure.
+   * True means requested, not completed; the remote source may deduplicate an in-flight request.
+   */
+  sort(): boolean;
+  /** Requested remote order. Loading/error state belongs to the source, not an accepted-result snapshot. */
+  readonly sorting: ReadOnlyProperty<readonly SortSpec[]>;
+  /** Browser-only: cycle unsorted/ascending/descending; additive preserves other terms and priority.
+   * False for local sources, invalid/hidden/unsortable columns, during SSR/hydration or after disposal.
+   * True means a remote request was issued, not that loading succeeded. Resets paging/scroll to the start.
+   */
+  toggleSort(visibleColumnIndex: number, additive?: boolean): boolean;
+  /** Clears all remote sort terms through the same command path. */
+  clearSort(): boolean;
+  /** Logical row/cell focus. A known unloaded position has a null focusedItem. */
+  readonly focusedIndex: ReadOnlyProperty<number>;
+  readonly focusedItem: ReadOnlyProperty<T | null>;
+  /** Logical coordinate. Row-only focus has column -1; reordering republishes the derived index. */
+  readonly focusedCell: ReadOnlyProperty<TablePosition | null>;
+  readonly editingCell: ReadOnlyProperty<TablePosition | null>;
+  readonly editingItem: ReadOnlyProperty<T | null>;
+  readonly originalEditValue: ReadOnlyProperty<unknown | null>;
+  readonly editingValue: ReadOnlyProperty<unknown | null>;
+  /** Starts an edit for a loaded, editable cell. A second target cancels the current edit first. */
+  editCell(rowIndex: number, visibleColumnIndex: number): boolean;
+  updateEdit(value: unknown): boolean;
+  /** Commits the current draft, or the supplied replacement. False keeps a read-only session open. */
+  commitEdit(value?: unknown): boolean;
+  cancelEdit(): boolean;
+  /** Changes only logical focus: no selection, scrolling, DOM focus or remote fetch.
+   * Invalid indices clear focus; all focus operations are no-ops after disposal.
+   */
+  focusIndex(index: number): void;
+  /** Focuses an absolute row/current visible-leaf coordinate. Invalid coordinates clear focus. */
+  focusCell(rowIndex: number, visibleColumnIndex: number): void;
+  focusNext(): void;
+  focusPrevious(): void;
+  /** Cell focus moves without changing row selection. Horizontal movement stops at table edges. */
+  focusLeftCell(): void;
+  focusRightCell(): void;
+  focusAboveCell(): void;
+  focusBelowCell(): void;
+  /** Rendered widths in visible-column order; independent read-only snapshots. */
+  readonly columnWidths: ReadOnlyProperty<readonly number[]>;
+  /** Resizes a visible column by a pixel delta; true if any movement was possible. */
+  resizeColumn(visibleColumnIndex: number, delta: number): boolean;
+  /** Browser-only: fit header + up to 100 mounted loaded cells; never fetches remote data.
+   * Bounds and resize policy apply. Returns true on change or when queued during hydration.
+   * Hidden/unmeasurable/locked columns, protected hosts and active composition are no-ops.
+   */
+  autoFitColumn(visibleColumnIndex: number): boolean;
+  /** Browser-only: moves to a final visible index without recreating cells. During hydration,
+   * the latest valid request waits until claiming completes. Hidden columns keep relative order.
+   * Returns false for invalid/no-op requests, protected hosts or active IME composition.
+   */
+  moveColumn(fromVisibleIndex: number, toVisibleIndex: number): boolean;
+  readonly selectionMode: ReadOnlyProperty<TableSelectionMode>;
+  readonly cellSelectionEnabled: ReadOnlyProperty<boolean>;
+  /** Sorted absolute row/current visible-leaf coordinates. Row selection uses column -1. */
+  readonly selectedCells: ReadOnlyProperty<readonly TablePosition[]>;
+  /** Sorted unique absolute positions. Item snapshots omit unloaded positions (no remote fetch). */
+  readonly selectedIndices: ReadOnlyProperty<readonly number[]>;
+  readonly selectedItems: ReadOnlyProperty<readonly T[]>;
+  /** Lead selection in absolute view coordinates; an unloaded lead has a null item. */
+  readonly selectedIndex: ReadOnlyProperty<number>;
+  readonly selectedItem: ReadOnlyProperty<T | null>;
+  /** Invalid positions clear selection. These methods are no-ops after unmount. */
+  selectIndex(index: number): void;
+  /** Selects the first matching item, or clears when absent. Does not fetch unloaded items. */
+  selectItem(item: T): void;
+  clearSelection(): void;
+  setSelectionMode(mode: TableSelectionMode): void;
+  setCellSelectionEnabled(enabled: boolean): void;
+  clearAndSelect(index: number): void;
+  clearIndex(index: number): void;
+  isSelected(index: number): boolean;
+  /** Cell operations address current visible-leaf indices. Invalid select coordinates clear. */
+  selectCell(rowIndex: number, visibleColumnIndex: number): void;
+  clearAndSelectCell(rowIndex: number, visibleColumnIndex: number): void;
+  clearCell(rowIndex: number, visibleColumnIndex: number): void;
+  isCellSelected(rowIndex: number, visibleColumnIndex: number): boolean;
+  /** Adds an inclusive rectangle, accepting either direction on both axes. */
+  selectCellRange(
+    startRow: number,
+    startVisibleColumnIndex: number,
+    endRow: number,
+    endVisibleColumnIndex: number
+  ): void;
+  /** Adds valid indices, ignoring invalid/duplicate arguments. Last valid index becomes lead. */
+  selectIndices(indices: readonly number[]): void;
+  /** Inclusive start, exclusive end, forward or backward. Adds to existing selection. */
+  selectRange(start: number, end: number): void;
+  /** Multiple mode only; selects currently known positions without loading their items. */
+  selectAll(): void;
+  selectFirst(): void;
+  selectLast(): void;
+  selectNext(): void;
+  selectPrevious(): void;
+  /** Reveals an absolute row without selecting it or changing paging/scrolling mode.
+   * Invalid/unknown positions are ignored. Known remote gaps load through the normal viewport.
+   * Browser-only; during hydration/hidden layout the latest valid request waits for a measurable viewport.
+   */
+  scrollToIndex(index: number): void;
+  /** Reveals the first loaded matching item; absent items are ignored, searching never fetches data. */
+  scrollToItem(item: T): void;
+  /** Reveals a current visible column with minimal horizontal movement. Oversized columns align
+   * at their start. Does not change row position, selection, focus, widths or resize policy.
+   * Browser-only; the latest valid request waits for hydration/measurable layout, following the
+   * requested column across reordering. Hidden/removed/invalid targets and disposed tables are no-ops.
+   */
+  scrollToColumnIndex(visibleColumnIndex: number): void;
+  /** Rebuilds visible cell content to pick up snapshot mutations. Does not request a remote reload. */
+  refresh(): void;
+  readonly isDisposed: boolean;
+}
+
+/** Mounts a table and returns its runtime-owned handle. */
+export function tableView<T, Q = unknown>(
+  source: Source<T, Q>,
+  columns: readonly ColumnDef<T>[],
+  options: TableViewOptions<T> = {}
+): TableViewHandle<T> {
+  const bridgeColumn = (col: ColumnDef<T>): Record<string, unknown> => defined({
+    standardCell: (col as Partial<StandardColumnDef<T>>).standardCell,
+    editOnBlur: (col as Partial<StandardColumnDef<T>>).editOnBlur,
+    standardItems: (col as Partial<StandardColumnDef<T>>).standardItems,
+    standardConverter: (col as Partial<StandardColumnDef<T>>).standardConverter,
+    standardIdentityBy: (col as Partial<StandardColumnDef<T>>).standardIdentityBy,
+    standardTextFormatter: (col as Partial<StandardColumnDef<T>>).standardTextFormatter,
+    standardTextParser: (col as Partial<StandardColumnDef<T>>).standardTextParser,
+    text: col.text,
+    columns: col.columns?.map(bridgeColumn),
+    prefWidth: col.prefWidth,
+    minWidth: col.minWidth,
+    maxWidth: col.maxWidth,
+    resizable: col.resizable,
+    reorderable: col.reorderable,
+    editable: col.editable,
+    visible: col.visible,
+    onVisibilityChange: col.onVisibilityChange,
+    sortable: col.sortable,
+    sortKey: col.sortKey,
+    headerClass: col.headerClass,
+    cellClass: col.cellClass,
+    headerCell: col.headerCell ? body(col.headerCell) : undefined,
+    sortIndicator: col.sortIndicator ? stateBody(col.sortIndicator) : undefined,
+    cell: col.cell ? rowBody(col.cell) : undefined,
+    value: col.value,
+    valueCell: col.valueCell ? valueCellBody(col.valueCell) : undefined,
+    onEditStart: col.onEditStart,
+    editCommitHandler: col.editCommitHandler,
+    onEditCommit: col.onEditCommit,
+    onEditCancel: col.onEditCancel,
+  });
+  let handle: TableViewHandle<T> | undefined;
+  component(
+    "table-view",
+    defined({
+      source,
+      direction: options.direction,
+      tableMenuButtonVisible: options.tableMenuButtonVisible,
+      columnMenuText: options.columnMenuText,
+      columnResizePolicy: options.columnResizePolicy,
+      customResizePolicy: options.customResizePolicy,
+      selectionMode: options.selectionMode,
+      cellSelectionEnabled: options.cellSelectionEnabled,
+      editable: options.editable,
+      rowKey: options.rowKey,
+      rowDisabled: options.rowDisabled,
+      onScrollTo: options.onScrollTo,
+      onScrollToColumn: options.onScrollToColumn,
+      row: options.row
+        ? (row: Omit<TableRowContext<T>, "renderCells">, self: ComponentHandle, scope: ScopeHandle,
+           cells: (scope: ScopeHandle) => void) => withScope(scope, self, () => options.row!({
+             item: row.item, index: row.index, empty: row.empty, selected: row.selected, focused: row.focused,
+             disabled: row.disabled,
+             renderCells: () => cells(currentScope()),
+           }))
+        : undefined,
+      receiveHandle: (value: TableViewHandle<T>) => { handle = value; },
+      columns: columns.map(bridgeColumn),
+      rowHeight: options.rowHeight,
+      variableRowHeight: options.variableRowHeight,
+      showHeader: options.showHeader,
+      showFooter: options.showFooter,
+      paging: options.paging,
+      pageSize: options.pageSize,
+      headerRows: options.headerRows,
+      crawlable: options.crawlable,
+      crawlId: options.crawlId,
+      header: options.header ? body(options.header) : undefined,
+      placeholder: options.placeholder ? body(options.placeholder) : undefined,
+    })
+  );
+  if (handle === undefined) throw new Error("The installed runtime does not provide a TableView handle.");
+  return handle;
+}

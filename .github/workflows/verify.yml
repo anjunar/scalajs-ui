@@ -1,0 +1,118 @@
+name: verify
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Cache Coursier and sbt
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/coursier
+            ~/.sbt
+            ~/.ivy2/cache
+          key: ${{ runner.os }}-sbt-${{ hashFiles('project/build.properties', 'project/plugins.sbt', 'build.sbt') }}
+          restore-keys: |
+            ${{ runner.os }}-sbt-
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # The demo's SSR tests import the shared preference module from this workspace.
+      - name: Install npm workspace
+        run: npm ci --no-audit --no-fund
+
+      - name: Scala test suite
+        run: sbt --server "Test/testOnly *"
+
+      - name: Link the production Scala.js bridge
+        run: sbt --server "scalajs-ui-bridge/fullLinkJS"
+
+      - name: Link the core and editor browser test applications
+        run: sbt --server "scalajs-ui-core-browser-tests/fullLinkJS" "scalajs-ui-editor-browser-tests/fullLinkJS"
+
+      # Every Scala.js artifact needed before Verify is already linked. Left
+      # running, the resident sbt server (a JVM) would sit through the whole
+      # npm test run competing with it for the runner's CPU and memory, so
+      # shut it down here. It starts fresh again from tools/build-pages.mjs's
+      # own sbt calls below, which is required anyway -- see the note there.
+      - name: Shut down sbt before verify
+        run: sbt --client shutdown
+
+      - name: Install test browsers
+        run: npm exec --workspace npm/scalajs-ui-core-browser-tests -- playwright install --with-deps chromium firefox webkit
+
+      # npm runs workspaces in package.json order, not dependency order. The
+      # package verification scripts typecheck consumers against the local
+      # workspace dist/*.d.ts files, so create those declarations first.
+      - name: Build TypeScript workspace declarations
+        run: |
+          npm run build --workspace npm/scalajs-ui-core
+          npm run build --workspace npm/scalajs-ui-router
+          npm run build --workspace npm/scalajs-ui-viewport
+          npm run build --workspace npm/scalajs-ui-controls
+          npm run build --workspace npm/scalajs-ui-forms
+          npm run build --workspace npm/scalajs-ui-editor
+          npm run build --workspace npm/scalajs-ui-json
+          npm run build --workspace npm/scalajs-ui-webauthn
+
+      - name: Verify every npm package and demo
+        run: npm run verify --workspaces --if-present
+
+      # The Pages build runs two Scala.js links with different UI_BASE_PATH
+      # values. A shared sbt server keeps the environment from its first
+      # client, so it needs a fresh one for the first environment-sensitive
+      # link -- guaranteed here since sbt was shut down above and nothing
+      # between there and here starts a new one.
+      - name: Build and validate GitHub Pages output
+        run: node tools/build-pages.mjs
+
+      - name: Configure GitHub Pages
+        if: github.event_name == 'push'
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs
+          include-hidden-files: true
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

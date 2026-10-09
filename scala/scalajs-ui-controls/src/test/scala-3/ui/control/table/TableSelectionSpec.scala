@@ -1,0 +1,673 @@
+package ui.control.table
+
+import ui.control.table.TableColumn.*
+import ui.control.table.TableView.*
+import ui.core.component.{AbstractComponent, Runtime}
+import ui.core.dsl.DslLayer
+import ui.core.layout.TextComponent.text
+import ui.core.remote.{RemoteListProperty, RemoteLoader, RemotePage}
+import ui.core.render.{Cursor, SsrCursor}
+import ui.core.state.{ListDataSource, ListProperty}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+import scala.collection.mutable
+import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.scalajs.js
+
+class TableSelectionSpec extends AnyFlatSpec with Matchers {
+  private case class Person(name: String)
+  private case class KeyedPerson(id: Int, name: String)
+  private case class Query(offset: Int, limit: Int)
+
+  private def mounted[S](source: ListDataSource[S])(run: TableView[S] => Unit): Unit = {
+    var table: TableView[S] = null
+    val root                = Runtime.mount(
+      new AbstractComponent {
+        override val tagName                       = "main"
+        override def compose(cursor: Cursor): Unit = DslLayer.render(this, cursor) {
+          table = tableView(source) {
+            column[S, String]("Value") { cell(value => text(value.toString) {}) }
+          }
+        }
+      },
+      new SsrCursor()
+    )
+    try run(table)
+    finally Runtime.unmount(root)
+  }
+
+  private def mountedWithColumns[S](source: ListDataSource[S])(
+      run: (TableView[S], Vector[TableColumn[S, String]]) => Unit
+  ): Unit = {
+    var table: TableView[S]                     = null
+    var columns: Vector[TableColumn[S, String]] = Vector.empty
+    val root                                    = Runtime.mount(
+      new AbstractComponent {
+        override val tagName                       = "main"
+        override def compose(cursor: Cursor): Unit = DslLayer.render(this, cursor) {
+          table = tableView(source) {
+            columns = Vector(
+              column[S, String]("A") { cell(value => text(value.toString) {}) },
+              column[S, String]("B") { cell(value => text(value.toString) {}) },
+              column[S, String]("C") { cell(value => text(value.toString) {}) }
+            )
+          }
+        }
+      },
+      new SsrCursor()
+    )
+    try run(table, columns)
+    finally Runtime.unmount(root)
+  }
+
+  "TableView selection" should "follow the selected occurrence through insertions and removals" in {
+    val same   = Person("same")
+    val values = ListProperty(js.Array(same, same, Person("last")))
+    mounted(values) { table =>
+      table.select(1)
+      values.insert(0, Person("before"))
+      table.selectedIndexProperty.get shouldBe 2
+      values.insertAll(1, Seq(Person("x"), Person("y")))
+      table.selectedIndexProperty.get shouldBe 4
+      values.remove(0, 2)
+      table.selectedIndexProperty.get shouldBe 2
+      table.selectedItemProperty.get should be theSameInstanceAs same
+      values.remove(1) // Remove the other occurrence, not the selected one.
+      table.selectedIndexProperty.get shouldBe 1
+      table.selectedItemProperty.get should be theSameInstanceAs same
+      values.remove(1)
+      table.selectedIndexProperty.get shouldBe -1
+      table.selectedItemProperty.get shouldBe null
+    }
+  }
+
+  it should "rebase patches outside the selection and clear a replaced occurrence" in {
+    val values = ListProperty(js.Array("a", "b", "c", "d", "e"))
+    mounted(values) { table =>
+      table.select(3)
+      values.patchInPlace(0, Seq("x", "y", "z"), 1)
+      table.selectedIndexProperty.get shouldBe 5
+      table.selectedItemProperty.get shouldBe "d"
+      values.patchInPlace(4, Seq("replacement"), 2)
+      table.selectedIndexProperty.get shouldBe -1
+      table.selectedItemProperty.get shouldBe null
+      table.select(0)
+      values.clear()
+      table.selectedIndexProperty.get shouldBe -1
+    }
+  }
+
+  it should "retain only unambiguous instance identity across a reset" in {
+    val first  = Person("same")
+    val second = Person("same")
+    val values = ListProperty(js.Array(first, second))
+    mounted(values) { table =>
+      table.select(1)
+      values.setAll(Seq(second, first))
+      table.selectedIndexProperty.get shouldBe 0
+      table.selectedItemProperty.get should be theSameInstanceAs second
+      values.notified()
+      table.selectedIndexProperty.get shouldBe 0
+      values.setAll(Seq(Person("same"), first))
+      table.selectedIndexProperty.get shouldBe -1
+      table.select(1)
+      values.setAll(Seq(first, first))
+      table.selectedIndexProperty.get shouldBe -1
+    }
+  }
+
+  it should "restore selection, lead, anchor and focus by a unique row key" in {
+    val values = ListProperty(
+      js.Array(KeyedPerson(1, "one"), KeyedPerson(2, "two"), KeyedPerson(3, "three"))
+    )
+    mounted(values) { table =>
+      table.rowKeyProperty.set(Some(_.id))
+      table.selectionModel.selectionMode = TableSelectionMode.Multiple
+      table.selectionModel.selectIndices(0, 2)
+      table.focusModel.focus(2)
+
+      values.setAll(
+        Seq(KeyedPerson(3, "new three"), KeyedPerson(1, "new one"), KeyedPerson(2, "new two"))
+      )
+
+      table.selectedIndicesProperty.get shouldBe Vector(0, 1)
+      table.selectedIndexProperty.get shouldBe 0
+      table.selectedItemsProperty.get.map(_.name) shouldBe Vector("new three", "new one")
+      table.focusedIndexProperty.get shouldBe 0
+      table.focusedItemProperty.get.name shouldBe "new three"
+
+      // The retained Shift anchor is entity 3 at its new position zero.
+      table.selectionModel.click(2, toggle = false, extend = true)
+      table.selectedIndicesProperty.get shouldBe Vector(0, 1, 2)
+    }
+  }
+
+  it should "reject ambiguous and failing row keys without guessing an occurrence" in {
+    val values = ListProperty(js.Array(KeyedPerson(1, "one"), KeyedPerson(2, "two")))
+    mounted(values) { table =>
+      table.rowKeyProperty.set(Some(_.id))
+      table.selectionModel.selectionMode = TableSelectionMode.Multiple
+      table.selectionModel.selectIndices(0, 1)
+      table.focusModel.focus(0)
+      values.setAll(Seq(KeyedPerson(1, "first"), KeyedPerson(1, "duplicate")))
+      table.selectionModel.isEmpty shouldBe true
+      table.focusModel.focusedIndex shouldBe -1
+
+      table.rowKeyProperty.set(
+        Some(person => if (person.id == 2) throw new Exception("bad key") else person.id)
+      )
+      values.setAll(Seq(KeyedPerson(1, "one"), KeyedPerson(2, "two")))
+      table.selectionModel.selectIndices(0, 1)
+      table.focusModel.focus(1)
+      values.notified()
+      table.selectedIndicesProperty.get shouldBe empty
+      table.focusModel.focusedIndex shouldBe -1
+    }
+  }
+
+  it should "adopt explicit item updates and normalize invalid indices without selecting a neighbor" in {
+    val values = ListProperty(js.Array("a", "b", "c"))
+    mounted(values) { table =>
+      table.select(1)
+      values.update(1, "updated")
+      table.selectedItemProperty.get shouldBe "updated"
+      table.select(99)
+      table.selectedIndexProperty.get shouldBe -1
+      table.selectedItemProperty.get shouldBe null
+      table.select(-3)
+      table.selectedIndexProperty.get shouldBe -1
+      table.select(2)
+      values.remove(2)
+      table.selectedIndexProperty.get shouldBe -1
+      table.select("a")
+      table.selectedIndexProperty.get shouldBe 0
+      table.clearSelection()
+      table.selectedItemProperty.get shouldBe null
+    }
+  }
+
+  it should "preserve absolute positions on sparse loads and rebase actual remote removals" in {
+    val remote = RemoteListProperty[String, Query](
+      loader = RemoteLoader(query =>
+        Future.successful(
+          RemotePage[String, Query](
+            items = (query.offset until query.offset + query.limit).map(i => s"Member $i"),
+            offset = Some(query.offset),
+            totalCount = Some(100)
+          )
+        )
+      ),
+      initialQuery = Query(50, 10),
+      underlying = js.Array((50 until 60).map(i => s"Member $i")*),
+      initialOffset = 50,
+      executionContext = ExecutionContext.parasitic,
+      rangeQueryUpdater = Some((query, offset, limit) => Query(offset, limit))
+    )
+    remote.totalCountProperty.set(Some(100))
+    mounted(remote) { table =>
+      table.select(55)
+      val notifications = mutable.ArrayBuffer.empty[String | Null]
+      val observer      = table.selectedItemProperty.observeWithoutInitial(notifications += _)
+      remote.ensureRangeLoaded(0, 5)
+      table.selectedIndexProperty.get shouldBe 55
+      table.selectedItemProperty.get shouldBe "Member 55"
+      notifications shouldBe empty
+      remote.remove(0) // Dense position zero is absolute zero, not the selected loaded offset.
+      table.selectedIndexProperty.get shouldBe 54
+      table.selectedItemProperty.get shouldBe "Member 55"
+      notifications.toVector shouldBe Vector("Member 55")
+      remote.update(9, "edited") // Four prefix items + selected sixth item in the later slice.
+      table.selectedIndexProperty.get shouldBe 54
+      table.selectedItemProperty.get shouldBe "edited"
+      notifications.toVector shouldBe Vector("Member 55", "edited")
+      observer.dispose()
+      table.select(80) // Unloaded but valid position.
+      table.selectedItemProperty.get shouldBe null
+      remote.ensureRangeLoaded(80, 81)
+      table.selectedIndexProperty.get shouldBe 80
+      table.selectedItemProperty.get shouldBe "Member 80"
+    }
+  }
+
+  it should "publish multi-selection, lead and mode as one coherent snapshot" in {
+    val values = ListProperty(js.Array("a", "b", "c", "d"))
+    mounted(values) { table =>
+      val model = table.selectionModel
+      model.selectAll()
+      model.isEmpty shouldBe true
+      model.selectionMode = TableSelectionMode.Multiple
+      var snapshots = 0
+      val observer  = table.selectedIndicesProperty.observeWithoutInitial { indices =>
+        snapshots += 1
+        table.selectedItemsProperty.get shouldBe indices.map(values(_))
+        if (indices.isEmpty) table.selectedIndexProperty.get shouldBe -1
+        else indices should contain(table.selectedIndexProperty.get)
+        table.selectedItemProperty.get shouldBe values
+          .itemAt(table.selectedIndexProperty.get)
+          .orNull
+      }
+      model.selectIndices(3, 1, 1, -1, 99)
+      snapshots shouldBe 1
+      table.selectedIndicesProperty.get shouldBe Vector(1, 3)
+      table.selectedIndexProperty.get shouldBe 1
+      model.select(2)
+      table.selectedIndicesProperty.get shouldBe Vector(1, 2, 3)
+      model.clearSelection(2)
+      table.selectedIndexProperty.get shouldBe 3
+      model.selectionMode = TableSelectionMode.Single
+      table.selectedIndicesProperty.get shouldBe Vector(3)
+      model.selectIndices(1, 0, 2)
+      table.selectedIndicesProperty.get shouldBe Vector(2)
+      model.clearAndSelect(0)
+      table.selectedIndicesProperty.get shouldBe Vector(0)
+      observer.dispose()
+    }
+  }
+
+  it should "support bounded forward and reverse ranges, selectAll and navigation" in {
+    mounted(ListProperty(js.Array("a", "b", "c", "d", "e"))) { table =>
+      val model = table.selectionModel
+      model.selectionMode = TableSelectionMode.Multiple
+      model.selectRange(1, 4)
+      table.selectedIndicesProperty.get shouldBe Vector(1, 2, 3)
+      table.selectedIndexProperty.get shouldBe 3
+      model.selectRange(4, 1)
+      table.selectedIndicesProperty.get shouldBe Vector(1, 2, 3, 4)
+      table.selectedIndexProperty.get shouldBe 2
+      model.clearSelection()
+      model.selectRange(Int.MinValue, Int.MaxValue)
+      table.selectedIndicesProperty.get shouldBe Vector(0, 1, 2, 3, 4)
+      model.clearSelection()
+      model.selectRange(Int.MaxValue, Int.MinValue)
+      table.selectedIndexProperty.get shouldBe 0
+      model.clearSelection()
+      model.selectAll()
+      table.selectedIndicesProperty.get shouldBe Vector(0, 1, 2, 3, 4)
+      model.clearAndSelect(2)
+      model.selectNext()
+      model.selectPrevious()
+      model.selectFirst()
+      model.selectLast()
+      table.selectedIndicesProperty.get shouldBe Vector(0, 2, 3, 4)
+      model.selectIndices(-1, 99)
+      model.selectRange(3, 3)
+      table.selectedIndicesProperty.get shouldBe Vector(0, 2, 3, 4)
+      model.select(-1) // The existing UI single-index invalidation contract is retained.
+      model.isEmpty shouldBe true
+    }
+  }
+
+  it should "rebase all selected occurrences and remove only replaced or deleted selections" in {
+    val same   = Person("same")
+    val tail   = Person("tail")
+    val values = ListProperty(js.Array(same, same, tail))
+    mounted(values) { table =>
+      val model = table.selectionModel
+      model.selectionMode = TableSelectionMode.Multiple
+      model.selectIndices(0, 1, 2)
+      values.insert(0, Person("before"))
+      table.selectedIndicesProperty.get shouldBe Vector(1, 2, 3)
+      values.remove(1)
+      table.selectedIndicesProperty.get shouldBe Vector(1, 2)
+      table.selectedItemsProperty.get shouldBe Vector(same, tail)
+      val replacement = Person("updated")
+      values.update(1, replacement)
+      table.selectedItemsProperty.get shouldBe Vector(replacement, tail)
+      values.patchInPlace(0, Seq(Person("new")), 2)
+      table.selectedIndicesProperty.get shouldBe Vector(1)
+      table.selectedItemProperty.get should be theSameInstanceAs tail
+      values.clear()
+      model.isEmpty shouldBe true
+    }
+  }
+
+  it should "resolve multi-selection resets by reference in one scan rather than by equal values" in {
+    val a      = Person("same")
+    val b      = Person("same")
+    val c      = Person("last")
+    val values = ListProperty(js.Array(a, b, c))
+    mounted(values) { table =>
+      val model = table.selectionModel
+      model.selectionMode = TableSelectionMode.Multiple
+      model.selectIndices(0, 1, 2)
+      values.setAll(Seq(c, b, a))
+      table.selectedIndicesProperty.get shouldBe Vector(0, 1, 2)
+      table.selectedIndexProperty.get shouldBe 0
+      table.selectedItemsProperty.get(1) should be theSameInstanceAs b
+      values.setAll(Seq(a, a, b, Person("last")))
+      table.selectedIndicesProperty.get shouldBe Vector(2)
+      table.selectedItemProperty.get should be theSameInstanceAs b
+      values.setAll(Seq(Person("same")))
+      model.isEmpty shouldBe true
+    }
+  }
+
+  it should "keep a rebased Shift anchor across toggle clicks and clear deleted anchors" in {
+    val values = ListProperty(js.Array((0 until 8)*))
+    mounted(values) { table =>
+      val model = table.selectionModel
+      model.selectionMode = TableSelectionMode.Multiple
+      model.click(2, toggle = false, extend = false)
+      model.click(5, toggle = false, extend = true)
+      table.selectedIndicesProperty.get shouldBe Vector(2, 3, 4, 5)
+      model.click(3, toggle = false, extend = true)
+      table.selectedIndicesProperty.get shouldBe Vector(2, 3)
+      model.click(6, toggle = true, extend = false)
+      model.click(6, toggle = true, extend = false) // Anchor may outlive its deselected occurrence.
+      model.click(7, toggle = true, extend = true)
+      table.selectedIndicesProperty.get shouldBe Vector(2, 3, 6, 7)
+      values.insert(0, -1)
+      model.click(8, toggle = false, extend = true)
+      table.selectedIndicesProperty.get shouldBe Vector(7, 8)
+      values.remove(7)
+      model.click(1, toggle = false, extend = true)
+      table.selectedIndicesProperty.get shouldBe Vector(1)
+      model.selectionMode = TableSelectionMode.Single
+      model.click(4, toggle = true, extend = true)
+      table.selectedIndicesProperty.get shouldBe Vector(4)
+    }
+  }
+
+  it should "select remote positions without fetching or fabricating items and refresh accepted ranges" in {
+    var loads  = 0
+    val remote = RemoteListProperty[String, Query](
+      loader = RemoteLoader { query =>
+        loads += 1
+        Future.successful(
+          RemotePage[String, Query](
+            items = (query.offset until query.offset + query.limit).map(i => s"row:$i"),
+            offset = Some(query.offset),
+            totalCount = Some(100)
+          )
+        )
+      },
+      initialQuery = Query(50, 2),
+      underlying = js.Array("row:50", "row:51"),
+      initialOffset = 50,
+      executionContext = ExecutionContext.parasitic,
+      rangeQueryUpdater = Some((_, offset, limit) => Query(offset, limit))
+    )
+    remote.totalCountProperty.set(Some(100))
+    mounted(remote) { table =>
+      val model = table.selectionModel
+      model.selectionMode = TableSelectionMode.Multiple
+      model.selectIndices(50, 80)
+      table.selectedIndicesProperty.get shouldBe Vector(50, 80)
+      table.selectedItemsProperty.get shouldBe Vector("row:50")
+      table.selectedItemProperty.get shouldBe null
+      loads shouldBe 0
+      remote.ensureRangeLoaded(80, 81)
+      table.selectedItemsProperty.get shouldBe Vector("row:50", "row:80")
+      remote.remove(0) // Dense zero = absolute 50, not absolute zero.
+      table.selectedIndicesProperty.get shouldBe Vector(79)
+      table.selectedItemProperty.get shouldBe "row:80"
+      model.selectAll()
+      table.selectedIndicesProperty.get.size shouldBe 99
+      table.selectedItemsProperty.get shouldBe Vector("row:51", "row:80")
+      loads shouldBe 1
+      remote.reload()
+      model.isEmpty shouldBe true
+    }
+  }
+
+  it should "leave selection snapshots unchanged after table disposal" in {
+    var savedTable: TableView[String]          = null
+    var saved: TableSelectionModel[String]     = null
+    var alternate: TableSelectionModel[String] = null
+    mounted(ListProperty(js.Array("a", "b"))) { current =>
+      savedTable = current
+      saved = current.selectionModel
+      alternate = new TableSelectionModel(current)
+      saved.selectionMode = TableSelectionMode.Multiple
+      saved.selectAll()
+    }
+    savedTable.selectionModel = alternate
+    savedTable.selectionModel should be theSameInstanceAs saved
+    saved.clearSelection()
+    saved.selectIndices(0)
+    saved.clearAndSelect(0)
+    saved.selectRange(0, 1)
+    saved.selectionMode = TableSelectionMode.Single
+    saved.selectedIndicesProperty.get shouldBe Vector(0, 1)
+    saved.selectionMode shouldBe TableSelectionMode.Multiple
+  }
+
+  it should "clear selection on an accepted remote replacement but not on a failed reload" in {
+    val requests = mutable.ArrayBuffer.empty[Promise[RemotePage[String, Query]]]
+    val remote   = RemoteListProperty[String, Query](
+      loader = RemoteLoader { _ =>
+        val result = Promise[RemotePage[String, Query]]()
+        requests += result
+        result.future
+      },
+      initialQuery = Query(0, 2),
+      underlying = js.Array("old-a", "old-b"),
+      executionContext = ExecutionContext.parasitic
+    )
+    remote.totalCountProperty.set(Some(2))
+    mounted(remote) { table =>
+      table.select(1)
+      val failure = remote.reload()
+      requests.last.failure(new IllegalStateException("offline"))
+      failure.value.get.isFailure shouldBe true
+      table.selectedItemProperty.get shouldBe "old-b"
+      val notifications = mutable.ArrayBuffer.empty[String | Null]
+      val observer      = table.selectedItemProperty.observeWithoutInitial(notifications += _)
+      remote.reload()
+      requests.last.success(RemotePage(items = Seq("new-a", "new-b"), totalCount = Some(2)))
+      table.selectedIndexProperty.get shouldBe -1
+      table.selectedItemProperty.get shouldBe null
+      notifications.toVector shouldBe Vector(null) // Never briefly select new-b at the old index.
+      observer.dispose()
+      table.select(1)
+      remote.clear()
+      table.selectedIndexProperty.get shouldBe -1
+    }
+  }
+
+  it should "restore loaded entities by row key after an accepted remote replacement" in {
+    val requests = mutable.ArrayBuffer.empty[Promise[RemotePage[KeyedPerson, Query]]]
+    val remote   = RemoteListProperty[KeyedPerson, Query](
+      loader = RemoteLoader { _ =>
+        val result = Promise[RemotePage[KeyedPerson, Query]]()
+        requests += result
+        result.future
+      },
+      initialQuery = Query(0, 3),
+      underlying = js.Array(
+        KeyedPerson(1, "old one"),
+        KeyedPerson(2, "old two"),
+        KeyedPerson(3, "old three")
+      ),
+      executionContext = ExecutionContext.parasitic
+    )
+    remote.totalCountProperty.set(Some(3))
+    mounted(remote) { table =>
+      table.rowKeyProperty.set(Some(_.id))
+      table.selectionModel.selectionMode = TableSelectionMode.Multiple
+      table.selectionModel.selectIndices(0, 2)
+      table.focusModel.focus(2)
+      remote.reload()
+      requests.last.success(
+        RemotePage(
+          items = Seq(
+            KeyedPerson(3, "new three"),
+            KeyedPerson(2, "new two"),
+            KeyedPerson(1, "new one")
+          ),
+          totalCount = Some(3)
+        )
+      )
+      table.selectedIndicesProperty.get shouldBe Vector(0, 2)
+      table.selectedIndexProperty.get shouldBe 0
+      table.selectedItemProperty.get.name shouldBe "new three"
+      table.focusModel.focusedIndex shouldBe 0
+      table.focusModel.focusedItem.name shouldBe "new three"
+    }
+  }
+
+  it should "project row selection into cells and publish inclusive rectangular ranges" in {
+    mountedWithColumns(ListProperty(js.Array("a", "b", "c", "d"))) { (table, columns) =>
+      val model = table.selectionModel
+      model.selectionMode = TableSelectionMode.Multiple
+      model.selectIndices(1, 3)
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(1 -> -1, 3 -> -1)
+
+      model.cellSelectionEnabled = true
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(1 -> 0, 3 -> 0)
+
+      model.clearSelection()
+      model.selectRange(1, columns(2), 3, columns(0))
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        (for { row <- 1 to 3; column <- 0 to 2 } yield row -> column).toVector
+      table.selectedIndicesProperty.get shouldBe Vector(1, 2, 3)
+      table.selectedIndexProperty.get shouldBe 3
+
+      table.focusModel.focus(0, columns(1))
+      model.select(0)
+      table.selectedCellsProperty.get.size shouldBe 10
+      model.clearAndSelect(3, columns(0))
+      model.selectionMode = TableSelectionMode.Single
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(3 -> 0)
+      model.cellSelectionEnabled = false
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(3 -> -1)
+    }
+  }
+
+  it should "rebase cell rectangles and retain column identity through reorder and visibility" in {
+    val values = ListProperty(js.Array("a", "b", "c"))
+    mountedWithColumns(values) { (table, columns) =>
+      val model = table.selectionModel
+      model.selectionMode = TableSelectionMode.Multiple
+      model.cellSelectionEnabled = true
+      model.selectRange(0, columns(0), 1, columns(1))
+      values.insert(0, "before")
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(1 -> 0, 1 -> 1, 2 -> 0, 2 -> 1)
+
+      table.columns.setAll(Vector(columns(2), columns(0), columns(1)))
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(1 -> 1, 1 -> 2, 2 -> 1, 2 -> 2)
+
+      columns(1).visible = false
+      table.selectedCellsProperty.get.map(position => position.row -> position.column) shouldBe
+        Vector(1 -> 1, 2 -> 1)
+      model.isSelected(1, columns(0)) shouldBe true
+      model.isSelected(1, columns(1)) shouldBe false
+    }
+  }
+
+  it should "apply pointer-style toggle and Shift extension as one cell snapshot" in {
+    mountedWithColumns(ListProperty(js.Array((0 until 5)*))) { (table, columns) =>
+      val model = table.selectionModel
+      model.selectionMode = TableSelectionMode.Multiple
+      model.cellSelectionEnabled = true
+      model.clickCell(1, columns(1), toggle = false, extend = false)
+      model.clickCell(3, columns(2), toggle = false, extend = true)
+      table.selectedCellsProperty.get.size shouldBe 6
+      model.clickCell(0, columns(0), toggle = true, extend = false)
+      table.selectedCellsProperty.get.map(position =>
+        position.row -> position.column
+      ) should contain(0 -> 0)
+      model.clickCell(0, columns(0), toggle = true, extend = false)
+      table.selectedCellsProperty.get.map(position =>
+        position.row -> position.column
+      ) should not contain (0 -> 0)
+    }
+  }
+
+  it should "replace the selection model and keep every table-owned model reconciled" in {
+    val values = ListProperty(js.Array("a", "b", "c"))
+    mounted(values) { table =>
+      val original = table.selectionModel
+      original.selectionMode = TableSelectionMode.Multiple
+      original.selectIndices(1, 2)
+
+      final class EvenSelectionModel(owner: TableView[String])
+          extends TableSelectionModel[String](owner) {
+        var selectCalls                       = 0
+        override def select(index: Int): Unit = {
+          selectCalls += 1
+          if (index % 2 == 0) super.select(index)
+        }
+      }
+
+      val replacement = new EvenSelectionModel(table)
+      replacement.selectionMode = TableSelectionMode.Multiple
+      replacement.select(0)
+      replacement.select(1)
+      replacement.selectCalls shouldBe 2
+      replacement.selectedIndicesProperty.get shouldBe Vector(0)
+
+      val activeMode = table.selectionModelProperty.flatMap(_.selectionModeProperty)
+      val observed   = mutable.ArrayBuffer.empty[Vector[Int]]
+      val observer   = table.selectedIndicesProperty.observeWithoutInitial(observed += _)
+      table.selectionModel = replacement
+
+      table.selectionModel should be theSameInstanceAs replacement
+      table.selectionModelProperty.get should be theSameInstanceAs replacement
+      activeMode.get shouldBe TableSelectionMode.Multiple
+      table.selectedIndicesProperty.get shouldBe Vector(0)
+      observed.last shouldBe Vector(0)
+
+      // A detached alternate owns its state, but no longer drives the table projection.
+      original.select(0)
+      table.selectedIndicesProperty.get shouldBe Vector(0)
+
+      values.insert(0, "before")
+      table.selectedIndicesProperty.get shouldBe Vector(1)
+      original.selectedIndicesProperty.get shouldBe Vector(1, 2, 3)
+
+      table.selectionModel = original
+      table.selectedIndicesProperty.get shouldBe Vector(1, 2, 3)
+      observer.dispose()
+    }
+  }
+
+  it should "reject null and foreign selection models atomically" in {
+    mounted(ListProperty(js.Array("a"))) { table =>
+      val original = table.selectionModel
+      an[IllegalArgumentException] should be thrownBy {
+        table.selectionModel = null.asInstanceOf[TableSelectionModel[String]]
+      }
+      table.selectionModel should be theSameInstanceAs original
+
+      mounted(ListProperty(js.Array("other"))) { other =>
+        val foreign = new TableSelectionModel(other)
+        an[IllegalArgumentException] should be thrownBy {
+          table.selectionModel = foreign
+        }
+        table.selectionModel should be theSameInstanceAs original
+      }
+    }
+  }
+
+  "A disabled row (V05)" should "refuse row and cell selection while a non-disabled row stays selectable" in {
+    mounted(ListProperty(js.Array("disabled", "enabled"))) { table =>
+      table.rowDisabledProperty.set(Some(_ == "disabled"))
+
+      table.selectionModel.click(0, toggle = false, extend = false)
+      table.selectionModel.isSelected(0) shouldBe false
+      table.selectionModel.click(1, toggle = false, extend = false)
+      table.selectionModel.isSelected(1) shouldBe true
+
+      table.selectionModel.cellSelectionEnabled = true
+      val column = table.allColumns.head
+      table.selectionModel.clickCell(0, column, toggle = false, extend = false)
+      table.selectionModel.isSelected(0, column) shouldBe false
+      table.selectionModel.clickCell(1, column, toggle = false, extend = false)
+      table.selectionModel.isSelected(1, column) shouldBe true
+
+      // Clearing the predicate makes the row selectable again -- disabled is reactive, not a
+      // one-time snapshot taken when the row was bound.
+      table.rowDisabledProperty.set(None)
+      table.selectionModel.clickCell(0, column, toggle = false, extend = false)
+      table.selectionModel.isSelected(0, column) shouldBe true
+    }
+  }
+}

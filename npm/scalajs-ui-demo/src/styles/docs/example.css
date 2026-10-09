@@ -1,0 +1,19 @@
+.docs-example {
+    gap: 16px;
+    min-width: 0;
+}
+
+.docs-example__live {
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.docs-example__note {
+    margin: 0;
+    color: var(--aj-ink-muted);
+    font-size: 0.9rem;
+}
+
+.docs-example .api-section {
+    margin-top: 12px;
+}

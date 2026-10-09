@@ -1,0 +1,75 @@
+{
+  "name": "@anjunar/scalajs-ui-bridge",
+  "version": "1.1.5",
+  "description": "The Scala.js implementation of @anjunar/scalajs-ui-core's contract -- the scalajs-ui-bridge sbt module, linked to an ES module.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./index.js"
+    },
+    "./core": {
+      "types": "./types/core.d.ts",
+      "default": "./core.js"
+    },
+    "./router": {
+      "types": "./types/router.d.ts",
+      "default": "./router.js"
+    },
+    "./controls": {
+      "types": "./types/controls.d.ts",
+      "default": "./controls.js"
+    },
+    "./viewport": {
+      "types": "./types/viewport.d.ts",
+      "default": "./viewport.js"
+    },
+    "./forms": {
+      "types": "./types/forms.d.ts",
+      "default": "./forms.js"
+    },
+    "./editor": {
+      "types": "./types/editor.d.ts",
+      "default": "./editor.js"
+    },
+    "./editor-api": {
+      "types": "./types/editor-api.d.ts",
+      "default": "./editor-api.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "core.js",
+    "router.js",
+    "controls.js",
+    "viewport.js",
+    "forms.js",
+    "editor.js",
+    "editor-api.js",
+    "dist",
+    "types",
+    "README.md"
+  ],
+  "scripts": {
+    "verify": "node scripts/verify.mjs"
+  },
+  "sideEffects": true,
+  "license": "MIT",
+  "author": "Patrick Bittner",
+  "homepage": "https://github.com/anjunar/scalajs-ui#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anjunar/scalajs-ui.git",
+    "directory": "npm/scalajs-ui-bridge"
+  },
+  "bugs": {
+    "url": "https://github.com/anjunar/scalajs-ui/issues"
+  },
+  "types": "./types/index.d.ts",
+  "peerDependencies": {
+    "@anjunar/scalajs-ui-core": "^1.1.5"
+  },
+  "dependencies": {}
+}
