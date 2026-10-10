@@ -10,6 +10,7 @@ import ui.core.state.Property
 import ui.forms.Form.FormContext
 import reflect.ClassDescriptor
 import reflect.macros.ReflectMacros
+import ui.core.state.ListProperty
 
 class Form[M](
     initialModel: M,
@@ -56,7 +57,7 @@ object Form {
       body
     }
 
-  def controls[M](using form: Form[M]): ui.core.state.ListProperty[Control[?]] = form.controls
+  def controls[M](using form: Form[M]): ListProperty[Control[?]] = form.controls
 
   def modelProperty[M](using form: Form[M]): Property[M] = form.valueProperty
 }

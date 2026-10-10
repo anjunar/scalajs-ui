@@ -16,6 +16,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.scalajs.js
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
+import ui.core.async.AsyncRenderContext
 
 class Router(
     routes: Seq[Route],
@@ -24,18 +25,18 @@ class Router(
 )(using ec: ExecutionContext)
     extends AbstractCustomComponent {
 
-  private var renderToken        = 0
-  private var routeAbortController = Option.empty[dom.AbortController]
-  private var asyncCursorContext = Option.empty[ui.core.async.AsyncRenderContext]
-  private var browserEnabled     = false
-  private var currentBrowserUrl  = () => initialUrl
-  private var initialized        = false
-  private var pendingScroll      = Option.empty[(String, Option[String])]
-  private var pendingLoads       = 0
-  private var preparingHydration = false
-  private val pageLoadListeners = ArrayBuffer.empty[RouterState => Unit]
+  private var renderToken           = 0
+  private var routeAbortController  = Option.empty[dom.AbortController]
+  private var asyncCursorContext    = Option.empty[AsyncRenderContext]
+  private var browserEnabled        = false
+  private var currentBrowserUrl     = () => initialUrl
+  private var initialized           = false
+  private var pendingScroll         = Option.empty[(String, Option[String])]
+  private var pendingLoads          = 0
+  private var preparingHydration    = false
+  private val pageLoadListeners     = ArrayBuffer.empty[RouterState => Unit]
   private val pageResolvedListeners = ArrayBuffer.empty[RouterState => Unit]
-  private val loadingProperty = Property(false)
+  private val loadingProperty       = Property(false)
 
   /** True until the active navigation's loaders and error boundary have settled. */
   def loading: ReadOnlyProperty[Boolean] = loadingProperty
@@ -50,12 +51,19 @@ class Router(
   def onPageResolved(listener: RouterState => Unit): Disposable =
     listen(pageResolvedListeners, listener)
 
-  private def listen(listeners: ArrayBuffer[RouterState => Unit], listener: RouterState => Unit): Disposable = {
+  private def listen(
+      listeners: ArrayBuffer[RouterState => Unit],
+      listener: RouterState => Unit
+  ): Disposable = {
     listeners += listener
     Disposable { listeners -= listener }
   }
 
-  private def notifyListeners(listeners: ArrayBuffer[RouterState => Unit], state: RouterState, token: Int): Unit =
+  private def notifyListeners(
+      listeners: ArrayBuffer[RouterState => Unit],
+      state: RouterState,
+      token: Int
+  ): Unit =
     listeners.toVector.foreach { listener =>
       if (token == renderToken && stateProperty.get == state && !isDisposed) {
         try listener(state)
@@ -144,7 +152,7 @@ class Router(
 
   def navigate(path: String, replace: Boolean = false): Unit = {
     val nextState = resolve(path, Some(currentLocale))
-    val changed = nextState != stateProperty.get
+    val changed   = nextState != stateProperty.get
 
     if (browserEnabled) {
       pendingScroll = Some(nextState.url -> nextState.fragment)
@@ -238,7 +246,7 @@ class Router(
       renderContext: RouteRenderContext,
       target: Property[AbstractComponent],
       hydrating: Boolean,
-      asyncContext: Option[ui.core.async.AsyncRenderContext]
+      asyncContext: Option[AsyncRenderContext]
   ): Unit = {
     val context = routeContext(renderContext)
     val route   = context.routeMatch.route

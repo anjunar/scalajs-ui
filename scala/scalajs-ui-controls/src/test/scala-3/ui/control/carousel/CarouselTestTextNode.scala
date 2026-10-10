@@ -18,4 +18,3 @@ private final class CarouselTestTextNode(private var value: String) extends Text
   override def getText: String             = value
   override def renderHtml(): String        = value
 }
-

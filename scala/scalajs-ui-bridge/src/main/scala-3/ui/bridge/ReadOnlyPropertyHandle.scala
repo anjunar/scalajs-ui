@@ -1,6 +1,6 @@
 package ui.bridge
 
-import ui.core.state.{Property => CoreProperty, ReadOnlyProperty => CoreReadOnlyProperty}
+import ui.core.state.{Property as CoreProperty, ReadOnlyProperty as CoreReadOnlyProperty}
 
 import scala.scalajs.js
 

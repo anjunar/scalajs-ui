@@ -17,4 +17,3 @@ final case class MessageKey(
   require(source.nonEmpty, "Message source must not be empty")
   require(placeholders.distinct == placeholders, s"Duplicate placeholders in message '$source'")
 }
-

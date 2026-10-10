@@ -15,6 +15,7 @@ import org.scalajs.dom
 
 import scala.compiletime.uninitialized
 import scala.scalajs.js.timers.{clearTimeout, setTimeout}
+import org.scalajs.dom.{HTMLElement as DomHTMLElement}
 
 final class Viewport extends AbstractComponent {
   val tagName = "div"
@@ -103,8 +104,9 @@ final class Viewport extends AbstractComponent {
     val cascade = Viewport.windowBaseOffsetPx + windows.length * Viewport.windowStepPx
     visibleArea match {
       case Some(area) if conf.placement == Viewport.WindowPlacement.Centered =>
-        val fittedWidth = math.min(width, math.max(0.0, area.width - 2 * Viewport.windowMarginPx))
-        val fittedHeight = math.min(height, math.max(0.0, area.height - 2 * Viewport.windowMarginPx))
+        val fittedWidth  = math.min(width, math.max(0.0, area.width - 2 * Viewport.windowMarginPx))
+        val fittedHeight =
+          math.min(height, math.max(0.0, area.height - 2 * Viewport.windowMarginPx))
         conf.leftPx.set(area.center(fittedWidth, horizontal = true))
         conf.topPx.set(area.center(fittedHeight, horizontal = false))
       case Some(area) =>
@@ -121,7 +123,9 @@ final class Viewport extends AbstractComponent {
 
   private[viewport] def showWindow(conf: Viewport.WindowConf): Unit =
     if (owns(conf)) {
-      if (!conf.autoHeight && !conf.visible.get && conf.placement == Viewport.WindowPlacement.Centered && !conf.userPositioned)
+      if (
+        !conf.autoHeight && !conf.visible.get && conf.placement == Viewport.WindowPlacement.Centered && !conf.userPositioned
+      )
         placeWindow(conf)
       else if (!conf.autoHeight) constrainWindow(conf)
       conf.visible.set(true)
@@ -132,18 +136,27 @@ final class Viewport extends AbstractComponent {
     if (owns(conf)) conf.visible.set(false)
 
   private[viewport] def repositionWindow(conf: Viewport.WindowConf): Unit =
-    if (owns(conf) && conf.visible.get && conf.placement == Viewport.WindowPlacement.Centered) placeWindow(conf)
+    if (owns(conf) && conf.visible.get && conf.placement == Viewport.WindowPlacement.Centered)
+      placeWindow(conf)
 
   private[viewport] def constrainWindow(conf: Viewport.WindowConf): Unit =
     constrainWindow(conf, conf.widthProperty.get, conf.heightProperty.get)
 
-  private[viewport] def constrainWindow(conf: Viewport.WindowConf, width: Double, height: Double): Unit =
+  private[viewport] def constrainWindow(
+      conf: Viewport.WindowConf,
+      width: Double,
+      height: Double
+  ): Unit =
     if (owns(conf)) visibleArea.foreach { area =>
       conf.leftPx.set(area.clamp(conf.leftPx.get, width, horizontal = true))
       conf.topPx.set(area.clamp(conf.topPx.get, height, horizontal = false))
     }
 
-  private[viewport] def positionMeasuredWindow(conf: Viewport.WindowConf, width: Double, height: Double): Unit =
+  private[viewport] def positionMeasuredWindow(
+      conf: Viewport.WindowConf,
+      width: Double,
+      height: Double
+  ): Unit =
     if (owns(conf)) {
       if (conf.placement == Viewport.WindowPlacement.Centered && !conf.userPositioned)
         placeWindow(conf, width, height)
@@ -159,14 +172,15 @@ final class Viewport extends AbstractComponent {
       case browser: DomHostElement =>
         browser.node match {
           case element: dom.HTMLElement =>
-            val rect       = element.getBoundingClientRect()
-            val clientLeft = rect.left + element.clientLeft
-            val clientTop  = rect.top + element.clientTop
-            val root       = dom.document.documentElement
-            val visibleLeft   = math.max(0.0, clientLeft)
-            val visibleTop    = math.max(0.0, clientTop)
-            val visibleRight  = math.min(root.clientWidth.toDouble, clientLeft + element.clientWidth)
-            val visibleBottom = math.min(root.clientHeight.toDouble, clientTop + element.clientHeight)
+            val rect         = element.getBoundingClientRect()
+            val clientLeft   = rect.left + element.clientLeft
+            val clientTop    = rect.top + element.clientTop
+            val root         = dom.document.documentElement
+            val visibleLeft  = math.max(0.0, clientLeft)
+            val visibleTop   = math.max(0.0, clientTop)
+            val visibleRight = math.min(root.clientWidth.toDouble, clientLeft + element.clientWidth)
+            val visibleBottom =
+              math.min(root.clientHeight.toDouble, clientTop + element.clientHeight)
             Some(
               Viewport.VisibleArea(
                 left = visibleLeft - clientLeft + element.scrollLeft,
@@ -292,8 +306,8 @@ object Viewport {
   type WindowBody  = AbstractComponent ?=> Cursor ?=> Unit
   type OverlayBody = Overlay ?=> Cursor ?=> Unit
 
-  enum WindowPlacement { case Cascaded, Centered }
-  enum WindowCloseBehavior { case Remove, Hide }
+  enum WindowPlacement     { case Cascaded, Centered }
+  enum WindowCloseBehavior { case Remove, Hide       }
 
   private val notificationFadeOutMs = 250
   private val windowFadeOutMs       = 300
@@ -301,7 +315,12 @@ object Viewport {
   private val windowStepPx          = 28.0
   private val windowMarginPx        = 8.0
 
-  private[viewport] final case class VisibleArea(left: Double, top: Double, width: Double, height: Double) {
+  private[viewport] final case class VisibleArea(
+      left: Double,
+      top: Double,
+      width: Double,
+      height: Double
+  ) {
 
     /** Position along one axis: `offset` into the visible area, pulled back so a window of `size`
       * still fits, but never before the area's leading margin.
@@ -319,8 +338,8 @@ object Viewport {
 
     def clamp(position: Double, size: Double, horizontal: Boolean): Double = {
       val (start, extent) = if (horizontal) (left, width) else (top, height)
-      val minimum = start + windowMarginPx
-      val maximum = start + math.max(windowMarginPx, extent - size - windowMarginPx)
+      val minimum         = start + windowMarginPx
+      val maximum         = start + math.max(windowMarginPx, extent - size - windowMarginPx)
       position.max(minimum).min(maximum)
     }
   }
@@ -398,10 +417,10 @@ object Viewport {
       val autoHeight: Boolean = false
   ) extends OwnedConf {
     private[viewport] var userPositioned: Boolean = false
-    val widthProperty: Property[Double] = Property(widthPx.toDouble)
-    val heightProperty: Property[Double] = Property(heightPx.toDouble)
-    val titleProperty: Property[String]  = Property("")
-    private var titleBinding: Disposable = Disposable.empty
+    val widthProperty: Property[Double]           = Property(widthPx.toDouble)
+    val heightProperty: Property[Double]          = Property(heightPx.toDouble)
+    val titleProperty: Property[String]           = Property("")
+    private var titleBinding: Disposable          = Disposable.empty
 
     def title: ReadOnlyProperty[String] =
       titleProperty
@@ -421,7 +440,7 @@ object Viewport {
   }
 
   final class OverlayConf(
-      val anchor: Option[org.scalajs.dom.HTMLElement],
+      val anchor: Option[DomHTMLElement],
       val body: OverlayBody,
       val widthPx: Option[Double],
       val effectiveWidthProperty: Property[Double],
@@ -565,7 +584,11 @@ object Viewport {
   private[viewport] def constrainWindow(conf: WindowConf): Unit =
     conf.ownerOption.foreach(_.constrainWindow(conf))
 
-  private[viewport] def positionMeasuredWindow(conf: WindowConf, width: Double, height: Double): Unit =
+  private[viewport] def positionMeasuredWindow(
+      conf: WindowConf,
+      width: Double,
+      height: Double
+  ): Unit =
     conf.ownerOption.foreach(_.positionMeasuredWindow(conf, width, height))
 
   def closeWindowById(id: String)(using component: AbstractComponent): Unit =

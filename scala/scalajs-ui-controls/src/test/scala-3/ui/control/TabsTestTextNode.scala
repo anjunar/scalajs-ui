@@ -19,4 +19,3 @@ private final class TabsTestTextNode(private var value: String) extends TextNode
   override def getText: String             = value
   override def renderHtml(): String        = value
 }
-

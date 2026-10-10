@@ -1,18 +1,21 @@
 package ui.forms.validators
 
 import java.time.{Instant, LocalDate, LocalDateTime, OffsetDateTime, ZonedDateTime}
-import java.util.Date
+import java.util
 import ui.core.i18n.{RuntimeMessage, i18n}
 import scala.scalajs.js
 import scala.util.Try
 import scala.util.matching.Regex
+import scala.Null
 
 final case class DecimalMinValidator[V](
     value: BigDecimal,
     inclusive: Boolean = true,
-    message: String | scala.Null = null
+    message: String | Null = null
 ) extends MessageValidator[V] {
-  override protected def defaultMessage: RuntimeMessage = if (inclusive) i18n"Must be greater than or equal to $value" else i18n"Must be greater than $value"
+  override protected def defaultMessage: RuntimeMessage = if (inclusive)
+    i18n"Must be greater than or equal to $value"
+  else i18n"Must be greater than $value"
 
   def validate(candidate: V): Option[String] =
     ValidatorSupport.decimalConstraint(
@@ -21,4 +24,3 @@ final case class DecimalMinValidator[V](
       resolvedMessage
     )
 }
-

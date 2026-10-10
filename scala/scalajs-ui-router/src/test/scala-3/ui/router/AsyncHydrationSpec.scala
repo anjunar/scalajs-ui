@@ -82,10 +82,10 @@ class AsyncHydrationSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "keep loading through adoption until the asynchronous route is rendered" in {
-    val cursor = new HydrationTestCursor
+    val cursor  = new HydrationTestCursor
     val pending = Promise[AbstractComponent]()
-    val router = routerFor(pending.future)
-    val events = mutable.ArrayBuffer.empty[String]
+    val router  = routerFor(pending.future)
+    val events  = mutable.ArrayBuffer.empty[String]
     router.onPageLoad(_ => events += "load")
     router.onPageResolved(_ => {
       cursor.texts should contain("ready")

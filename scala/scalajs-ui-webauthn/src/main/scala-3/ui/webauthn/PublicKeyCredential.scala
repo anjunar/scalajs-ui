@@ -17,4 +17,3 @@ trait PublicKeyCredential extends js.Object {
   def getClientExtensionResults(): js.Object      = js.native
   val toJSON: js.UndefOr[js.Function0[js.Object]] = js.native
 }
-

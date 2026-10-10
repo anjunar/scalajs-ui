@@ -3,6 +3,7 @@ package app.pages
 import app.components.Showcase
 import ui.core.component.AbstractComponent
 import ui.core.i18n.i18n
+import ui.router.Route
 
 /** The page behind `/500`.
   *
@@ -13,7 +14,7 @@ import ui.core.i18n.i18n
 object ErrorPage {
 
   def render(): AbstractComponent =
-    ui.router.Route.component {
+    Route.component {
       Showcase.showcasePage(
         i18n"Route unavailable",
         i18n"This page could not be loaded. Internal error details are not exposed to visitors."

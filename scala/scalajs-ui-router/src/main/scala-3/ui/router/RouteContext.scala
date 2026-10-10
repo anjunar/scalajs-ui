@@ -1,5 +1,8 @@
 package ui.router
 
+import org.scalajs.dom.AbortSignal
+import ui.core.i18n.I18nLocale
+
 final case class RouteContext(
     path: String,
     url: String,
@@ -9,7 +12,7 @@ final case class RouteContext(
     queryParams: QueryParams,
     state: RouterState,
     routeMatch: RouteMatch,
-    locale: Option[ui.core.i18n.I18nLocale],
+    locale: Option[I18nLocale],
     /** Set when this route renders as the target of a failure forward.
       *
       * An error route is an ordinary route -- same type, same loader, same outlets -- so it reads
@@ -17,5 +20,5 @@ final case class RouteContext(
       * `browserPath` are still the visitor's, `fullPath` and `routeMatch` are the error route's.
       */
     failure: Option[RouteFailure] = None,
-    signal: Option[org.scalajs.dom.AbortSignal] = None
+    signal: Option[AbortSignal] = None
 )

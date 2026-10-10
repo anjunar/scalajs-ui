@@ -1,4 +1,6 @@
 package ui.editor
+import java.net.URLDecoder
+
 object InternalImageUrl {
   def valid(value: String): Boolean = {
     if (value == null || !value.startsWith("/") || value.startsWith("//")) return false
@@ -10,7 +12,7 @@ object InternalImageUrl {
         !text.takeWhile(c => c != '?' && c != '#').split('/').exists(p => p == "." || p == "..")
     if (!safe(value)) return false
     try {
-      val decoded = java.net.URLDecoder.decode(value.replace("+", "%2B"), "UTF-8")
+      val decoded = URLDecoder.decode(value.replace("+", "%2B"), "UTF-8")
       safe(decoded) && !decoded.contains("%") &&
       !"(?i)%2f|%5c|%3f|%23".r.findFirstIn(value).isDefined
     } catch { case _: IllegalArgumentException => false }

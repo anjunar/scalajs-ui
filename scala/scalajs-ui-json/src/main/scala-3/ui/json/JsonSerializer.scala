@@ -4,6 +4,7 @@ import ui.core.state.{ListProperty, Property}
 import reflect.{ClassDescriptor, ParameterizedTypeDescriptor}
 
 import scala.scalajs.js
+import scala.collection.Map
 
 private[json] object JsonSerializer {
 
@@ -106,7 +107,7 @@ private[json] object JsonSerializer {
     val valueType = JsonTypeModel.secondTypeArgument(context.resolvedType)
 
     value match {
-      case entries: scala.collection.Map[?, ?] =>
+      case entries: Map[?, ?] =>
         entries.toSeq.map { case (key, entryValue) =>
           key.toString -> serialize(entryValue, context.child(valueType))
         }
@@ -182,7 +183,7 @@ private[json] object JsonSerializer {
       } else if (JsonTypeModel.isMap(expectedType)) {
         val valueType = JsonTypeModel.secondTypeArgument(expectedType)
         value
-          .asInstanceOf[scala.collection.Map[?, ?]]
+          .asInstanceOf[Map[?, ?]]
           .valuesIterator
           .exists(item => hasDirtyPayload(item, context.child(valueType)))
       } else if (JsonTypeModel.isCollection(expectedType)) {

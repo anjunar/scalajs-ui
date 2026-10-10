@@ -20,4 +20,3 @@ final case class I18nLocale(code: String) {
 object I18nLocale {
   val En: I18nLocale = I18nLocale("en")
 }
-

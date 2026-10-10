@@ -4,4 +4,3 @@ object PublicKeyCredentialHint {
   final val ClientDevice = "client-device"
   final val Hybrid       = "hybrid"
 }
-

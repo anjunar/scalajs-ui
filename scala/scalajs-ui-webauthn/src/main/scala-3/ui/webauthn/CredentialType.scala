@@ -4,4 +4,3 @@ package ui.webauthn
 object CredentialType {
   final val PublicKey = "public-key"
 }
-

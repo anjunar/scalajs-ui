@@ -27,4 +27,3 @@ object RemotePage {
   ): RemotePage[V, Query] =
     RemotePage(items.toSeq, offset, nextQuery, totalCount, hasMore)
 }
-

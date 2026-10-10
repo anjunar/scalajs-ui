@@ -15,4 +15,3 @@ final case class MessageValue(
   def at(locale: I18nLocale): Option[LocalizedPattern] =
     translations.get(locale)
 }
-

@@ -4,7 +4,6 @@ import ui.core.state.Disposable
 import org.scalajs.dom
 import scala.collection.mutable
 
-
 /** A scoped write barrier, not an input controller or scheduler. Native browser changes are
   * deliberately unaffected. Release the lease before retrying a projection or unmounting its host.
   */

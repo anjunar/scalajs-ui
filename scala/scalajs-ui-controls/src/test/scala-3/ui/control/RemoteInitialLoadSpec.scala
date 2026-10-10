@@ -56,7 +56,7 @@ class RemoteInitialLoadSpec extends AnyFlatSpec with Matchers {
   private class Fixture(total: Option[Int]) {
     var requests = 0
     val response = Promise[RemotePage[String, Unit]]()
-    val source = RemoteListProperty[String, Unit](
+    val source   = RemoteListProperty[String, Unit](
       loader = RemoteLoader { _ =>
         requests += 1
         response.future

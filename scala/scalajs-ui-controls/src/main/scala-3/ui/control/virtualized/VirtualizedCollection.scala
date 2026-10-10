@@ -16,6 +16,11 @@ import org.scalajs.dom
 
 import scala.concurrent.Future
 import scala.scalajs.js
+import scala.concurrent.ExecutionContext
+import ui.core.remote.RemoteListChange
+import ui.core.remote.RemoteSort
+import ui.core.render.Cursor
+import ui.core.state.ReadOnlyProperty
 abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource[T])
     extends AbstractComponent {
 
@@ -173,7 +178,7 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
         case _ => pageStart + pageSize < renderableCount
       }
 
-  protected def pageStatusProperty: ui.core.state.ReadOnlyProperty[String] =
+  protected def pageStatusProperty: ReadOnlyProperty[String] =
     itemStateRevisionProperty.map { _ =>
       val total = pageCount(displayItemCount)
       if (total == 0) "No items"
@@ -200,7 +205,7 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
     * animation-frame timing guess. Explicit DSL/bridge choices and URL modes keep their requested
     * behavior. Client-only mounts run the same transition immediately.
     */
-  protected def enableDefaultBrowserScrolling(cursor: ui.core.render.Cursor): Unit =
+  protected def enableDefaultBrowserScrolling(cursor: Cursor): Unit =
     if (browserRendering && !displayModeConfigured && isPaging) {
       // Capture this while the control still exposes the exact SSR slice. A viewport measurement
       // may release the control's local `hydrating` flag before an async hydration session as a
@@ -225,7 +230,7 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
     */
   protected def renderPagingFooter(
       cssPrefix: String
-  )(using AbstractComponent, ui.core.render.Cursor): Unit =
+  )(using AbstractComponent, Cursor): Unit =
     when(displayModeProperty.map(_ == CollectionDisplayMode.Paging)) {
       div {
         classes = Seq(s"$cssPrefix-footer", "ui-virtualized-footer")
@@ -244,7 +249,7 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
     */
   private def renderPagingControl(label: String, pageDelta: Int)(using
       parent: AbstractComponent,
-      cursor: ui.core.render.Cursor
+      cursor: Cursor
   ): Unit =
     anchor(label) { link ?=>
       classes = Seq("ui-virtualized-page-button")
@@ -393,11 +398,11 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
   protected def itemsUpdateInProgress: Boolean =
     Option(currentRemoteItems).exists(_.isUpdatingItems)
 
-  protected def handleRemoteItemsChange(change: ui.core.remote.RemoteListChange[T]): Unit = {
+  protected def handleRemoteItemsChange(change: RemoteListChange[T]): Unit = {
     change match {
-      case ui.core.remote.RemoteListChange.Reset()       => resetMeasurements()
-      case ui.core.remote.RemoteListChange.Structural(_) => resetMeasurements()
-      case _                                             => ()
+      case RemoteListChange.Reset()       => resetMeasurements()
+      case RemoteListChange.Structural(_) => resetMeasurements()
+      case _                              => ()
     }
     bumpRemoteState()
     refreshItemState()
@@ -457,7 +462,7 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
 
   /** Hook for CrawlableCollection; nothing to do without crawl state. */
   protected def onRemoteSortingChanged(
-      sorting: Vector[ui.core.remote.RemoteSort]
+      sorting: Vector[RemoteSort]
   ): Unit = ()
 
   // --- scrolling and measurement ------------------------------------------
@@ -656,7 +661,7 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
     * there.
     */
   protected def discardResult(result: Future[?]): Unit = {
-    result.recover { case _ => () }(using scala.concurrent.ExecutionContext.global)
+    result.recover { case _ => () }(using ExecutionContext.global)
     ()
   }
 }

@@ -78,4 +78,3 @@ private final class TableTextFieldInput[S, T](
       .filter(value => value != null && !js.isUndefined(value))
       .fold("")(_.toString)
 }
-

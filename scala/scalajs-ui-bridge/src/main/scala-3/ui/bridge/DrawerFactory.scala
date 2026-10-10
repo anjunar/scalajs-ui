@@ -44,4 +44,3 @@ private[bridge] object DrawerFactory extends ComponentFactory {
         )
     }
 }
-

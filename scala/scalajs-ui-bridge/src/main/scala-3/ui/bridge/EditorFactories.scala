@@ -4,16 +4,7 @@ import ui.core.component.AbstractComponent
 import ui.core.render.Cursor
 import ui.core.state.{Property as CoreProperty}
 import ui.editor.Editor
-import ui.editor.plugins.{
-  basePlugin,
-  codePlugin,
-  headingPlugin,
-  horizontalRulePlugin,
-  imagePlugin,
-  linkPlugin,
-  listPlugin,
-  tablePlugin
-}
+import ui.editor.plugins.{basePlugin, codePlugin, headingPlugin, horizontalRulePlugin, imagePlugin, linkPlugin, listPlugin, tablePlugin}
 import org.scalajs.dom
 
 import scala.scalajs.js

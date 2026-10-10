@@ -1,13 +1,6 @@
 package ui.control.table
 
-import ui.control.virtualized.{
-  CollectionDisplayMode,
-  CrawlableCollection,
-  FixedRowGeometry,
-  ItemGeometry,
-  MeasuredRowGeometry,
-  VirtualizedCollection
-}
+import ui.control.virtualized.{CollectionDisplayMode, CrawlableCollection, FixedRowGeometry, ItemGeometry, MeasuredRowGeometry, VirtualizedCollection}
 import ui.core.component.AbstractComponent
 import ui.core.remote.{RemoteListChange, RemoteSort}
 import ui.core.dsl.ClassDsl.{addClass, classIf, classes}
@@ -19,14 +12,7 @@ import ui.core.layout.Div
 import ui.core.layout.Div.div
 import ui.core.layout.TextComponent.text
 import ui.core.render.{Cursor, DomHostElement, HostMutationGuard, HostWriteBlocked}
-import ui.core.state.{
-  CompositeDisposable,
-  Disposable,
-  ListDataSource,
-  ListProperty,
-  Property,
-  ReadOnlyProperty
-}
+import ui.core.state.{CompositeDisposable, Disposable, ListDataSource, ListProperty, Property, ReadOnlyProperty}
 import ui.core.statement.Foreach.foreach
 import ui.core.statement.DynamicComponentRenderer.dynamic
 import ui.core.statement.KeyedChildren

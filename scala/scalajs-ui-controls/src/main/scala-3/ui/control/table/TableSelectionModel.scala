@@ -1,7 +1,8 @@
 package ui.control.table
 
 import ui.core.state.{ListDataSource, Property, ReadOnlyProperty}
-
+import java.lang.{Integer as JavaInteger}
+import java.util
 
 /** Runtime-owned row/cell selection. One snapshot keeps mode, lead, results and Shift anchors
   * coherent. Unloaded remote positions are selected coordinates, not fabricated selected items.
@@ -378,7 +379,7 @@ class TableSelectionModel[S](final val tableView: TableView[S]) {
         if (index == previous.anchor) locate(anchorKey)
         else locate(entryKeys.getOrElse(index, None))
     case None if allowReferenceFallback =>
-      val positions = new java.util.IdentityHashMap[AnyRef, java.lang.Integer]()
+      val positions = new util.IdentityHashMap[AnyRef, JavaInteger]()
       (previous.entries.flatMap(_.item) ++ previous.anchorItem).foreach { item =>
         positions.put(item.asInstanceOf[AnyRef], -1)
       }

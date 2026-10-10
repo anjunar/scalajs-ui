@@ -21,9 +21,9 @@ import scala.scalajs.js
 final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
   val tagName = "div"
 
-  private var containerHost: Div = _
+  private var containerHost: Div                      = _
   private var activeResizeCleanup: Option[() => Unit] = None
-  private var activeDragCleanup: Option[() => Unit] = None
+  private var activeDragCleanup: Option[() => Unit]   = None
 
   override def compose(cursor: Cursor): Unit = {
     given AbstractComponent = this
@@ -77,7 +77,7 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
                 conf.onClose.foreach(_(this))
                 conf.closeBehavior match {
                   case Viewport.WindowCloseBehavior.Remove => Viewport.closeWindow(conf)
-                  case Viewport.WindowCloseBehavior.Hide => Viewport.hideWindow(conf)
+                  case Viewport.WindowCloseBehavior.Hide   => Viewport.hideWindow(conf)
                 }
               }
             }
@@ -91,8 +91,14 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
 
       if (conf.resizable && !conf.autoHeight) {
         Seq(
-          ("n", 0, -1), ("ne", 1, -1), ("e", 1, 0), ("se", 1, 1),
-          ("s", 0, 1), ("sw", -1, 1), ("w", -1, 0), ("nw", -1, -1)
+          ("n", 0, -1),
+          ("ne", 1, -1),
+          ("e", 1, 0),
+          ("se", 1, 1),
+          ("s", 0, 1),
+          ("sw", -1, 1),
+          ("w", -1, 0),
+          ("nw", -1, -1)
         ).foreach { case (name, horizontal, vertical) =>
           div {
             classes = Seq("ui-window__handle", s"ui-window__handle--$name")
@@ -114,16 +120,18 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
       dom.window.addEventListener("resize", reposition)
       val sizeObserver =
         if (conf.autoHeight) host match {
-          case browser: DomHostElement => browser.node match {
-            case element: dom.HTMLElement =>
-              val observer = new dom.ResizeObserver((_, _) => positionMeasured(element))
-              observer.observe(element)
-              positionMeasured(element)
-              Some(observer)
-            case _ => None
-          }
+          case browser: DomHostElement =>
+            browser.node match {
+              case element: dom.HTMLElement =>
+                val observer = new dom.ResizeObserver((_, _) => positionMeasured(element))
+                observer.observe(element)
+                positionMeasured(element)
+                Some(observer)
+              case _ => None
+            }
           case _ => None
-        } else None
+        }
+        else None
       addDisposable(Disposable {
         dom.window.removeEventListener("resize", reposition)
         sizeObserver.foreach(_.disconnect())
@@ -133,7 +141,11 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
     }
 
   private def positionMeasured(element: dom.HTMLElement): Unit =
-    Viewport.positionMeasuredWindow(conf, element.offsetWidth.toDouble, element.offsetHeight.toDouble)
+    Viewport.positionMeasuredWindow(
+      conf,
+      element.offsetWidth.toDouble,
+      element.offsetHeight.toDouble
+    )
 
   private def viewportWidth: Double =
     host match {
@@ -152,15 +164,17 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
   private def keepInsideViewport(): Unit = {
     if (conf.placement == Viewport.WindowPlacement.Centered) {
       if (conf.autoHeight) host match {
-        case browser: DomHostElement => browser.node match {
-          case element: dom.HTMLElement => positionMeasured(element)
-          case _ => ()
-        }
+        case browser: DomHostElement =>
+          browser.node match {
+            case element: dom.HTMLElement => positionMeasured(element)
+            case _                        => ()
+          }
         case _ => ()
-      } else Viewport.constrainWindow(conf)
+      }
+      else Viewport.constrainWindow(conf)
       return
     }
-    val width = math.min(conf.widthProperty.get, math.max(0.0, viewportWidth - 16.0))
+    val width   = math.min(conf.widthProperty.get, math.max(0.0, viewportWidth - 16.0))
     val maxLeft = math.max(8.0, viewportWidth - width - 8.0)
     conf.leftPx.set(conf.leftPx.get.max(8.0).min(maxLeft))
   }
@@ -185,27 +199,27 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
         event.stopPropagation()
         Viewport.touchWindow(conf)
 
-        val startX = pointer.clientX.toDouble
-        val startY = pointer.clientY.toDouble
-        val startLeft = conf.leftPx.get
-        val startTop = conf.topPx.get
-        val startWidth = conf.widthProperty.get.min(1600.0).min(viewportWidth - 16.0)
+        val startX      = pointer.clientX.toDouble
+        val startY      = pointer.clientY.toDouble
+        val startLeft   = conf.leftPx.get
+        val startTop    = conf.topPx.get
+        val startWidth  = conf.widthProperty.get.min(1600.0).min(viewportWidth - 16.0)
         val startHeight = conf.heightProperty.get.min(1024.0)
-        val pointerId = pointer.pointerId
+        val pointerId   = pointer.pointerId
 
         val moveListener: js.Function1[dom.PointerEvent, Unit] = next =>
           if (next.pointerId == pointerId) {
-            val dx = next.clientX.toDouble - startX
-            val dy = next.clientY.toDouble - startY
+            val dx    = next.clientX.toDouble - startX
+            val dy    = next.clientY.toDouble - startY
             val width = horizontal match {
               case -1 => (startWidth - dx).max(360.0).min(startLeft + startWidth - 8.0)
-              case 1 => (startWidth + dx).max(360.0).min(viewportWidth - startLeft - 8.0)
-              case _ => startWidth
+              case 1  => (startWidth + dx).max(360.0).min(viewportWidth - startLeft - 8.0)
+              case _  => startWidth
             }
             val height = vertical match {
               case -1 => (startHeight - dy).max(360.0)
-              case 1 => (startHeight + dy).max(360.0)
-              case _ => startHeight
+              case 1  => (startHeight + dy).max(360.0)
+              case _  => startHeight
             }
             if (horizontal != 0) {
               conf.widthProperty.set(width)
@@ -233,11 +247,12 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
 
   private def startDrag(event: UiEvent): Unit =
     event.raw match {
-      case pointer: dom.PointerEvent if pointer.button == 0 &&
-          (pointer.target match {
-            case element: dom.Element => element.closest("button") == null
-            case _ => true
-          }) =>
+      case pointer: dom.PointerEvent
+          if pointer.button == 0 &&
+            (pointer.target match {
+              case element: dom.Element => element.closest("button") == null
+              case _                    => true
+            }) =>
         stopDrag()
         event.preventDefault()
         Viewport.touchWindow(conf)
@@ -246,7 +261,7 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
         val startY      = pointer.clientY.toDouble
         val initialLeft = conf.leftPx.get
         val initialTop  = conf.topPx.get
-        val pointerId = pointer.pointerId
+        val pointerId   = pointer.pointerId
 
         val moveListener: js.Function1[dom.PointerEvent, Unit] = next =>
           if (next.pointerId == pointerId) {
@@ -254,12 +269,14 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
             conf.leftPx.set(initialLeft + next.clientX.toDouble - startX)
             conf.topPx.set(initialTop + next.clientY.toDouble - startY)
             if (conf.autoHeight) host match {
-              case browser: DomHostElement => browser.node match {
-                case element: dom.HTMLElement => positionMeasured(element)
-                case _ => ()
-              }
+              case browser: DomHostElement =>
+                browser.node match {
+                  case element: dom.HTMLElement => positionMeasured(element)
+                  case _                        => ()
+                }
               case _ => ()
-            } else Viewport.constrainWindow(conf)
+            }
+            else Viewport.constrainWindow(conf)
           }
 
         val finishListener: js.Function1[dom.PointerEvent, Unit] = next =>

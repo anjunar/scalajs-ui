@@ -13,4 +13,3 @@ private[bridge] trait DrawerHandleFacade extends js.Object {
   def setOpen(value: Boolean): Unit = js.native
   def toggle(): Unit                = js.native
 }
-

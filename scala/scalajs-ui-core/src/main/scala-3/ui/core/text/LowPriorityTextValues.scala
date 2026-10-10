@@ -10,4 +10,3 @@ private[text] trait LowPriorityTextValues {
     ): ReadOnlyProperty[String] =
       value.flatMap(next => textValue.asReadOnlyProperty(next))
 }
-

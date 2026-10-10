@@ -8,6 +8,7 @@ import ui.core.i18n.i18n
 import ui.core.layout.Button.button
 import ui.core.render.Cursor
 import ui.router.Router
+import ui.router.Route
 
 /** The page behind `/404`.
   *
@@ -18,7 +19,7 @@ import ui.router.Router
 object NotFoundPage {
 
   def render(): AbstractComponent =
-    ui.router.Route.component {
+    Route.component {
       Showcase.showcasePage(
         i18n"Page not found",
         i18n"The requested address does not match a route in this application."

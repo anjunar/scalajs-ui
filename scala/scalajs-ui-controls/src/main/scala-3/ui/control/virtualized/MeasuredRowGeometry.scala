@@ -1,5 +1,7 @@
 package ui.control.virtualized
 
+import scala.collection.mutable.ArrayBuffer
+
 /** Measured heights, one column -- used by VirtualListView and optionally TableView.
   *
   * Holds measured heights and their prefix sums. What is not yet measured uses the estimate;
@@ -18,8 +20,8 @@ final class MeasuredRowGeometry(
     overscanPx: () => Double
 ) extends ItemGeometry {
 
-  private val heights = scala.collection.mutable.ArrayBuffer.empty[Double]
-  private val prefix  = scala.collection.mutable.ArrayBuffer(0.0)
+  private val heights = ArrayBuffer.empty[Double]
+  private val prefix  = ArrayBuffer(0.0)
 
   private var prefixDirtyFrom = Int.MaxValue
 

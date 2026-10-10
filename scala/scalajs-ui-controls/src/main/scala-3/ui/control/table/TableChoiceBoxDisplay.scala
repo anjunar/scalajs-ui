@@ -24,4 +24,3 @@ private final class TableChoiceBoxDisplay[S, T](cell: TableChoiceBoxCell[S, T])
     }) {}
   }
 }
-

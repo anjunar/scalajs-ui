@@ -16,17 +16,17 @@ private[bridge] object WindowFactory extends ComponentFactory {
       options: js.Dictionary[js.Any],
       body: js.Function2[ComponentHandleBridge, ScopeHandleBridge, Unit]
   )(using parent: AbstractComponent, cursor: Cursor): AbstractComponent = {
-    val title    = ControlFactories.str(options("title"))
-    val widthPx  = options.get("widthPx").map(ControlFactories.int).getOrElse(520)
-    val heightPx = options.get("heightPx").map(ControlFactories.int).getOrElse(360)
+    val title     = ControlFactories.str(options("title"))
+    val widthPx   = options.get("widthPx").map(ControlFactories.int).getOrElse(520)
+    val heightPx  = options.get("heightPx").map(ControlFactories.int).getOrElse(360)
     val resizable = options.get("resizable").map(ControlFactories.bool).getOrElse(true)
     val placement = options.get("placement").map(ControlFactories.str) match {
       case Some("centered") => Viewport.WindowPlacement.Centered
-      case _ => Viewport.WindowPlacement.Cascaded
+      case _                => Viewport.WindowPlacement.Cascaded
     }
     val mobileSheet = options.get("mobileSheet").map(ControlFactories.bool).getOrElse(true)
-    val autoHeight = options.get("autoHeight").map(ControlFactories.bool).getOrElse(false)
-    val onClose  = options.get("onClose").map(_.asInstanceOf[js.Function0[Unit]]).orUndefined
+    val autoHeight  = options.get("autoHeight").map(ControlFactories.bool).getOrElse(false)
+    val onClose     = options.get("onClose").map(_.asInstanceOf[js.Function0[Unit]]).orUndefined
 
     val conf = Viewport.WindowConf(
       title,

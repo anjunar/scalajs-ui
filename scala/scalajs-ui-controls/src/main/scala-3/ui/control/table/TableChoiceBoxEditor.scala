@@ -104,4 +104,3 @@ private final class TableChoiceBoxEditor[S, T](cell: TableChoiceBoxCell[S, T])
     setAttribute("aria-invalid", (index < 0).toString)
   }
 }
-

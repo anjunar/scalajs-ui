@@ -5,6 +5,7 @@ import ui.core.layout.TextComponent
 import ui.core.statement.KeyedChildren
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import scala.util.Random
 
 class KeyedReorderSpec extends AnyFlatSpec with Matchers {
   private class Probe {
@@ -13,23 +14,7 @@ class KeyedReorderSpec extends AnyFlatSpec with Matchers {
   }
   // Instrument the cursor's insertion host, retaining real SSR nodes and guards.
   private class CountedHost(delegate: HostElement, probe: Probe) extends HostElement {
-    export delegate.{
-      tagName,
-      setAttribute,
-      removeAttribute,
-      attribute,
-      setProperty,
-      property,
-      setStyle,
-      removeStyle,
-      style,
-      setClassNames,
-      insertChild,
-      removeChild,
-      clearChildren,
-      childCount,
-      renderHtml
-    }
+    export delegate.{tagName, setAttribute, removeAttribute, attribute, setProperty, property, setStyle, removeStyle, style, setClassNames, insertChild, removeChild, clearChildren, childCount, renderHtml}
     def insertBefore(child: HostNode, before: Option[HostNode]): Unit = {
       probe.writes += 1
       if (probe.writes == probe.failAt)
@@ -103,7 +88,7 @@ class KeyedReorderSpec extends AnyFlatSpec with Matchers {
 
   "Permutation reconciliation" should "match an independent minimal-move oracle" in {
     val f      = new Fixture(24)
-    val random = new scala.util.Random(28L)
+    val random = new Random(28L)
     try {
       var previous = (0 until 24).toVector
       (0 until 100).foreach { _ =>

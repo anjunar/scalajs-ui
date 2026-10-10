@@ -24,4 +24,3 @@ private abstract class TabsTestRoot extends AbstractComponent {
       content
     }
 }
-

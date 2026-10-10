@@ -21,4 +21,3 @@ final case class I18nConfig(
   val localesByCode: Map[String, I18nLocale] =
     supportedLocales.iterator.map(locale => locale.code -> locale).toMap
 }
-

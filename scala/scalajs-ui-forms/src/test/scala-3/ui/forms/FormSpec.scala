@@ -145,4 +145,3 @@ class FormSpec extends AnyFlatSpec with Matchers {
       case child                => descendantText(child)
     }
 }
-

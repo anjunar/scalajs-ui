@@ -11,6 +11,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
+import ui.core.component.AbstractComponent
 
 class NestedRouteAsyncSpec extends AsyncFlatSpec with Matchers {
 
@@ -18,7 +19,7 @@ class NestedRouteAsyncSpec extends AsyncFlatSpec with Matchers {
     ExecutionContext.parasitic
 
   "Asynchronous nested routes" should "join the SSR render before HTML is collected" in {
-    val child  = Promise[ui.core.component.AbstractComponent]()
+    val child  = Promise[AbstractComponent]()
     val routes =
       Seq(
         Route.view(

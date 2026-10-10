@@ -26,4 +26,3 @@ private final class TableComboBoxDisplay[S, T](cell: TableComboBoxCell[S, T])
     }) {}
   }
 }
-

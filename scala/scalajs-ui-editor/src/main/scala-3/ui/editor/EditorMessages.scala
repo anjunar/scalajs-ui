@@ -60,7 +60,8 @@ object EditorMessages {
   val toolbar             = i18n"Editor toolbar"
   val invalidImages = i18n"Images require an internal URL and an optional positive pixel width."
   val unavailable   = i18n"The visual editor is unavailable."
-  val unsupportedMarkdown = i18n"HTML and additional text marks must be edited in Markdown source mode."
+  val unsupportedMarkdown =
+    i18n"HTML and additional text marks must be edited in Markdown source mode."
   val unsupportedImageWidth = i18n"The image width is outside the supported range."
   val invalidImageReference = i18n"The image address or width is invalid."
 

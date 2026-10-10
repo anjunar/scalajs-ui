@@ -18,9 +18,9 @@ trait Control[V] extends Editable { self: AbstractComponent =>
   val errors: ListProperty[String]               = ListProperty()
   val invalidProperty: ReadOnlyProperty[Boolean] = errors.map(_.nonEmpty)
 
-  private var errorMessages = Vector.empty[RuntimeMessage]
-  private var renderingErrors = false
-  private var observingLocale = false
+  private var errorMessages    = Vector.empty[RuntimeMessage]
+  private var renderingErrors  = false
+  private var observingLocale  = false
   private val fallbackResolver = I18nResolver(MessageCatalog.empty)
 
   // Keep the public string property compatible with direct writes and clear/reset calls.
@@ -49,7 +49,9 @@ trait Control[V] extends Editable { self: AbstractComponent =>
   }
 
   private def resolve(message: RuntimeMessage): String =
-    I18nRuntime.current(using self).map(_.resolveNow(message))
+    I18nRuntime
+      .current(using self)
+      .map(_.resolveNow(message))
       .getOrElse(fallbackResolver.resolve(message, I18nLocale.En))
 
   private def renderErrors(): Unit = {

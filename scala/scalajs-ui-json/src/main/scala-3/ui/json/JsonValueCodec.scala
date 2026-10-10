@@ -1,22 +1,28 @@
 package ui.json
 
-import java.util.UUID
+import java.util
 import scala.scalajs.js
+import java.math.{BigDecimal as JavaBigDecimal}
 
 private[json] object JsonValueCodec {
 
   /** Exact decimals, e.g. prices. Scala's `BigDecimal` is an alias of `scala.math.BigDecimal`. */
-  val DecimalTypes: Set[String] = Set("scala.math.BigDecimal", "scala.BigDecimal", "scala.package.BigDecimal", "java.math.BigDecimal")
+  val DecimalTypes: Set[String] = Set(
+    "scala.math.BigDecimal",
+    "scala.BigDecimal",
+    "scala.package.BigDecimal",
+    "java.math.BigDecimal"
+  )
 
   def serializePrimitive(value: Any, typeName: String): js.Any =
     typeName match {
       // Written as a string of digits: a JavaScript number would round them and drop the scale (120.00 to 120).
       case "java.math.BigDecimal" =>
-        value.asInstanceOf[java.math.BigDecimal].toPlainString
+        value.asInstanceOf[JavaBigDecimal].toPlainString
       case decimal if DecimalTypes.contains(decimal) =>
         value.asInstanceOf[BigDecimal].bigDecimal.toPlainString
       case "java.util.UUID" =>
-        value.asInstanceOf[UUID].toString
+        value.asInstanceOf[util.UUID].toString
       case "scala.Int" | "int" =>
         value.asInstanceOf[Int].toDouble
       case "scala.Double" | "double" =>
@@ -49,7 +55,7 @@ private[json] object JsonValueCodec {
       case "scala.Char" | "char"       =>
         value.toString.headOption.getOrElse('\u0000')
       case "java.util.UUID" =>
-        UUID.fromString(uuidValue(value.toString))
+        util.UUID.fromString(uuidValue(value.toString))
       case "java.math.BigDecimal" =>
         decimal(value)
       case decimalType if DecimalTypes.contains(decimalType) =>
@@ -58,14 +64,14 @@ private[json] object JsonValueCodec {
         value
     }
 
-  /**
-   * A decimal as a string of digits keeps them all; as a JSON number it is what `JSON.parse` made of it, a double, whose
-   * shortest representation is read back, e.g. 120.5 as 120.5, with the scale of those digits.
-   */
-  private def decimal(value: js.Any): java.math.BigDecimal =
+  /** A decimal as a string of digits keeps them all; as a JSON number it is what `JSON.parse` made
+    * of it, a double, whose shortest representation is read back, e.g. 120.5 as 120.5, with the
+    * scale of those digits.
+    */
+  private def decimal(value: js.Any): JavaBigDecimal =
     js.typeOf(value) match {
-      case "number" => new java.math.BigDecimal(value.toString)
-      case "string" => new java.math.BigDecimal(value.asInstanceOf[String].trim)
+      case "number" => new JavaBigDecimal(value.toString)
+      case "string" => new JavaBigDecimal(value.asInstanceOf[String].trim)
       case other    => throw new IllegalArgumentException(s"Expected a decimal number, got $other")
     }
 

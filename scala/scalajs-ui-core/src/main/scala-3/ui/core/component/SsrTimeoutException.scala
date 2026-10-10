@@ -14,4 +14,3 @@ final class SsrTimeoutException(val timeoutMs: Int)
     extends RuntimeException(s"SSR render timed out after $timeoutMs ms") {
   val status: Int = 504
 }
-

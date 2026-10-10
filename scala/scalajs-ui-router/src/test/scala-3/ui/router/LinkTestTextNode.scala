@@ -16,4 +16,3 @@ private final class LinkTestTextNode(private var value: String) extends TextNode
   override def getText: String             = value
   override def renderHtml(): String        = value
 }
-

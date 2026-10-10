@@ -1,11 +1,6 @@
 package ui.control.virtuallist
 
-import ui.control.virtualized.{
-  CollectionDisplayMode,
-  CrawlableCollection,
-  MeasuredRowGeometry,
-  VirtualizedCollection
-}
+import ui.control.virtualized.{CollectionDisplayMode, CrawlableCollection, MeasuredRowGeometry, VirtualizedCollection}
 import ui.core.component.AbstractComponent
 import ui.core.remote.RemoteSort
 import ui.core.dsl.ClassDsl.{addClass, classIf, classes}

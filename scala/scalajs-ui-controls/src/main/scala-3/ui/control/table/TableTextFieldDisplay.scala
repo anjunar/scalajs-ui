@@ -24,4 +24,3 @@ private final class TableTextFieldDisplay[S, T](cell: TableCell[S, T], formatter
     }) {}
   }
 }
-

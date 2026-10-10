@@ -14,4 +14,3 @@ enum TableEditCancelReason {
   case CellUnavailable
   case Disposed
 }
-

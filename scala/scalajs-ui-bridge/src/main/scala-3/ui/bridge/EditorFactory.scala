@@ -4,22 +4,14 @@ import ui.core.component.AbstractComponent
 import ui.core.render.Cursor
 import ui.core.state.{Property as CoreProperty}
 import ui.editor.Editor
-import ui.editor.plugins.{
-  basePlugin,
-  codePlugin,
-  headingPlugin,
-  horizontalRulePlugin,
-  imagePlugin,
-  linkPlugin,
-  listPlugin,
-  tablePlugin
-}
+import ui.editor.plugins.{basePlugin, codePlugin, headingPlugin, horizontalRulePlugin, imagePlugin, linkPlugin, listPlugin, tablePlugin}
 import org.scalajs.dom
 
 import scala.scalajs.js
 import scala.scalajs.js.Thenable.Implicits.*
 import scala.concurrent.ExecutionContext
 import ui.editor.{MediaUploader, MediaUrlPolicy, MediaReference, UploadedMediaReference}
+import scala.scalajs.concurrent.JSExecutionContext
 
 /** Step 6 of JAVASCRIPT_API.md §9, the editor half -- the trigger was FINAL.md Priorität 4
   * ("`scalajs-ui-editor` veröffentlichen oder bewusst ausklammern"), settled as: veröffentlichen,
@@ -55,7 +47,7 @@ private[bridge] object EditorFactory extends ComponentFactory {
         val facade = value.asInstanceOf[js.Dynamic]
         self.mediaUploader = Some(new MediaUploader {
           def upload(file: dom.File, signal: dom.AbortSignal) = {
-            given ExecutionContext = scala.scalajs.concurrent.JSExecutionContext.queue
+            given ExecutionContext = JSExecutionContext.queue
             facade.upload(file, signal).asInstanceOf[js.Promise[js.Dynamic]].toFuture.map {
               result =>
                 require(
@@ -151,4 +143,3 @@ private[bridge] object EditorFactory extends ComponentFactory {
     }
   }
 }
-

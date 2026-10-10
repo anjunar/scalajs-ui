@@ -58,4 +58,3 @@ private[bridge] object CoreRuntime {
   @JSExportTopLevel("installCoreRuntime", "core")
   def install(): Unit = ()
 }
-

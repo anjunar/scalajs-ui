@@ -67,4 +67,3 @@ class ImageSpec extends AnyFlatSpec with Matchers {
     imageHost.attribute("alt") shouldBe Some("Second image")
   }
 }
-

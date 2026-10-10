@@ -5,4 +5,3 @@ object CredentialMediationRequirement {
   final val Required    = "required"
   final val Conditional = "conditional"
 }
-

@@ -27,4 +27,3 @@ private abstract class ComboRoot extends AbstractComponent {
       content
     }
 }
-

@@ -1,17 +1,15 @@
 package ui.json
 
 import ui.core.state.{ListProperty, Property}
-import reflect.{
-  ClassDescriptor,
-  ParameterizedTypeDescriptor,
-  PropertyDescriptor,
-  TypeVariableDescriptor
-}
+import reflect.{ClassDescriptor, ParameterizedTypeDescriptor, PropertyDescriptor, TypeVariableDescriptor}
 
 import scala.collection.immutable.{ListMap, Map as ImmutableMap}
 import scala.reflect.ClassTag
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
+import reflect.TypeDescriptor
+import scala.collection.Map
+import java.util
 
 private[json] object JsonDeserializer {
 
@@ -202,9 +200,9 @@ private[json] object JsonDeserializer {
   }
 
   private def createMap(
-      descriptor: reflect.TypeDescriptor,
+      descriptor: TypeDescriptor,
       entries: Seq[(String, Any)]
-  ): scala.collection.Map[String, Any] =
+  ): Map[String, Any] =
     JsonTypeModel.rawTypeName(descriptor) match {
       case "scala.collection.immutable.ListMap" =>
         ListMap(entries*)
@@ -218,7 +216,7 @@ private[json] object JsonDeserializer {
 
   private def createScalaArray(
       items: Seq[Any],
-      elementType: reflect.TypeDescriptor,
+      elementType: TypeDescriptor,
       schemas: JsonSchemaCatalog
   ): Array[?] =
     elementType.typeName match {
@@ -233,7 +231,7 @@ private[json] object JsonDeserializer {
       case "scala.Predef.String" | "java.lang.String" =>
         items.map(_.asInstanceOf[String]).toArray
       case "java.util.UUID" =>
-        items.map(_.asInstanceOf[java.util.UUID]).toArray
+        items.map(_.asInstanceOf[util.UUID]).toArray
       case _ =>
         val runtimeClass = elementType match {
           case parameterized: ParameterizedTypeDescriptor =>

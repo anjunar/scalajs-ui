@@ -11,6 +11,8 @@ import ui.core.layout.TextComponent.text
 import ui.core.layout.VBox.vbox
 import ui.core.render.Cursor
 import ui.core.i18n.{I18nRuntime, RuntimeMessage, i18n}
+import ui.core.i18n.I18n
+import ui.core.i18n.I18nLocale
 
 object OverviewPage {
   def render()(using AbstractComponent, Cursor): Unit = {
@@ -69,8 +71,8 @@ vbox {
                 classes = Seq("calm-action", "calm-action--secondary");
                 onClick { _ =>
                   runtime.setLocale(
-                    if (runtime.locale.get.code == "de") ui.core.i18n.I18nLocale.En
-                    else ui.core.i18n.I18nLocale("de")
+                    if (runtime.locale.get.code == "de") I18nLocale.En
+                    else I18nLocale("de")
                   )
                 }
               }
@@ -80,7 +82,7 @@ vbox {
               i18nSample("""i18n"Delete document"""", i18n"Delete document")
               i18nSample(
                 """i18n"User $user invited you to $group"""",
-                i18n"User ${ui.core.i18n.I18n.named("user", "Mira")} invited you to ${ui.core.i18n.I18n.named("group", "Core Team")}"
+                i18n"User ${I18n.named("user", "Mira")} invited you to ${I18n.named("group", "Core Team")}"
               )
               i18nSample(
                 """i18n"Missing translations fall back to English"""",

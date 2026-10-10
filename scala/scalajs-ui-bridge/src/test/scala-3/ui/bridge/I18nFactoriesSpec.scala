@@ -5,6 +5,7 @@ import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.ExecutionContext
 import scala.scalajs.js
+import scala.concurrent.Future
 
 /** Exercises the i18n facade end to end through `ScopeHandleBridge`, the same way a TypeScript
   * consumer's `i18nProvider()`/`t()`/`i18n\`...\`` would -- but built here as the raw JS shapes
@@ -24,7 +25,7 @@ class I18nFactoriesSpec extends AsyncFlatSpec with Matchers {
 
   private def render(
       build: js.Function1[ScopeHandleBridge, Unit]
-  ): scala.concurrent.Future[SsrResultHandle] =
+  ): Future[SsrResultHandle] =
     runtime.renderToString(build, js.undefined).toFuture
 
   /** The `RuntimeMessageFacade` shape `i18n.ts`'s `` i18n`Hello ${named("name", "Mira")}` ``

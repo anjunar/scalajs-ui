@@ -1,10 +1,6 @@
 package ui.bridge
 
-import ui.core.state.{
-  Disposable => CoreDisposable,
-  ReadOnlyProperty => CoreReadOnlyProperty,
-  WritableProperty => CoreWritableProperty
-}
+import ui.core.state.{Disposable as CoreDisposable, ReadOnlyProperty as CoreReadOnlyProperty, WritableProperty as CoreWritableProperty}
 
 import scala.scalajs.js
 

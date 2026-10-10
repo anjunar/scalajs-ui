@@ -4,19 +4,13 @@ import ui.core.component.{AbstractComponent, AbstractCustomComponent}
 import ui.core.layout.{Anchor, TextComponent}
 import ui.core.dsl.DslLayer
 import ui.core.render.Cursor
-import ui.router.{
-  Route,
-  RouteContext => CoreRouteContext,
-  RouteFailure,
-  Router,
-  RouterConfig,
-  RouterLink
-}
+import ui.router.{Route, RouteContext as CoreRouteContext, RouteFailure, Router, RouterConfig, RouterLink}
 
 import scala.concurrent.ExecutionContext
 import scala.scalajs.js
 import scala.scalajs.js.JavaScriptException
 import scala.scalajs.js.JSConverters.*
+import scala.concurrent.Future
 private[bridge] object RouterFactories {
 
   def failureKind(failure: RouteFailure): String =
@@ -43,7 +37,7 @@ private[bridge] object RouterFactories {
         // `Router.loadRoute` renders in one pass instead of flashing the loading boundary. Only a
         // real promise goes through `.map`, which the global EC always defers.
         if (js.typeOf(produced) == "function")
-          scala.concurrent.Future.successful(
+          Future.successful(
             routeComponent(produced.asInstanceOf[js.Function1[ScopeHandleBridge, Unit]])
           )
         else

@@ -73,4 +73,3 @@ object I18nRuntime {
     }
 
 }
-

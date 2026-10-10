@@ -11,4 +11,3 @@ private[bridge] object ControlsRuntime {
   @JSExportTopLevel("installControlsRuntime", "controls")
   def install(): Unit = ()
 }
-

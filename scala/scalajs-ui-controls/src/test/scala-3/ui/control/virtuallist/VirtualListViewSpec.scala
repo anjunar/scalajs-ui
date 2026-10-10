@@ -271,4 +271,3 @@ class VirtualListViewSpec extends AnyFlatSpec with Matchers {
     )
   }
 }
-

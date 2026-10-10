@@ -4,4 +4,3 @@ object ResidentKeyRequirement {
   final val Preferred   = "preferred"
   final val Required    = "required"
 }
-

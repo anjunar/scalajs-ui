@@ -49,4 +49,3 @@ class InputSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(root)
   }
 }
-

@@ -4,4 +4,3 @@ object UserVerificationRequirement {
   final val Preferred   = "preferred"
   final val Required    = "required"
 }
-

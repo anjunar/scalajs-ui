@@ -12,4 +12,3 @@ enum MessageState {
   case NeedsReview(reason: String)
   case Obsolete
 }
-

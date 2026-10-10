@@ -10,11 +10,12 @@ import org.scalatest.matchers.should.Matchers
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success}
+import scala.scalajs.concurrent.JSExecutionContext
 
 class AsyncRenderContextSpec extends AsyncFlatSpec with Matchers {
 
   override implicit def executionContext: ExecutionContext =
-    scala.scalajs.concurrent.JSExecutionContext.queue
+    JSExecutionContext.queue
 
   "AsyncRenderContext" should "propagate rendering failures" in {
     val context = new AsyncRenderContext()

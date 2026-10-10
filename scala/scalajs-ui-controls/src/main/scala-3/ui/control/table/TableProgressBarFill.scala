@@ -5,7 +5,8 @@ import ui.core.dsl.ClassDsl.addClass
 import ui.core.dsl.DslLayer
 import ui.core.dsl.StyleDsl.*
 import ui.core.render.Cursor
-private final class TableProgressBarFill(progress: ui.core.state.ReadOnlyProperty[Double])
+import ui.core.state.ReadOnlyProperty
+private final class TableProgressBarFill(progress: ReadOnlyProperty[Double])
     extends AbstractComponent {
   override val tagName: String = "span"
 

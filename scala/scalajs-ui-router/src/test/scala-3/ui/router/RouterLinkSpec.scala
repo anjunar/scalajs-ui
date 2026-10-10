@@ -99,4 +99,3 @@ class RouterLinkSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(root)
   }
 }
-

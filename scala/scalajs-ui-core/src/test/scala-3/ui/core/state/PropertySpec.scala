@@ -32,10 +32,10 @@ class PropertySpec extends AnyFlatSpec with Matchers {
   }
 
   it should "skip observers disposed earlier in the same notification" in {
-    val source = Property(0)
-    val observed = mutable.ArrayBuffer.empty[Int]
+    val source            = Property(0)
+    val observed          = mutable.ArrayBuffer.empty[Int]
     var later: Disposable = Disposable.empty
-    val first = source.observeWithoutInitial(_ => later.dispose())
+    val first             = source.observeWithoutInitial(_ => later.dispose())
     later = source.observeWithoutInitial(value => observed += value)
     val last = source.observeWithoutInitial(value => observed += value * 10)
 

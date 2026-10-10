@@ -48,4 +48,3 @@ object RemoteLoader {
   )(decode: (js.Any, Query) => RemotePage[V, Query]): RemoteLoader[V, Query] =
     RemoteLoader(query => fetchPage(requestFor(query), query, decode, executionContext))
 }
-

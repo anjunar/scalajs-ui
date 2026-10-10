@@ -152,4 +152,3 @@ class ImageCropperSpec extends AnyFlatSpec with Matchers {
       Some("https://example.test/image.png")
   }
 }
-

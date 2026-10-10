@@ -8,6 +8,7 @@ import org.scalajs.dom
 import scala.scalajs.js
 
 import scala.collection.mutable
+import ui.core.render.HostMutationGuard
 
 abstract class AbstractComponent
     extends ClassDsl
@@ -138,7 +139,7 @@ abstract class AbstractComponent
 
   private def checkClassWrite(): Unit =
     if (!isVirtual && !isText && _host != null)
-      ui.core.render.HostMutationGuard.checkWrite(_host)
+      HostMutationGuard.checkWrite(_host)
 
   private[ui] def hostBound(): Unit =
     syncClasses()
@@ -151,7 +152,7 @@ abstract class AbstractComponent
 
   def dispose(): Unit = {
     if (disposed) return
-    physicalHosts.foreach(ui.core.render.HostMutationGuard.checkRemoval)
+    physicalHosts.foreach(HostMutationGuard.checkRemoval)
     disposed = true
     var firstFailure: Throwable | Null = null
     _children.foreach { child =>

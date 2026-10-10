@@ -33,4 +33,3 @@ final class TableChoiceBoxCell[S, T](
       )
     )
 }
-

@@ -6,6 +6,7 @@ import ui.core.render.{Cursor, SsrCursor}
 import ui.viewport.Viewport.viewport
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import ui.core.state.Property
 
 /** The lifecycle half of the Viewport contract, next to ViewportStateSpec.
   *
@@ -78,8 +79,12 @@ class ViewportLifecycleSpec extends AnyFlatSpec with Matchers {
 
   it should "reuse a hidden window and keep a single mounted instance" in {
     val fixture = mountViewport()
-    val conf = Viewport.WindowConf("Player", placement = Viewport.WindowPlacement.Centered,
-      mobileSheet = false, closeBehavior = Viewport.WindowCloseBehavior.Hide) {}
+    val conf    = Viewport.WindowConf(
+      "Player",
+      placement = Viewport.WindowPlacement.Centered,
+      mobileSheet = false,
+      closeBehavior = Viewport.WindowCloseBehavior.Hide
+    ) {}
 
     fixture.viewport.addWindow(conf)
     fixture.viewport.hideWindow(conf)
@@ -93,7 +98,7 @@ class ViewportLifecycleSpec extends AnyFlatSpec with Matchers {
 
   it should "retain a dragged centered window's position while it remains visible" in {
     val fixture = mountViewport()
-    val conf = Viewport.WindowConf("Player", placement = Viewport.WindowPlacement.Centered) {}
+    val conf    = Viewport.WindowConf("Player", placement = Viewport.WindowPlacement.Centered) {}
     fixture.viewport.addWindow(conf)
     conf.leftPx.set(145)
     conf.topPx.set(185)
@@ -130,7 +135,7 @@ class ViewportLifecycleSpec extends AnyFlatSpec with Matchers {
     val fixture = mountViewport()
 
     val conf = fixture.viewport.notifyProperty(
-      ui.core.state.Property("Saved"),
+      Property("Saved"),
       Viewport.NotificationKind.Info,
       durationMs = 3000
     )
@@ -152,7 +157,7 @@ class ViewportLifecycleSpec extends AnyFlatSpec with Matchers {
       anchor = None,
       body = _ ?=> _ ?=> (),
       widthPx = None,
-      effectiveWidthProperty = ui.core.state.Property(0.0)
+      effectiveWidthProperty = Property(0.0)
     )
 
     fixture.viewport.addOverlay(conf)
@@ -175,4 +180,3 @@ class ViewportLifecycleSpec extends AnyFlatSpec with Matchers {
 
   private final case class Fixture(root: AbstractComponent, viewport: Viewport)
 }
-

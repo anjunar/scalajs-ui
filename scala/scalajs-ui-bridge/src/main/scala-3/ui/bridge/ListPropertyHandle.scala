@@ -1,6 +1,6 @@
 package ui.bridge
 
-import ui.core.state.{ListProperty => CoreListProperty}
+import ui.core.state.{ListProperty as CoreListProperty}
 
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*

@@ -1,18 +1,6 @@
 package ui.bridge
 
-import ember.editor.core.{
-  Affinity,
-  Commit,
-  Document,
-  NodeId,
-  NodeIdGenerator,
-  NodeSelection,
-  Origin,
-  Point,
-  RangeSelection,
-  Schema,
-  Selection
-}
+import ember.editor.core.{Affinity, Commit, Document, NodeId, NodeIdGenerator, NodeSelection, Origin, Point, RangeSelection, Schema, Selection}
 import ember.editor.forms.FieldCodec
 import ember.editor.json.{DocumentJson, JsonSupport}
 import ember.editor.markdown.{LossPolicy, MarkdownCodec, MarkdownSupport}

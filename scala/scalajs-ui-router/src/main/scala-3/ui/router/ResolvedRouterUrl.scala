@@ -16,4 +16,3 @@ private[router] final case class ResolvedRouterUrl(
   def fragment: Option[String] =
     Option(hash.stripPrefix("#")).filter(_.nonEmpty).map(RouterConfig.decode)
 }
-

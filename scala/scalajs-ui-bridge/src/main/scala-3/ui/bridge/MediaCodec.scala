@@ -5,12 +5,7 @@ import ui.core.dsl.DslLayer
 import ui.core.dsl.DslLayer.render
 import ui.core.dsl.EventDsl.on
 import ui.core.render.Cursor
-import ui.core.state.{
-  CompositeDisposable,
-  Disposable => CoreDisposable,
-  ListProperty => CoreListProperty,
-  Property => CoreProperty
-}
+import ui.core.state.{CompositeDisposable, Disposable as CoreDisposable, ListProperty as CoreListProperty, Property as CoreProperty}
 import ui.forms.*
 import ui.forms.Form.FormContext
 import ui.forms.validators.{Validator, ValidatorFactory}
@@ -19,6 +14,7 @@ import reflect.Annotation
 
 import scala.collection.mutable
 import scala.scalajs.js
+import java.util
 
 /** Converts between `ui.forms.Media` (a Scala class of `Property`-wrapped fields, built for the
   * Scala.js-only `ImageCropper` UI) and the plain JSON-shaped value a TS model field can actually
@@ -52,7 +48,7 @@ private[bridge] object MediaCodec {
     else {
       val dict = value.asInstanceOf[js.Dictionary[js.Any]]
       new Media(
-        id = CoreProperty(java.util.UUID.fromString(stringField(dict, "id"))),
+        id = CoreProperty(util.UUID.fromString(stringField(dict, "id"))),
         name = CoreProperty(stringField(dict, "name")),
         contentType = CoreProperty(stringField(dict, "contentType")),
         data = CoreProperty(stringField(dict, "data")),
@@ -69,7 +65,7 @@ private[bridge] object MediaCodec {
   private def thumbnailFromJs(value: js.Any): Thumbnail = {
     val dict = value.asInstanceOf[js.Dictionary[js.Any]]
     new Thumbnail(
-      id = CoreProperty(java.util.UUID.fromString(stringField(dict, "id"))),
+      id = CoreProperty(util.UUID.fromString(stringField(dict, "id"))),
       name = CoreProperty(stringField(dict, "name")),
       contentType = CoreProperty(stringField(dict, "contentType")),
       data = CoreProperty(stringField(dict, "data"))

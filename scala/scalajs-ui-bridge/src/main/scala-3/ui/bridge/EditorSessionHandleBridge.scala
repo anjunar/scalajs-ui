@@ -1,22 +1,16 @@
 package ui.bridge
 
-import ember.editor.core.{
-  EditorSession,
-  ExtensionResolver,
-  NodeId,
-  NodeIdGenerator,
-  Origin,
-  Subscription,
-  TransactionMeta
-}
+import ember.editor.core.{EditorSession, ExtensionResolver, NodeId, NodeIdGenerator, Origin, Subscription, TransactionMeta}
 import ember.editor.history.History
 import ember.editor.link.LinkUrlPolicy
 import ember.editor.richtext.RichText
-import ui.core.state.{Disposable => CoreDisposable}
+import ui.core.state.{Disposable as CoreDisposable}
 import ui.editor.NativeEditorBinding
 
 import scala.collection.mutable
 import scala.scalajs.js
+import ember.editor.core.Commit
+import ember.editor.core.Document
 
 /** An Ember session, as TypeScript holds it (architecture §23).
   *
@@ -149,7 +143,7 @@ final class EditorSessionHandleBridge private[bridge] (
       if (owned) session.dispose()
     }
 
-  private def replace(document: Either[String, ember.editor.core.Document]): js.Object =
+  private def replace(document: Either[String, Document]): js.Object =
     document.fold(
       EditorDtos.failure,
       next =>
@@ -160,7 +154,7 @@ final class EditorSessionHandleBridge private[bridge] (
           .fold(error => EditorDtos.failure(error.message), revisionResult)
     )
 
-  private def revisionResult(commit: ember.editor.core.Commit): js.Object =
+  private def revisionResult(commit: Commit): js.Object =
     js.Dynamic.literal(ok = true, revision = commit.current.revision.value.toDouble)
 
   private def allowLoss(options: js.Any, where: String): Boolean =

@@ -1,11 +1,6 @@
 package ui.control.datagrid
 
-import ui.control.virtualized.{
-  CollectionDisplayMode,
-  CrawlableCollection,
-  GridGeometry,
-  VirtualizedCollection
-}
+import ui.control.virtualized.{CollectionDisplayMode, CrawlableCollection, GridGeometry, VirtualizedCollection}
 import ui.control.datagrid.DataGrid
 import ui.core.component.AbstractComponent
 import ui.core.remote.RemoteSort

@@ -35,4 +35,3 @@ import scala.scalajs.js
 enum CollectionDisplayMode {
   case Paging, Scrolling
 }
-

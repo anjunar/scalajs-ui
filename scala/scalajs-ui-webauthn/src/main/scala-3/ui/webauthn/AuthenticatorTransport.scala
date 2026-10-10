@@ -7,4 +7,3 @@ object AuthenticatorTransport {
   final val Hybrid    = "hybrid"
   final val Internal  = "internal"
 }
-

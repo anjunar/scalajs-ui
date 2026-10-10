@@ -15,4 +15,3 @@ private abstract class ControlRoot extends AbstractComponent {
   override def compose(cursor: Cursor): Unit =
     render(this, cursor) { content }
 }
-

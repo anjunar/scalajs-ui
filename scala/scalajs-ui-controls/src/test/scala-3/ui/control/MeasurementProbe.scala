@@ -3,12 +3,7 @@ package ui.control
 import ui.control.datagrid.DataGrid
 import ui.control.table.TableView
 import ui.control.virtuallist.VirtualListView
-import ui.control.virtualized.{
-  CollectionDisplayMode,
-  FixedRowGeometry,
-  ItemGeometry,
-  VirtualizedCollection
-}
+import ui.control.virtualized.{CollectionDisplayMode, FixedRowGeometry, ItemGeometry, VirtualizedCollection}
 import ui.core.component.{AbstractComponent, Runtime}
 import ui.core.dsl.DslLayer
 import ui.core.layout.Div.div
@@ -17,12 +12,13 @@ import ui.core.render.{Cursor, SsrCursor}
 import ui.core.state.ListProperty
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import scala.scalajs.js.Array
 
 /** Minimal VirtualizedCollection that observes only whether a measurement notifies its follow-ups.
   */
 private final class MeasurementProbe(itemCount: Int = 0, crawlOffset: Int = 0)
     extends VirtualizedCollection[String](
-      ListProperty(scala.scalajs.js.Array((0 until itemCount).map(_.toString)*))
+      ListProperty(Array((0 until itemCount).map(_.toString)*))
     ) {
 
   override val tagName: String = "div"
@@ -65,4 +61,3 @@ private final class MeasurementProbe(itemCount: Int = 0, crawlOffset: Int = 0)
 
   override def compose(cursor: Cursor): Unit = ()
 }
-

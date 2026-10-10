@@ -8,4 +8,3 @@ object CoseAlgorithmIdentifier {
   final val RS384 = -258
   final val RS512 = -259
 }
-

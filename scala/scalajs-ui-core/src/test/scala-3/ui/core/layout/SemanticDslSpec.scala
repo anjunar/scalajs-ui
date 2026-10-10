@@ -63,9 +63,13 @@ class SemanticDslSpec extends AnyFlatSpec with Matchers {
 
     val html = cursor.collectHtml()
     html should include("<header><nav aria-label=\"Primary\"><ul><li>Home</li></ul></nav></header>")
-    html should include("<main><section><figure><img src=\"/cover.jpg\" alt=\"Cover\" width=\"354\" height=\"354\" decoding=\"async\">")
+    html should include(
+      "<main><section><figure><img src=\"/cover.jpg\" alt=\"Cover\" width=\"354\" height=\"354\" decoding=\"async\">"
+    )
     html should include("<figcaption>Cover art</figcaption></figure></section>")
-    html should include("<iframe src=\"https://example.com/player\" title=\"Player\" allowfullscreen=\"true\"></iframe>")
+    html should include(
+      "<iframe src=\"https://example.com/player\" title=\"Player\" allowfullscreen=\"true\"></iframe>"
+    )
     html should endWith("<footer>End</footer></div>")
 
     Runtime.unmount(root)

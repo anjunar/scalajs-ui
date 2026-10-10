@@ -1,18 +1,10 @@
 package ui.bridge
 
-import ember.editor.core.{
-  EditorSession,
-  ExtensionResolver,
-  NodeId,
-  NodeIdGenerator,
-  Origin,
-  Subscription,
-  TransactionMeta
-}
+import ember.editor.core.{EditorSession, ExtensionResolver, NodeId, NodeIdGenerator, Origin, Subscription, TransactionMeta}
 import ember.editor.history.History
 import ember.editor.link.LinkUrlPolicy
 import ember.editor.richtext.RichText
-import ui.core.state.{Disposable => CoreDisposable}
+import ui.core.state.{Disposable as CoreDisposable}
 import ui.editor.NativeEditorBinding
 
 import scala.collection.mutable

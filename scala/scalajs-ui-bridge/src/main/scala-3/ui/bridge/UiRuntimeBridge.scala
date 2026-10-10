@@ -4,7 +4,7 @@ import ui.core.async.AsyncRenderContext
 import ui.core.component.{AbstractComponent, Runtime}
 import ui.core.render.{Cursor, DomCursor, HydratingCursor}
 import ui.core.request.{RequestContext, RequestHeaders}
-import ui.core.state.{ListProperty => CoreListProperty, Property => CoreProperty}
+import ui.core.state.{ListProperty as CoreListProperty, Property as CoreProperty}
 import org.scalajs.dom
 
 import scala.concurrent.{ExecutionContext, Future}

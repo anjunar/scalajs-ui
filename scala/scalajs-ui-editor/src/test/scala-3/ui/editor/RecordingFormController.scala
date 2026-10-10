@@ -29,4 +29,3 @@ private final class RecordingFormController extends FormController {
   override def clearErrors(): Unit                                    = ()
   override def resetInteractionState(): Unit                          = ()
 }
-

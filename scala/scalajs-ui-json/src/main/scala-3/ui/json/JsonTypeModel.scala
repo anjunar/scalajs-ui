@@ -1,12 +1,6 @@
 package ui.json
 
-import reflect.{
-  ArrayTypeDescriptor,
-  ClassDescriptor,
-  ParameterizedTypeDescriptor,
-  TypeDescriptor,
-  TypeVariableDescriptor
-}
+import reflect.{ArrayTypeDescriptor, ClassDescriptor, ParameterizedTypeDescriptor, TypeDescriptor, TypeVariableDescriptor}
 
 private[json] object JsonTypeModel {
 

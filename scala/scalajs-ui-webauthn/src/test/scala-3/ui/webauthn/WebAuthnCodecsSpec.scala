@@ -5,6 +5,7 @@ import org.scalatest.matchers.should.Matchers
 
 import scala.scalajs.js
 import scala.scalajs.js.typedarray.Uint8Array
+import scala.scalajs.js.typedarray.ArrayBuffer
 
 class WebAuthnCodecsSpec extends AnyFlatSpec with Matchers {
 
@@ -108,10 +109,8 @@ class WebAuthnCodecsSpec extends AnyFlatSpec with Matchers {
           clientDataJSON = bytes(4, 5).buffer,
           attestationObject = bytes(6, 7).buffer,
           getTransports = (() => js.Array("internal")): js.Function0[js.Array[String]],
-          getAuthenticatorData =
-            (() => bytes(8, 9).buffer): js.Function0[scala.scalajs.js.typedarray.ArrayBuffer],
-          getPublicKey =
-            (() => bytes(10, 11).buffer): js.Function0[scala.scalajs.js.typedarray.ArrayBuffer],
+          getAuthenticatorData = (() => bytes(8, 9).buffer): js.Function0[ArrayBuffer],
+          getPublicKey = (() => bytes(10, 11).buffer): js.Function0[ArrayBuffer],
           getPublicKeyAlgorithm = (() => -7): js.Function0[Int]
         ),
         getClientExtensionResults = (
@@ -192,22 +191,26 @@ class WebAuthnCodecsSpec extends AnyFlatSpec with Matchers {
 
   it should "hand options to the browser's own JSON parsers where the browser has them" in {
     val global = js.Dynamic.global.globalThis
-    val calls = js.Array[String]()
+    val calls  = js.Array[String]()
     val parsed = js.Dynamic.literal(parsed = true)
-    val api = js.Dynamic.literal()
-    api.updateDynamic("parseCreationOptionsFromJSON")(js.ThisFunction.fromFunction2 { (self: js.Dynamic, value: js.Dynamic) =>
-      calls.push(s"creation:${value.selectDynamic("challenge")}:${self eq api}")
-      parsed
+    val api    = js.Dynamic.literal()
+    api.updateDynamic("parseCreationOptionsFromJSON")(js.ThisFunction.fromFunction2 {
+      (self: js.Dynamic, value: js.Dynamic) =>
+        calls.push(s"creation:${value.selectDynamic("challenge")}:${self eq api}")
+        parsed
     })
-    api.updateDynamic("parseRequestOptionsFromJSON")(js.ThisFunction.fromFunction2 { (self: js.Dynamic, value: js.Dynamic) =>
-      calls.push(s"request:${value.selectDynamic("challenge")}:${self eq api}")
-      parsed
+    api.updateDynamic("parseRequestOptionsFromJSON")(js.ThisFunction.fromFunction2 {
+      (self: js.Dynamic, value: js.Dynamic) =>
+        calls.push(s"request:${value.selectDynamic("challenge")}:${self eq api}")
+        parsed
     })
     val previous = global.selectDynamic("PublicKeyCredential")
     global.updateDynamic("PublicKeyCredential")(api)
     try {
-      val creation = WebAuthnCodecs.creationOptionsFromJson(js.Dynamic.literal(challenge = "Y3JlYXRl"))
-      val request = WebAuthnCodecs.requestOptionsFromJson(js.Dynamic.literal(challenge = "cmVxdWVzdA"))
+      val creation =
+        WebAuthnCodecs.creationOptionsFromJson(js.Dynamic.literal(challenge = "Y3JlYXRl"))
+      val request =
+        WebAuthnCodecs.requestOptionsFromJson(js.Dynamic.literal(challenge = "cmVxdWVzdA"))
       (creation.asInstanceOf[js.Any] eq parsed) shouldBe true
       (request.asInstanceOf[js.Any] eq parsed) shouldBe true
       calls.toSeq shouldBe Seq("creation:Y3JlYXRl:true", "request:cmVxdWVzdA:true")

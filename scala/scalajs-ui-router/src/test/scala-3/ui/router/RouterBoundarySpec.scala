@@ -232,4 +232,3 @@ class RouterBoundarySpec extends AnyFlatSpec with Matchers {
       text(value) {}
     }
 }
-

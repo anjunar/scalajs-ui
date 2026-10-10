@@ -10,4 +10,3 @@ private[bridge] object ViewportRuntime {
   @JSExportTopLevel("installViewportRuntime", "viewport")
   def install(): Unit = ()
 }
-

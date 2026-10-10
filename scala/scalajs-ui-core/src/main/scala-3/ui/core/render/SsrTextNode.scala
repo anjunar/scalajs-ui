@@ -29,7 +29,8 @@ object SsrTextNode {
     * merged Text node, the same reason an empty text node needs [[EmptyAnchor]]: HTML has no way to
     * serialize two sibling text runs without an element or comment between them. Unlike
     * `EmptyAnchor`, this stands for no node of its own; [[HydratingCursor]] skips it as it would
-    * skip inter-element whitespace, so it never becomes a hydration fault's "found" node either. */
+    * skip inter-element whitespace, so it never becomes a hydration fault's "found" node either.
+    */
   val BoundaryLabel: String = "ui:text-boundary"
 
   val Boundary: String = s"<!--$BoundaryLabel-->"

@@ -2,10 +2,10 @@ import sbt._
 
 /** Generates `app.SiteConfig` from `site.config.json`.
   *
-  * The deployment path must not be maintained twice. `site.config.json` feeds sitemap.xml/robots.txt
-  * (tools/) and Scala code through this generator. This is deliberately a generator rather than
-  * runtime detection: SSR has no DOM and therefore cannot read a `<base href>`, while a differing
-  * basePath between server and browser breaks hydration.
+  * The deployment path must not be maintained twice. `site.config.json` feeds
+  * sitemap.xml/robots.txt (tools/) and Scala code through this generator. This is deliberately a
+  * generator rather than runtime detection: SSR has no DOM and therefore cannot read a
+  * `<base href>`, while a differing basePath between server and browser breaks hydration.
   *
   * Since the document head is rendered from Scala, every metadata field the head needs comes
   * through here as well -- there is no longer an index.html that a Vite plugin could fill in.

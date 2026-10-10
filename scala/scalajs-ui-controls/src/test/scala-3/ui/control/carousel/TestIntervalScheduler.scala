@@ -38,4 +38,3 @@ private final class TestIntervalScheduler extends IntervalScheduler {
 
   def activeTaskCount: Int = tasks.count(_.active)
 }
-

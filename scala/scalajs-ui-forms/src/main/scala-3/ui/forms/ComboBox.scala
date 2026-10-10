@@ -19,6 +19,7 @@ import ui.forms.Form.FormContext
 import ui.viewport.Overlay
 import ui.viewport.Overlay.*
 import org.scalajs.dom
+import ui.core.render.UiEvent
 
 final class ComboBox[T] private (
     val name: String,
@@ -265,7 +266,7 @@ final class ComboBox[T] private (
     else identityProperty.get(left) == identityProperty.get(right)
   }
 
-  private def handleKeyDown(event: ui.core.render.UiEvent): Unit =
+  private def handleKeyDown(event: UiEvent): Unit =
     event.raw match {
       case keyboard: dom.KeyboardEvent if editableProperty.get =>
         keyboard.key match {

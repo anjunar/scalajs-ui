@@ -9,4 +9,3 @@ private[bridge] object RouterRuntime {
   @JSExportTopLevel("installRouterRuntime", "router")
   def install(): Unit = ()
 }
-

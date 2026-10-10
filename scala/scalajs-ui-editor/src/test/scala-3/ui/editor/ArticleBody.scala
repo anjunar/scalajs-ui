@@ -19,4 +19,3 @@ import org.scalatest.matchers.should.Matchers
 import scala.collection.mutable
 
 private final class ArticleBody(var body: Property[String] = Property(""))
-

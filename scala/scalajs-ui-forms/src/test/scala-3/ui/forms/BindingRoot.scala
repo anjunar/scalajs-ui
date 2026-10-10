@@ -17,4 +17,3 @@ private final class BindingRoot(body: AbstractComponent ?=> Cursor ?=> Unit)
   override def compose(cursor: Cursor): Unit =
     render(this, cursor)(body)
 }
-

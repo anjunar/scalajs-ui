@@ -6,8 +6,10 @@ import ui.core.state.{Property, ReadOnlyProperty}
 import ui.core.text.TextValue
 
 import java.util.regex.Matcher
+import java.lang.{Long as JavaLong}
 
 object I18n {
+
   /** A plain runtime string, e.g. an annotation or server error, using the same key as the macro.
     * Use the i18n interpolator for messages with arguments.
     */
@@ -16,7 +18,13 @@ object I18n {
       (hash ^ char.toLong) * 0x100000001b3L
     }
     RuntimeMessage(
-      MessageKey(source, None, MessageFingerprint(java.lang.Long.toUnsignedString(fingerprint, 16)), Vector.empty, None),
+      MessageKey(
+        source,
+        None,
+        MessageFingerprint(JavaLong.toUnsignedString(fingerprint, 16)),
+        Vector.empty,
+        None
+      ),
       Vector.empty
     )
   }
@@ -36,4 +44,3 @@ object I18n {
   def entry(key: MessageKey): CatalogEntryBuilder =
     CatalogEntryBuilder(key)
 }
-

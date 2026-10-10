@@ -26,4 +26,3 @@ private final class Person(
 private object Person {
   def apply(): Person = new Person()
 }
-

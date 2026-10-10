@@ -3,12 +3,7 @@ package ui.control
 import ui.control.datagrid.DataGrid
 import ui.control.table.TableView
 import ui.control.virtuallist.VirtualListView
-import ui.control.virtualized.{
-  CollectionDisplayMode,
-  FixedRowGeometry,
-  ItemGeometry,
-  VirtualizedCollection
-}
+import ui.control.virtualized.{CollectionDisplayMode, FixedRowGeometry, ItemGeometry, VirtualizedCollection}
 import ui.core.component.{AbstractComponent, Runtime}
 import ui.core.dsl.DslLayer
 import ui.core.layout.Div.div
@@ -17,6 +12,7 @@ import ui.core.render.{Cursor, SsrCursor}
 import ui.core.state.ListProperty
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import scala.scalajs.js.Array
 
 /** TableView adds two follow-ups to inherited counters: bumpRemoteState triggers bumpHeaderState,
   * and refreshItemState triggers refreshSelectedItem.
@@ -31,7 +27,7 @@ class TableViewFollowUpSpec extends AnyFlatSpec with Matchers {
   import ui.control.table.TableView.*
 
   "TableView" should "keep the selected item in sync when the data changes" in {
-    val data = ListProperty(scala.scalajs.js.Array("a", "b", "c"))
+    val data = ListProperty(Array("a", "b", "c"))
 
     var table: TableView[String] | Null = null
     Runtime.mount(

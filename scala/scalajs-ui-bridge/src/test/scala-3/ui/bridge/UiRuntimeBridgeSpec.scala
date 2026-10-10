@@ -7,6 +7,7 @@ import org.scalatest.matchers.should.Matchers
 import scala.concurrent.ExecutionContext
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
+import scala.concurrent.Future
 
 /** Exercises the bridge end to end through its own JS-facing surface -- `ScopeHandleBridge`,
   * `ComponentHandleBridge`, `PropertyHandle`, `ListPropertyHandle` -- the same way a TypeScript
@@ -34,7 +35,7 @@ class UiRuntimeBridgeSpec extends AsyncFlatSpec with Matchers {
 
   private def render(
       build: js.Function1[ScopeHandleBridge, Unit]
-  ): scala.concurrent.Future[SsrResultHandle] =
+  ): Future[SsrResultHandle] =
     runtime.renderToString(build, js.undefined).toFuture
 
   "SSR request headers" should "remain isolated through asynchronous children and normalize repeated values" in {

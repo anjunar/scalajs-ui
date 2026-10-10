@@ -34,9 +34,8 @@ object JsonSchema {
       descriptors: Seq[ClassDescriptor],
       subtypeNames: Map[String, Seq[String]]
   ): JsonSchema[T] = {
-    val basic = descriptors.map(descriptor =>
-      descriptor.typeName -> fromDescriptor[Any](descriptor)
-    ).toMap
+    val basic =
+      descriptors.map(descriptor => descriptor.typeName -> fromDescriptor[Any](descriptor)).toMap
     val schemas = descriptors.map { descriptor =>
       fromDescriptor[Any](
         descriptor,

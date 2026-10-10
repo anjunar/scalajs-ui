@@ -2,7 +2,6 @@ package ui.control.table
 
 import ui.core.state.{ListDataSource, Property, ReadOnlyProperty, WritableProperty}
 
-
 /** One table-owned edit session. It coordinates state and write-back, but deliberately does not
   * prescribe an editor component or keyboard policy.
   */

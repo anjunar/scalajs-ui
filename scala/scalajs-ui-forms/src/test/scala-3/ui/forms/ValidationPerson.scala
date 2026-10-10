@@ -16,7 +16,6 @@ import scala.annotation.meta.field
 
 class ValidationPerson {
   @(NotBlank @field)(message = "Name is required")
-  val name: Property[String] = Property("")
+  val name: Property[String]               = Property("")
   val contact: Property[ValidationContact] = Property(new ValidationContact)
 }
-

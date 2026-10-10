@@ -2,7 +2,7 @@ package ui.bridge
 
 import java.time.format.DateTimeFormatter
 import java.time.{Instant, LocalDate, LocalDateTime, ZoneId}
-import java.util.Locale
+import java.util
 import scala.scalajs.js.annotation.{JSExport, JSExportAll, JSExportTopLevel}
 
 @JSExportAll
@@ -14,6 +14,5 @@ final class JsLocalDateTime private[bridge] (private val underlying: LocalDateTi
   def minute: Int                                          = underlying.getMinute
   override def toString: String                            = underlying.toString
   def format(pattern: String, languageTag: String): String =
-    underlying.format(DateTimeFormatter.ofPattern(pattern, Locale.forLanguageTag(languageTag)))
+    underlying.format(DateTimeFormatter.ofPattern(pattern, util.Locale.forLanguageTag(languageTag)))
 }
-

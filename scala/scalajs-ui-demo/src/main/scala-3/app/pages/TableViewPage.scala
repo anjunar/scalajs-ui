@@ -5,17 +5,7 @@ import scala.concurrent.Future
 import app.components.Showcase.*
 import ui.control.table.TableColumn.*
 import ui.control.table.TableView.*
-import ui.control.table.{
-  ColumnResizePolicy,
-  CustomColumnResizePolicy,
-  TableCell,
-  TableColumn,
-  TableDirection,
-  TableRow,
-  TableSelectionMode,
-  TableSort,
-  TableView
-}
+import ui.control.table.{ColumnResizePolicy, CustomColumnResizePolicy, TableCell, TableColumn, TableDirection, TableRow, TableSelectionMode, TableSort, TableView}
 import ui.core.component.AbstractComponent
 import ui.core.remote.{RemoteListProperty, RemoteLoader, RemotePage, RemoteSort}
 import ui.core.dsl.AttributeDsl.setAttribute
@@ -209,9 +199,7 @@ object TableViewPage {
     val status       = Property("Double-click a row to inspect it.")
     val lastEdit     = Property("—")
     val loadedStatus = books.totalCountProperty.flatMap { totalCount =>
-      books.loadedLengthProperty.map(loaded =>
-        s"$loaded / ${totalCount.getOrElse(loaded)}"
-      )
+      books.loadedLengthProperty.map(loaded => s"$loaded / ${totalCount.getOrElse(loaded)}")
     }
 
     showcasePage(i18n"TableView", i18n"Reactive rows with a stable SSR and hydration structure.") {
@@ -437,7 +425,9 @@ object TableViewPage {
                             text(
                               itemProperty.map(item =>
                                 Option(item)
-                                  .fold("")(book => s"${book.title} · ${book.author} · ${book.year}")
+                                  .fold("")(book =>
+                                    s"${book.title} · ${book.author} · ${book.year}"
+                                  )
                               )
                             ) {}
                           }

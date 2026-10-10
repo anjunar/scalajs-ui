@@ -10,4 +10,3 @@ final case class TableEditCommitEvent[S, T](
     oldValue: T,
     newValue: T
 )
-

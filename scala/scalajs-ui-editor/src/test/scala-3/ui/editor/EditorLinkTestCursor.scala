@@ -32,4 +32,3 @@ private final class EditorLinkTestCursor(onCreate: EditorLinkTestHostElement => 
 
   override def sub(host: HostElement): Cursor = this
 }
-

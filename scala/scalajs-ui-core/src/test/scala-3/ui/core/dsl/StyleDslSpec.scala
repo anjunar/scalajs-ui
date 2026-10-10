@@ -114,4 +114,3 @@ class StyleDslSpec extends AnyFlatSpec with Matchers {
     missingRead shouldBe ""
   }
 }
-

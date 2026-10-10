@@ -5,7 +5,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import reflect.macros.ReflectMacros
 
-import java.util.UUID
+import java.util
 import scala.annotation.meta.field
 import scala.collection.immutable.ListMap
 import scala.scalajs.js
@@ -15,7 +15,7 @@ import scala.scalajs.reflect.annotation.EnableReflectiveInstantiation
 
 final class ValueTypes(
     var optional: Property[Option[String]] = Property(None),
-    var identifiers: Property[ListMap[String, UUID]] = Property(ListMap.empty),
+    var identifiers: Property[ListMap[String, util.UUID]] = Property(ListMap.empty),
     var numbers: Property[List[Int]] = Property(Nil),
     var array: Property[Array[Int]] = Property(Array.empty),
     var jsArray: Property[js.Array[Int]] = Property(js.Array()),
@@ -28,4 +28,3 @@ final class ValueTypes(
     var raw: Property[js.Any] = Property(null),
     var replies: Property[Array[Reply]] = Property(Array.empty)
 )
-

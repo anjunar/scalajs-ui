@@ -5,12 +5,7 @@ import ui.core.dsl.DslLayer
 import ui.core.dsl.DslLayer.render
 import ui.core.dsl.EventDsl.on
 import ui.core.render.Cursor
-import ui.core.state.{
-  CompositeDisposable,
-  Disposable => CoreDisposable,
-  ListProperty => CoreListProperty,
-  Property => CoreProperty
-}
+import ui.core.state.{CompositeDisposable, Disposable as CoreDisposable, ListProperty as CoreListProperty, Property as CoreProperty}
 import ui.forms.*
 import ui.forms.Form.FormContext
 import ui.forms.validators.{Validator, ValidatorFactory}
@@ -32,4 +27,3 @@ private[bridge] object FieldSetFactory extends ComponentFactory {
     }
   }
 }
-

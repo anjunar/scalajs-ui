@@ -9,4 +9,3 @@ final case class CredentialCreationSettings(
     signal: Option[AbortSignal] = None,
     mediation: Option[String] = None
 )
-

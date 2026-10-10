@@ -24,4 +24,3 @@ object RouterLinkHandler {
   def inject(using component: AbstractComponent): Option[RouterLinkHandler] =
     RouterLinkContext.inject
 }
-

@@ -65,4 +65,3 @@ final case class RestRequest(
     init.asInstanceOf[dom.RequestInit]
   }
 }
-

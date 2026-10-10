@@ -17,4 +17,3 @@ final class TableCheckBoxCell[S] extends TableCell[S, Boolean] {
   override protected def renderContent(using AbstractComponent, Cursor): Unit =
     DslLayer.child(new TableCheckBoxEditor(this)) {}
 }
-

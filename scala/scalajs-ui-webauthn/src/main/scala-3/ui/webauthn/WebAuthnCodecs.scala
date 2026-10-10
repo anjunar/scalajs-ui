@@ -179,8 +179,9 @@ object WebAuthnCodecs {
       transports = stringArray(value, "transports").toSeq
     )
 
-  /** The browser's own parser, called on `PublicKeyCredential` itself. A plain Scala function: casting one to a
-    * `js.Function1` does not make it callable from JavaScript ("x0 is not a function").
+  /** The browser's own parser, called on `PublicKeyCredential` itself. A plain Scala function:
+    * casting one to a `js.Function1` does not make it callable from JavaScript ("x0 is not a
+    * function").
     */
   private def nativeParser(name: String): Option[js.Any => js.Any] =
     publicKeyCredentialApi.flatMap { api =>

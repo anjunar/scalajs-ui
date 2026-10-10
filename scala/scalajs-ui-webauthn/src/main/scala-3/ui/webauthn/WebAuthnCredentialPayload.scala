@@ -12,4 +12,3 @@ trait WebAuthnCredentialPayload {
 
   final def toJson: String = js.JSON.stringify(toJsObject)
 }
-

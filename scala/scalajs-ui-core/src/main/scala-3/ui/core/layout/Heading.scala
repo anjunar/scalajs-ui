@@ -10,7 +10,9 @@ class Heading(level: Int) extends AbstractComponent {
 }
 
 object Heading {
-  def heading(level: Int)(body: Heading ?=> Cursor ?=> Unit = {})(using AbstractComponent, Cursor): Heading =
+  def heading(
+      level: Int
+  )(body: Heading ?=> Cursor ?=> Unit = {})(using AbstractComponent, Cursor): Heading =
     DslLayer.child(new Heading(level)) {
       body
     }

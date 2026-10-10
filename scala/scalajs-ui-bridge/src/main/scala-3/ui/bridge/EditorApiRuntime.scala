@@ -10,4 +10,3 @@ private[bridge] object EditorApiRuntime {
   @JSExportTopLevel("editorApi", "editor")
   val editorApi: EditorApiBridge = new EditorApiBridge()
 }
-

@@ -8,6 +8,9 @@ import ui.core.dsl.StyleDsl.*
 import ui.core.layout.TextComponent.text
 import ui.core.render.Cursor
 import ui.core.state.{Disposable, Property, ReadOnlyProperty}
+import org.scalajs.dom.Element
+import org.scalajs.dom.MouseEvent
+import ui.core.render.DomHostElement
 
 class TableCell[S, T] extends AbstractComponent {
   override val tagName: String = "div"
@@ -115,11 +118,11 @@ class TableCell[S, T] extends AbstractComponent {
         )
         onClick { event =>
           event.raw match {
-            case mouse: org.scalajs.dom.MouseEvent if !emptyProperty.get && !disabledProperty.get =>
+            case mouse: MouseEvent if !emptyProperty.get && !disabledProperty.get =>
               val element = host
-                .asInstanceOf[ui.core.render.DomHostElement]
+                .asInstanceOf[DomHostElement]
                 .node
-                .asInstanceOf[org.scalajs.dom.Element]
+                .asInstanceOf[Element]
               if (TableRowKeyboard.isRowBackground(mouse, element) && table.canMoveColumns) {
                 mouse.stopPropagation()
                 if (table.selectionModel.cellSelectionEnabled)
@@ -143,12 +146,11 @@ class TableCell[S, T] extends AbstractComponent {
         if (supportsIntegratedEditor)
           onDoubleClick { event =>
             event.raw match {
-              case mouse: org.scalajs.dom.MouseEvent
-                  if !emptyProperty.get && !disabledProperty.get =>
+              case mouse: MouseEvent if !emptyProperty.get && !disabledProperty.get =>
                 val element = host
-                  .asInstanceOf[ui.core.render.DomHostElement]
+                  .asInstanceOf[DomHostElement]
                   .node
-                  .asInstanceOf[org.scalajs.dom.Element]
+                  .asInstanceOf[Element]
                 if (TableRowKeyboard.isRowBackground(mouse, element) && startIntegratedEdit()) {
                   mouse.preventDefault()
                   mouse.stopPropagation()

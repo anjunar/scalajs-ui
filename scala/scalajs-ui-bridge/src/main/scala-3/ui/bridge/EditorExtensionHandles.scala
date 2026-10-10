@@ -9,13 +9,7 @@ import ember.editor.link.{LinkExtension, LinkUrlPolicy}
 import ember.editor.list.ListExtension
 import ember.editor.markdown.MarkdownSupport
 import ember.editor.richtext.RichText
-import ember.editor.standard.{
-  ImageJsonSupport,
-  MarkdownRules,
-  MarkdownSupports,
-  StandardJsonCodecs,
-  StandardJsonSupport
-}
+import ember.editor.standard.{ImageJsonSupport, MarkdownRules, MarkdownSupports, StandardJsonCodecs, StandardJsonSupport}
 
 import scala.scalajs.js
 

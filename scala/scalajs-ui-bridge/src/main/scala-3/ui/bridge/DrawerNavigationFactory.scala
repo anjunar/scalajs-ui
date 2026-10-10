@@ -26,4 +26,3 @@ private[bridge] object DrawerNavigationFactory extends ComponentFactory {
         throw new IllegalStateException("drawerNavigation() must be composed inside drawer().")
     }
 }
-

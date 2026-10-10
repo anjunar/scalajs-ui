@@ -20,6 +20,8 @@ import org.scalatest.matchers.should.Matchers
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.scalajs.js
+import ui.control.table.TableDirection
+import ui.viewport.Viewport
 
 class TableViewSpec extends AnyFlatSpec with Matchers {
 
@@ -36,7 +38,7 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
       table.scrollToColumnIndex(1)
       table.scrollToColumnIndex(-1)
       table.scrollToColumn(null)
-      val foreign = new ui.control.table.TableColumn[String, String]("Foreign")
+      val foreign = new TableColumn[String, String]("Foreign")
       table.scrollToColumn(foreign)
       foreign.dispose()
       table.scrollLeftProperty.get shouldBe 0.0
@@ -51,7 +53,7 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
 
   it should "render a deterministic right-to-left table while keeping native scrolling normalized" in {
     val html = renderTable(Seq("Ada")) {
-      direction = ui.control.table.TableDirection.RightToLeft
+      direction = TableDirection.RightToLeft
     }
 
     html should include("dir=\"rtl\"")
@@ -74,7 +76,7 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
         new AbstractComponent {
           override val tagName                       = "main"
           override def compose(cursor: Cursor): Unit = DslLayer.render(this, cursor) {
-            ui.viewport.Viewport.viewport {
+            Viewport.viewport {
               tableView(ListProperty(js.Array("Ada"))) {
                 tableMenuButtonVisible = true
                 column[String, String]("Name") {}

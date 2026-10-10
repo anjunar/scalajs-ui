@@ -4,19 +4,13 @@ import ui.core.component.{AbstractComponent, AbstractCustomComponent}
 import ui.core.layout.{Anchor, TextComponent}
 import ui.core.dsl.DslLayer
 import ui.core.render.Cursor
-import ui.router.{
-  Route,
-  RouteContext => CoreRouteContext,
-  RouteFailure,
-  Router,
-  RouterConfig,
-  RouterLink
-}
+import ui.router.{Route, RouteContext as CoreRouteContext, RouteFailure, Router, RouterConfig, RouterLink}
 
 import scala.concurrent.ExecutionContext
 import scala.scalajs.js
 import scala.scalajs.js.JavaScriptException
 import scala.scalajs.js.JSConverters.*
+import ui.router.RouterState
 
 /** `router` -- mounts a [[RouterViewRoot]] around a `ui.router.Router` with the translated table.
   */
@@ -49,7 +43,7 @@ private[bridge] object RouterFactory extends ComponentFactory {
         RouterFactories.projectConfig(config)
       )
 
-    def pageEvent(state: ui.router.RouterState): js.Object =
+    def pageEvent(state: RouterState): js.Object =
       js.Dynamic.literal(path = state.path, url = state.url)
 
     config.toOption.foreach { callbacks =>

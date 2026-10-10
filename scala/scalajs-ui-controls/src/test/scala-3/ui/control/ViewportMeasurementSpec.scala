@@ -3,12 +3,7 @@ package ui.control
 import ui.control.datagrid.DataGrid
 import ui.control.table.TableView
 import ui.control.virtuallist.VirtualListView
-import ui.control.virtualized.{
-  CollectionDisplayMode,
-  FixedRowGeometry,
-  ItemGeometry,
-  VirtualizedCollection
-}
+import ui.control.virtualized.{CollectionDisplayMode, FixedRowGeometry, ItemGeometry, VirtualizedCollection}
 import ui.core.component.{AbstractComponent, Runtime}
 import ui.core.dsl.DslLayer
 import ui.core.layout.Div.div
@@ -17,6 +12,8 @@ import ui.core.render.{Cursor, SsrCursor}
 import ui.core.state.ListProperty
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import scala.scalajs.js.Array
+import ui.control.table.ColumnResizePolicy
 
 /** The measured viewport size must be applied on both axes.
   *
@@ -38,7 +35,7 @@ class ViewportMeasurementSpec extends AnyFlatSpec with Matchers {
       given AbstractComponent = host
       given Cursor            = cursor
       grid = dataGrid[String](
-        ListProperty(scala.scalajs.js.Array((0 until 40).map(index => s"Item $index")*))
+        ListProperty(Array((0 until 40).map(index => s"Item $index")*))
       ) {
         itemWidthPx = 200
         itemHeightPx = 100
@@ -62,7 +59,7 @@ class ViewportMeasurementSpec extends AnyFlatSpec with Matchers {
     render { (host, cursor) =>
       given AbstractComponent = host
       given Cursor            = cursor
-      table = tableView[String](ListProperty(scala.scalajs.js.Array("a", "b", "c"))) {
+      table = tableView[String](ListProperty(Array("a", "b", "c"))) {
         column[String, String]("Name") {
           prefWidth = 120.0
           cell { item => text(item) {} }
@@ -85,8 +82,8 @@ class ViewportMeasurementSpec extends AnyFlatSpec with Matchers {
     render { (host, cursor) =>
       given AbstractComponent = host
       given Cursor            = cursor
-      table = tableView[String](ListProperty(scala.scalajs.js.Array("a", "b", "c"))) {
-        columnResizePolicy = ui.control.table.ColumnResizePolicy.FlexLastColumn
+      table = tableView[String](ListProperty(Array("a", "b", "c"))) {
+        columnResizePolicy = ColumnResizePolicy.FlexLastColumn
         column[String, String]("Name") {
           prefWidth = 120.0
           cell { item => text(item) {} }
@@ -113,7 +110,7 @@ class ViewportMeasurementSpec extends AnyFlatSpec with Matchers {
       given AbstractComponent = host
       given Cursor            = cursor
       list = virtualList[String](
-        ListProperty(scala.scalajs.js.Array((0 until 20).map(index => s"Item $index")*))
+        ListProperty(Array((0 until 20).map(index => s"Item $index")*))
       ) {
         estimateHeightPx = 40
         cellRenderer = renderer

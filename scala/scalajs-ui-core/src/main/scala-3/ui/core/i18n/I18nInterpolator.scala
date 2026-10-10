@@ -1,6 +1,7 @@
 package ui.core.i18n
 
 import scala.quoted.*
+import java.lang.{Long as JavaLong}
 
 extension (inline sc: StringContext)
   inline def i18n(inline args: Any*): RuntimeMessage =
@@ -135,6 +136,6 @@ private object I18nMacros {
     val hash   = input.foldLeft(offset) { (hash, char) =>
       (hash ^ char.toLong) * prime
     }
-    java.lang.Long.toUnsignedString(hash, 16)
+    JavaLong.toUnsignedString(hash, 16)
   }
 }

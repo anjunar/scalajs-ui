@@ -439,4 +439,3 @@ final class EditorSpec extends AnyFlatSpec with Matchers {
   }
 
 }
-

@@ -25,4 +25,3 @@ object MessageCatalog {
     new MessageCatalog(indexed)
   }
 }
-

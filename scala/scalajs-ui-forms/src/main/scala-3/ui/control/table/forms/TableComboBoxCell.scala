@@ -40,4 +40,3 @@ object TableComboBoxCell {
   )(using column: TableColumn[S, T]): Unit =
     column.cellFactoryProperty.set(Some(_ => new TableComboBoxCell(items, converter, identityBy)))
 }
-

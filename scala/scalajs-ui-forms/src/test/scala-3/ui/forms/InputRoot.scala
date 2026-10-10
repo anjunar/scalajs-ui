@@ -20,4 +20,3 @@ private abstract class InputRoot extends AbstractComponent {
       content
     }
 }
-

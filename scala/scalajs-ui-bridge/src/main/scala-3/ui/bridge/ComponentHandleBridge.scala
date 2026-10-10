@@ -1,7 +1,7 @@
 package ui.bridge
 
 import ui.core.component.{AbstractComponent}
-import ui.core.state.{Disposable => CoreDisposable}
+import ui.core.state.{Disposable as CoreDisposable}
 import ui.forms.ErrorResponse
 
 import scala.scalajs.js

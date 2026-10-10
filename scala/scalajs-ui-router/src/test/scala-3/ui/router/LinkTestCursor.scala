@@ -22,4 +22,3 @@ private final class LinkTestCursor(onCreate: LinkTestHostElement => Unit) extend
 
   override def sub(host: HostElement): Cursor = this
 }
-

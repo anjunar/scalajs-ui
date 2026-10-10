@@ -1,11 +1,12 @@
 package ui.forms.validators
 
 import java.time.{Instant, LocalDate, LocalDateTime, OffsetDateTime, ZonedDateTime}
-import java.util.Date
+import java.util
 import ui.core.i18n.{RuntimeMessage, i18n}
 import scala.scalajs.js
 import scala.util.Try
 import scala.util.matching.Regex
+import java.math.{BigDecimal as JavaBigDecimal}
 
 private object ValidatorSupport {
   val defaultEmailRegex: Regex =
@@ -44,7 +45,7 @@ private object ValidatorSupport {
 
   def toBigDecimal(value: Any): Option[BigDecimal] = value match {
     case big: BigDecimal                                      => Some(big)
-    case big: java.math.BigDecimal                            => Some(BigDecimal(big))
+    case big: JavaBigDecimal                                  => Some(BigDecimal(big))
     case number: Byte                                         => Some(BigDecimal(number))
     case number: Short                                        => Some(BigDecimal(number))
     case number: Int                                          => Some(BigDecimal(number))
@@ -77,7 +78,7 @@ private object ValidatorSupport {
     case value: LocalDateTime  => Some(value.compareTo(LocalDateTime.now()))
     case value: OffsetDateTime => Some(value.compareTo(OffsetDateTime.now()))
     case value: ZonedDateTime  => Some(value.compareTo(ZonedDateTime.now()))
-    case value: Date           => Some(value.compareTo(new Date()))
+    case value: util.Date      => Some(value.compareTo(new util.Date()))
     // HTML date inputs bind ISO local-date strings through Control[String].
     case value: String => Try(LocalDate.parse(value)).toOption.map(_.compareTo(localToday()))
     case _             => None

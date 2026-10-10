@@ -23,4 +23,3 @@ private final class EditorLinkTestTextNode(private var value: String) extends Te
   override def getText: String             = value
   override def renderHtml(): String        = value
 }
-

@@ -21,4 +21,3 @@ object RuntimeMessage {
     ): ReadOnlyProperty[String] =
       I18nRuntime.require.text(value)
 }
-

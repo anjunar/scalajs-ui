@@ -9,4 +9,3 @@ final case class TableEditStartEvent[S, T](
     rowValue: S,
     oldValue: T
 )
-

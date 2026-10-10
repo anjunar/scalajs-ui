@@ -5,4 +5,3 @@ object AttestationConveyancePreference {
   final val Direct     = "direct"
   final val Enterprise = "enterprise"
 }
-

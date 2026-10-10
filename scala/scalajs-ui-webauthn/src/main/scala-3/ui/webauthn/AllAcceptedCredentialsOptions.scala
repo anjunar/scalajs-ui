@@ -17,4 +17,3 @@ final case class AllAcceptedCredentialsOptions(
       allAcceptedCredentialIds = js.Array(allAcceptedCredentialIds*)
     )
 }
-

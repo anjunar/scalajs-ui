@@ -2,7 +2,7 @@ package ui.bridge
 
 import java.time.format.DateTimeFormatter
 import java.time.{Instant, LocalDate, LocalDateTime, ZoneId}
-import java.util.Locale
+import java.util
 import scala.scalajs.js.annotation.{JSExport, JSExportAll, JSExportTopLevel}
 
 /** Stable JavaScript boundary for the scala-java-time implementation already linked into the UI
@@ -16,5 +16,5 @@ final class JsLocalDate private[bridge] (private val underlying: LocalDate) {
   def dayOfMonth: Int                                      = underlying.getDayOfMonth
   override def toString: String                            = underlying.toString
   def format(pattern: String, languageTag: String): String =
-    underlying.format(DateTimeFormatter.ofPattern(pattern, Locale.forLanguageTag(languageTag)))
+    underlying.format(DateTimeFormatter.ofPattern(pattern, util.Locale.forLanguageTag(languageTag)))
 }

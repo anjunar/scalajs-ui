@@ -11,4 +11,3 @@ final class TableProgressBarCell[S] extends TableCell[S, Double] {
   override protected def renderContent(using AbstractComponent, Cursor): Unit =
     DslLayer.child(new TableProgressBar(this)) {}
 }
-

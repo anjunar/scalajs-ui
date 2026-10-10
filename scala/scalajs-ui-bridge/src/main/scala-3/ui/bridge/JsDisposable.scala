@@ -1,6 +1,6 @@
 package ui.bridge
 
-import ui.core.state.{Disposable => CoreDisposable}
+import ui.core.state.{Disposable as CoreDisposable}
 
 import scala.scalajs.js
 

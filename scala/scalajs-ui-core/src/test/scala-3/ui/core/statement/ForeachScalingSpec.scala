@@ -62,4 +62,3 @@ class ForeachScalingSpec extends AnyFlatSpec with Matchers {
     (System.nanoTime() - startedAt) / 1000000.0
   }
 }
-

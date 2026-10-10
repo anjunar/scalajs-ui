@@ -124,4 +124,3 @@ class NativeControlsSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(root)
   }
 }
-

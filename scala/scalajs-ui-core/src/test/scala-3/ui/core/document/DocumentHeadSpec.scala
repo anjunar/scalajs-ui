@@ -129,4 +129,3 @@ class DocumentHeadSpec extends AnyFlatSpec with Matchers {
     head.htmlAttributes shouldBe empty
   }
 }
-

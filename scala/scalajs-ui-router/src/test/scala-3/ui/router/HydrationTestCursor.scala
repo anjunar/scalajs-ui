@@ -48,4 +48,3 @@ private final class HydrationTestCursor extends Cursor {
 
   override def before(node: HostNode): Cursor = this
 }
-

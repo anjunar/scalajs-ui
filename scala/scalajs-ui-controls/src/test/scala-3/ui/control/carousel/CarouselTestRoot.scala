@@ -23,4 +23,3 @@ private abstract class CarouselTestRoot extends AbstractComponent {
       content
     }
 }
-

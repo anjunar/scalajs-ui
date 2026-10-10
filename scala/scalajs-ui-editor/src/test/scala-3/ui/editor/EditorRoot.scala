@@ -27,4 +27,3 @@ private abstract class EditorRoot extends AbstractComponent {
       content
     }
 }
-

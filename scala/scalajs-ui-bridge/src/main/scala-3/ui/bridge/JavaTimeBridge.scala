@@ -2,7 +2,7 @@ package ui.bridge
 
 import java.time.format.DateTimeFormatter
 import java.time.{Instant, LocalDate, LocalDateTime, ZoneId}
-import java.util.Locale
+import java.util
 import scala.scalajs.js.annotation.{JSExport, JSExportAll, JSExportTopLevel}
 object JavaTimeBridge {
   // moduleID "forms": date fields (scalajs-ui-forms) are what actually calls these, and giving

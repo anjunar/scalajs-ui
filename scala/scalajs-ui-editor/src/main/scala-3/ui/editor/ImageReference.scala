@@ -16,4 +16,3 @@ final case class ImageReference(
     this
   }
 }
-

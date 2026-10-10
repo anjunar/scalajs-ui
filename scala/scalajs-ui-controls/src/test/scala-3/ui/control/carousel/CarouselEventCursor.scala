@@ -29,4 +29,3 @@ private final class CarouselEventCursor(
 
   override def sub(host: HostElement): Cursor = this
 }
-

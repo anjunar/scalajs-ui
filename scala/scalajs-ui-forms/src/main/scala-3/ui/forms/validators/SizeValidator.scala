@@ -1,16 +1,17 @@
 package ui.forms.validators
 
 import java.time.{Instant, LocalDate, LocalDateTime, OffsetDateTime, ZonedDateTime}
-import java.util.Date
+import java.util
 import ui.core.i18n.{RuntimeMessage, i18n}
 import scala.scalajs.js
 import scala.util.Try
 import scala.util.matching.Regex
+import scala.Null
 
 final case class SizeValidator[V](
     min: Int = 0,
     max: Int = Int.MaxValue,
-    message: String | scala.Null = null
+    message: String | Null = null
 ) extends MessageValidator[V] {
   require(min >= 0, s"min must be >= 0 but was $min")
   require(max >= min, s"max must be >= min but was $max < $min")
@@ -29,4 +30,3 @@ final case class SizeValidator[V](
     else if (min == 0) i18n"Must contain at most $max characters/items"
     else i18n"Must contain between $min and $max characters/items"
 }
-

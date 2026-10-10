@@ -109,4 +109,3 @@ private object TableTextFieldEditor {
     if (dom.document.getElementById(id) == null) id else nextErrorId()
   }
 }
-

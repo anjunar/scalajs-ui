@@ -8,4 +8,3 @@ import ui.core.text.TextValue
 import java.util.regex.Matcher
 
 final case class MessageFingerprint(value: String) extends AnyVal
-

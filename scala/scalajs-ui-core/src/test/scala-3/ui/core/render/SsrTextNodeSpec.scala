@@ -42,4 +42,3 @@ class SsrTextNodeSpec extends AnyFlatSpec with Matchers {
     html shouldBe "<main><div>Ada &amp; Grace</div></main>"
   }
 }
-

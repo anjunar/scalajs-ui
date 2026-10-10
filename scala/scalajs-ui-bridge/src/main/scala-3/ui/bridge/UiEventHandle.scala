@@ -1,6 +1,6 @@
 package ui.bridge
 
-import ui.core.render.{UiEvent => CoreUiEvent}
+import ui.core.render.{UiEvent as CoreUiEvent}
 import org.scalajs.dom
 
 import scala.scalajs.js

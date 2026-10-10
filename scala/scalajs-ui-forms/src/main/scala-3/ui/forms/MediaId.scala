@@ -2,12 +2,12 @@ package ui.forms
 
 import ui.core.state.Property
 
-import java.util.UUID
+import java.util
 import scala.scalajs.js
 import scala.scalajs.js.typedarray.Uint8Array
 
 private[forms] object MediaId {
-  def randomUuid(): UUID = {
+  def randomUuid(): util.UUID = {
     val bytes  = new Uint8Array(16)
     val crypto = js.Dynamic.global.selectDynamic("crypto")
 
@@ -29,7 +29,7 @@ private[forms] object MediaId {
 
     def hex(index: Int): String = f"${bytes(index).toInt & 0xff}%02x"
 
-    UUID.fromString(
+    util.UUID.fromString(
       s"${hex(0)}${hex(1)}${hex(2)}${hex(3)}-" +
         s"${hex(4)}${hex(5)}-" +
         s"${hex(6)}${hex(7)}-" +

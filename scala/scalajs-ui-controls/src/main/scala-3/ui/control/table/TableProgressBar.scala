@@ -27,4 +27,3 @@ private final class TableProgressBar[S](cell: TableProgressBarCell[S]) extends A
   private def normalized(value: Double): Double =
     if (value.isNaN) 0.0 else math.max(0.0, math.min(1.0, value))
 }
-

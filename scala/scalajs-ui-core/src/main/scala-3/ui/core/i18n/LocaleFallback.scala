@@ -14,4 +14,3 @@ final case class LocaleFallback(primary: I18nLocale, defaultLocale: I18nLocale =
     (Iterator.single(primary) ++ parents ++ Iterator.single(defaultLocale)).toVector.distinct
   }
 }
-

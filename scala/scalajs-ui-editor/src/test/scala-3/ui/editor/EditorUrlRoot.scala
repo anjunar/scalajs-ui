@@ -24,4 +24,3 @@ private abstract class EditorUrlRoot(scope: UrlScope) extends EditorRoot {
     super.compose(cursor)
   }
 }
-

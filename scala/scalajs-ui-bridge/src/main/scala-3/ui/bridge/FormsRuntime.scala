@@ -18,4 +18,3 @@ private[bridge] object FormsRuntime {
   @JSExportTopLevel("installFormsRuntime", "forms")
   def install(): Unit = ()
 }
-

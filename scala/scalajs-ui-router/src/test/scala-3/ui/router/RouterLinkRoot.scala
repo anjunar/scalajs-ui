@@ -23,4 +23,3 @@ private abstract class RouterLinkRoot(handler: RouterLinkHandler) extends Abstra
     }
   }
 }
-

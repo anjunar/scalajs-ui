@@ -1,18 +1,20 @@
 package ui.forms.validators
 
 import java.time.{Instant, LocalDate, LocalDateTime, OffsetDateTime, ZonedDateTime}
-import java.util.Date
+import java.util
 import ui.core.i18n.{RuntimeMessage, i18n}
 import scala.scalajs.js
 import scala.util.Try
 import scala.util.matching.Regex
+import scala.Null
 
 final case class DigitsValidator[V](
     integer: Int,
     fraction: Int,
-    message: String | scala.Null = null
+    message: String | Null = null
 ) extends MessageValidator[V] {
-  override protected def defaultMessage: RuntimeMessage = i18n"At most $integer integer digits and $fraction fractional digits are allowed"
+  override protected def defaultMessage: RuntimeMessage =
+    i18n"At most $integer integer digits and $fraction fractional digits are allowed"
 
   require(integer >= 0, s"integer must be >= 0 but was $integer")
   require(fraction >= 0, s"fraction must be >= 0 but was $fraction")
@@ -36,4 +38,3 @@ final case class DigitsValidator[V](
     integerDigits <= integer && scale <= fraction
   }
 }
-

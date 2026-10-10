@@ -4,10 +4,7 @@ import ui.control.carousel.Carousel.Renderer
 import ui.control.carousel.CarouselSlide.carouselSlide
 import ui.core.component.AbstractComponent
 import ui.core.component.AbstractComponent.{addDisposable as addDslDisposable}
-import ui.core.dsl.AttributeDsl.{
-  removeAttribute as removeDslAttribute,
-  setAttribute as setDslAttribute
-}
+import ui.core.dsl.AttributeDsl.{removeAttribute as removeDslAttribute, setAttribute as setDslAttribute}
 import ui.core.dsl.ClassDsl.{addClass, classIf, classes}
 import ui.core.dsl.DslLayer
 import ui.core.dsl.EventDsl.{on, onClick}
@@ -31,11 +28,11 @@ final class Carousel[T] private[carousel] (
 
   private val itemsRefProperty: Property[ListProperty[T]] = Property(ListProperty[T]())
 
-  val activeIndexProperty: Property[Int]          = Property(0)
-  val autoAdvanceMsProperty: Property[Int]        = Property(0)
-  val wrapAroundProperty: Property[Boolean]       = Property(true)
-  val ssrShowAllStatesProperty: Property[Boolean] = Property(true)
-  private val sidePreviewCountState: Property[Int] = Property(1)
+  val activeIndexProperty: Property[Int]              = Property(0)
+  val autoAdvanceMsProperty: Property[Int]            = Property(0)
+  val wrapAroundProperty: Property[Boolean]           = Property(true)
+  val ssrShowAllStatesProperty: Property[Boolean]     = Property(true)
+  private val sidePreviewCountState: Property[Int]    = Property(1)
   val sidePreviewCountProperty: ReadOnlyProperty[Int] = sidePreviewCountState
 
   private val itemStateRevisionProperty                        = Property(0)
@@ -101,7 +98,7 @@ final class Carousel[T] private[carousel] (
       itemStateRevisionProperty.map(_ => getItems.toSeq)
     val multipleItemsProperty =
       itemStateRevisionProperty.map(_ => slideCount > 1)
-    val statusTextProperty     = navigationRevisionProperty.map(_ => statusText)
+    val statusTextProperty = navigationRevisionProperty.map(_ => statusText)
     DslLayer.render(this, cursor) {
       addClass("ui-carousel")
       classIf(
@@ -114,8 +111,14 @@ final class Carousel[T] private[carousel] (
       )
       classIf("ui-carousel--empty", itemStateRevisionProperty.map(_ => slideCount == 0))
       classIf("ui-carousel--single", itemStateRevisionProperty.map(_ => slideCount <= 1))
-      classIf("ui-carousel--side-previews-2", navigationRevisionProperty.map(_ => effectiveSidePreviewCount >= 2))
-      classIf("ui-carousel--side-previews-3", navigationRevisionProperty.map(_ => effectiveSidePreviewCount >= 3))
+      classIf(
+        "ui-carousel--side-previews-2",
+        navigationRevisionProperty.map(_ => effectiveSidePreviewCount >= 2)
+      )
+      classIf(
+        "ui-carousel--side-previews-3",
+        navigationRevisionProperty.map(_ => effectiveSidePreviewCount >= 3)
+      )
       setAttribute("role", "region")
       setAttribute("aria-roledescription", "carousel")
       setAttribute("tabindex", "0")
@@ -305,13 +308,17 @@ final class Carousel[T] private[carousel] (
       math.min(sidePreviewCountProperty.get, (slideCount - 1) / 2)
     else math.min(sidePreviewCountProperty.get, slideCount - 1)
 
-  private[carousel] def sidePreviewState(index: Int, offset: Int, count: Int): ReadOnlyProperty[Boolean] =
+  private[carousel] def sidePreviewState(
+      index: Int,
+      offset: Int,
+      count: Int
+  ): ReadOnlyProperty[Boolean] =
     navigationRevisionProperty.map { _ =>
       val distance = math.abs(offset)
       if (distance == 0 || distance > effectiveSidePreviewCount) false
       else {
         val candidate = normalizedActiveIndex + offset
-        val target =
+        val target    =
           if (wrapAroundProperty.get && count > 2) math.floorMod(candidate, count)
           else candidate
         target == index

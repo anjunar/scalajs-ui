@@ -5,7 +5,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import reflect.macros.ReflectMacros
 
-import java.util.UUID
+import java.util
 import scala.annotation.meta.field
 import scala.collection.immutable.ListMap
 import scala.scalajs.js
@@ -16,4 +16,3 @@ import scala.scalajs.reflect.annotation.EnableReflectiveInstantiation
 final class CommentThread(
     var replies: ListProperty[Reply] = ListProperty()
 )
-

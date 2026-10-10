@@ -17,15 +17,7 @@ import ui.core.text.TextValue
 import ui.forms.Form.FormContext
 import ui.viewport.Viewport
 import org.scalajs.dom
-import org.scalajs.dom.{
-  CanvasRenderingContext2D,
-  File,
-  FileReader,
-  HTMLCanvasElement,
-  HTMLImageElement,
-  HTMLInputElement,
-  PointerEvent
-}
+import org.scalajs.dom.{CanvasRenderingContext2D, File, FileReader, HTMLCanvasElement, HTMLImageElement, HTMLInputElement, PointerEvent}
 
 import scala.math.{abs, max, min}
 import scala.scalajs.js
@@ -267,7 +259,7 @@ final class ImageCropper private (
             .foreach { encoded =>
               val previousValue = valueProperty.get
               val previousDirty = dirtyProperty.get
-              val media = mediaFromFile(selectedFile, encoded)
+              val media         = mediaFromFile(selectedFile, encoded)
               dirtyProperty.set(true)
               sourceProperty.set(media)
               valueProperty.set(media)
@@ -289,7 +281,11 @@ final class ImageCropper private (
       .orElse(Option(valueProperty.get))
       .filter(hasImageData)
 
-  private def openCropWindow(source: Media, initialValue: Media = valueProperty.get, initialDirty: Boolean = dirtyProperty.get): Viewport.WindowConf = {
+  private def openCropWindow(
+      source: Media,
+      initialValue: Media = valueProperty.get,
+      initialDirty: Boolean = dirtyProperty.get
+  ): Viewport.WindowConf = {
     Option(activeSession).filterNot(_.closed) match {
       case Some(current) =>
         Viewport.touchWindow(current.windowConf)
@@ -581,4 +577,3 @@ object ImageCropper {
   private def positive(value: Int, fallback: Int): Int =
     if (value > 0) value else fallback
 }
-

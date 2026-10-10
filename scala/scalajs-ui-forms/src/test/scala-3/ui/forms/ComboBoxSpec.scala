@@ -17,6 +17,9 @@ import ui.viewport.Viewport
 import ui.viewport.Viewport.viewport
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import scala.scalajs.js.Array
+import ui.control.table.TableColumn
+import ui.control.table.TableView
 
 class ComboBoxSpec extends AnyFlatSpec with Matchers {
 
@@ -215,18 +218,18 @@ class ComboBoxSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "provide the table ComboBox cell factory without coupling controls to forms" in {
-    val selected = Property(members.head)
-    val rows     = ListProperty(scala.scalajs.js.Array(selected))
-    val choices  = ListProperty(scala.scalajs.js.Array(members*))
-    var ownerColumn: ui.control.table.TableColumn[Property[Member], Member] = null
-    var table: ui.control.table.TableView[Property[Member]]                 = null
-    val cursor                                                              = new SsrCursor()
-    val root                                                                = Runtime.mount(
+    val selected                                           = Property(members.head)
+    val rows                                               = ListProperty(Array(selected))
+    val choices                                            = ListProperty(Array(members*))
+    var ownerColumn: TableColumn[Property[Member], Member] = null
+    var table: TableView[Property[Member]]                 = null
+    val cursor                                             = new SsrCursor()
+    val root                                               = Runtime.mount(
       new ComboRoot {
         override protected def content(using AbstractComponent, Cursor): Unit =
           viewport {
             table = tableView(rows) {
-              ui.control.table.TableView.editable = true
+              TableView.editable = true
               ownerColumn = column[Property[Member], Member]("Owner") {
                 cellValueFactory = _.value
                 comboBoxCell(choices, _.name, _.id)
@@ -251,4 +254,3 @@ class ComboBoxSpec extends AnyFlatSpec with Matchers {
     Member(2, "Bob")
   )
 }
-

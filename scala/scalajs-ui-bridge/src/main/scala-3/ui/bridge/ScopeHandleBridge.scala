@@ -6,12 +6,13 @@ import ui.core.dsl.DslLayer
 import ui.core.i18n.{I18nLocale, I18nRuntime}
 import ui.core.layout.{Condition, Head, TextComponent}
 import ui.core.render.Cursor
-import ui.core.state.{ListProperty => CoreListProperty, ReadOnlyProperty => CoreReadOnlyProperty}
+import ui.core.state.{ListProperty as CoreListProperty, ReadOnlyProperty as CoreReadOnlyProperty}
 import ui.core.statement.Foreach
 
 import scala.concurrent.ExecutionContext
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
+import ui.core.layout.FetchComponent
 
 /** The JS projection of the pair `(AbstractComponent, Cursor)` that Scala threads through
   * `using AbstractComponent, Cursor`. Mirrors `contract.ts`'s `ScopeHandle`.
@@ -148,7 +149,7 @@ final class ScopeHandleBridge(
     given Cursor            = cursor
     given ExecutionContext  = ExecutionContext.global
 
-    ui.core.layout.FetchComponent.fetch(() => load().toFuture) { value =>
+    FetchComponent.fetch(() => load().toFuture) { value =>
       val self        = summon[AbstractComponent]
       val childCursor = summon[Cursor]
       onLoaded(value, new ScopeHandleBridge(self, childCursor))

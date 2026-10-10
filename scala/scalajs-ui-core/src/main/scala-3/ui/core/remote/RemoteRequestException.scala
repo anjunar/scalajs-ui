@@ -44,4 +44,3 @@ private[remote] def fetchPage[V, Query](
     }
     .andThen { case _ => prepared.cleanup() }
 }
-

@@ -4,14 +4,7 @@ import ui.core.component.{AbstractComponent, AbstractCustomComponent}
 import ui.core.layout.{Anchor, TextComponent}
 import ui.core.dsl.DslLayer
 import ui.core.render.Cursor
-import ui.router.{
-  Route,
-  RouteContext => CoreRouteContext,
-  RouteFailure,
-  Router,
-  RouterConfig,
-  RouterLink
-}
+import ui.router.{Route, RouteContext as CoreRouteContext, RouteFailure, Router, RouterConfig, RouterLink}
 
 import scala.concurrent.ExecutionContext
 import scala.scalajs.js

@@ -22,4 +22,3 @@ private final class TestCursor(onCreate: TestHostElement => Unit) extends Cursor
 
   override def sub(host: HostElement): Cursor = this
 }
-

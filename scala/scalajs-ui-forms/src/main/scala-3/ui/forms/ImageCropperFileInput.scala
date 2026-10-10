@@ -17,15 +17,7 @@ import ui.core.text.TextValue
 import ui.forms.Form.FormContext
 import ui.viewport.Viewport
 import org.scalajs.dom
-import org.scalajs.dom.{
-  CanvasRenderingContext2D,
-  File,
-  FileReader,
-  HTMLCanvasElement,
-  HTMLImageElement,
-  HTMLInputElement,
-  PointerEvent
-}
+import org.scalajs.dom.{CanvasRenderingContext2D, File, FileReader, HTMLCanvasElement, HTMLImageElement, HTMLInputElement, PointerEvent}
 
 import scala.math.{abs, max, min}
 import scala.scalajs.js
@@ -72,4 +64,3 @@ private object ImageCropperFileInput {
       body
     }
 }
-

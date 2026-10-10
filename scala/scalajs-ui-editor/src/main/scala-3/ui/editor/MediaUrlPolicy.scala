@@ -3,7 +3,6 @@ package ui.editor
 import org.scalajs.dom
 import scala.concurrent.Future
 
-
 /** Synchronous in both SSR and the browser. Implementations may restrict media routes. */
 trait MediaUrlPolicy {
   def resolve(src: String): Option[MediaReference]
@@ -27,4 +26,3 @@ object MediaUrlPolicy {
       .filter(ref => ref.mediaId.isEmpty || value.mediaId.isEmpty || ref.mediaId == value.mediaId)
       .map(ref => value.copy(src = ref.src, mediaId = ref.mediaId.orElse(value.mediaId)).validated)
 }
-

@@ -44,4 +44,3 @@ final class I18nResolver(catalog: MessageCatalog) {
       )
     }
 }
-

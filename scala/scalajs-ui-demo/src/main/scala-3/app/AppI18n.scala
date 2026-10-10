@@ -3,6 +3,7 @@ package app
 import app.i18n.*
 import ui.core.state.ReadOnlyProperty
 import ui.core.i18n.*
+import ui.forms.validators.ValidationI18n
 
 object AppI18n {
   val German: I18nLocale  = I18nLocale("de")
@@ -19,7 +20,7 @@ object AppI18n {
 
   val catalog: MessageCatalog =
     TranslationSupport.catalog(
-      ui.forms.validators.ValidationI18n.german,
+      ValidationI18n.german,
       AppTranslations.entries,
       AppRouterBoundaryTranslations.entries,
       OverviewPageTranslations.entries,

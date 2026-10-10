@@ -152,8 +152,8 @@ final class SsrHostElement(val tagName: String) extends HostElement, SsrNode {
     * node, and `HydratingCursor` would then run out of nodes for the second `text()` call.
     */
   def renderChildrenHtml(): String = {
-    val builder          = new mutable.StringBuilder
-    var previousWasText  = false
+    val builder         = new mutable.StringBuilder
+    var previousWasText = false
     for (child <- children) {
       val isText = child match {
         case text: SsrTextNode => text.getText.nonEmpty

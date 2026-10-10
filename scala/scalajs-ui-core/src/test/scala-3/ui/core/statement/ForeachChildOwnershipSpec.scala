@@ -10,6 +10,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.scalajs.js
+import ui.core.layout.TextComponent
 
 /** Who owns a container's children list?
   *
@@ -69,8 +70,7 @@ class ForeachChildOwnershipSpec extends AnyFlatSpec with Matchers {
     root.children.head.children.map { item =>
       item.children.headOption
         .flatMap(_.children.headOption)
-        .collect { case t: ui.core.layout.TextComponent => t.getText }
+        .collect { case t: TextComponent => t.getText }
         .getOrElse("")
     }.toSeq
 }
-

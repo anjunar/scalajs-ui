@@ -1,13 +1,6 @@
 package ui.core.document
 
-import ui.core.render.{
-  Cursor,
-  DomHostElement,
-  HostElement,
-  SsrHostElement,
-  SsrRawTextNode,
-  SsrTextNode
-}
+import ui.core.render.{Cursor, DomHostElement, HostElement, SsrHostElement, SsrRawTextNode, SsrTextNode}
 import org.scalajs.dom
 
 import scala.collection.mutable

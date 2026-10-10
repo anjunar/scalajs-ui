@@ -38,4 +38,3 @@ object PublicKeyCredentialRequestOptions {
     result.asInstanceOf[PublicKeyCredentialRequestOptions]
   }
 }
-

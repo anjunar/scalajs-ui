@@ -11,6 +11,7 @@ import ui.forms.validators.Validator
 
 import org.scalajs.dom
 import scala.scalajs.js
+import ui.core.state.ListProperty
 
 class Input(val name: String, val standalone: Boolean = false)
     extends AbstractComponent,
@@ -100,10 +101,10 @@ object Input {
 
   def stringValueProperty(using input: Input): Property[String] = input.valueProperty
 
-  def validators(using input: Input): ui.core.state.ListProperty[Validator[String]] =
+  def validators(using input: Input): ListProperty[Validator[String]] =
     input.validators
 
-  def errorsProperty(using input: Input): ui.core.state.ListProperty[String] = input.errors
+  def errorsProperty(using input: Input): ListProperty[String] = input.errors
 
   @deprecated("Use input(name, standalone = true) instead.", "1.0.0")
   def standaloneInput(

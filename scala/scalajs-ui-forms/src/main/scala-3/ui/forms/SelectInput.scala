@@ -30,7 +30,9 @@ final class SelectInput(
         val option = OptionElement.option(choice.value, valueProperty.get == choice.value) {
           text(choice.label) {}
         }
-        option.addDisposable(valueProperty.observe(value => option.selected_=(value == choice.value)))
+        option.addDisposable(
+          valueProperty.observe(value => option.selected_=(value == choice.value))
+        )
       }
 
       def read(): Unit = {

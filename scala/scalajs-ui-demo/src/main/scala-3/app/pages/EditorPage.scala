@@ -19,11 +19,11 @@ import ui.router.RouteContext
 
 object EditorPage {
   def render(_context: RouteContext)(using AbstractComponent, Cursor): Unit = {
-    val document   = initialDocument()
-    val state      = Property(document)
+    val document       = initialDocument()
+    val state          = Property(document)
     val editorEditable = Property(true)
     val markdownView   = Property(false)
-    val editorName = "article"
+    val editorName     = "article"
 
     Showcase.showcasePage(
       i18n"Editor",

@@ -9,7 +9,9 @@ class Paragraph extends AbstractComponent {
 }
 
 object Paragraph {
-  def paragraph(body: Paragraph ?=> Cursor ?=> Unit = {})(using AbstractComponent, Cursor): Paragraph =
+  def paragraph(
+      body: Paragraph ?=> Cursor ?=> Unit = {}
+  )(using AbstractComponent, Cursor): Paragraph =
     DslLayer.child(new Paragraph()) {
       body
     }

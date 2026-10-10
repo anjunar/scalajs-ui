@@ -23,4 +23,3 @@ private final class TestRoot(body: AbstractComponent ?=> Cursor ?=> Unit)
   override def compose(cursor: Cursor): Unit =
     render(this, cursor)(body)
 }
-

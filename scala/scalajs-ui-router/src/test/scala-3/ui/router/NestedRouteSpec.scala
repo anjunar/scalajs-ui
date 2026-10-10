@@ -11,6 +11,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.Promise
+import ui.core.component.AbstractComponent
 
 class NestedRouteSpec extends AnyFlatSpec with Matchers {
 
@@ -99,8 +100,8 @@ class NestedRouteSpec extends AnyFlatSpec with Matchers {
   }
 
   private def nestedRoutes(
-      parent: RouteContext => Future[ui.core.component.AbstractComponent],
-      child: RouteContext => Future[ui.core.component.AbstractComponent]
+      parent: RouteContext => Future[AbstractComponent],
+      child: RouteContext => Future[AbstractComponent]
   ): Seq[Route] =
     Seq(
       Route.view(
@@ -109,4 +110,3 @@ class NestedRouteSpec extends AnyFlatSpec with Matchers {
       )(parent)
     )
 }
-

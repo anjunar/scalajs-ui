@@ -7,15 +7,7 @@ import ember.editor.code.*
 import ember.editor.codehighlighting.CodeDecorations
 import ember.editor.table.*
 import ember.editor.link.*
-import ember.editor.image.{
-  ImageExtension,
-  ImageCommands,
-  ImageNode,
-  PositivePixels,
-  MediaUrlPolicy as NativeMediaPolicy,
-  MediaReference as NativeMediaReference,
-  MediaId
-}
+import ember.editor.image.{ImageExtension, ImageCommands, ImageNode, PositivePixels, MediaUrlPolicy as NativeMediaPolicy, MediaReference as NativeMediaReference, MediaId}
 import ember.editor.history.*
 import ember.editor.markdown.{ListKind as MarkdownListKind, *}
 import ember.editor.standard.*
@@ -35,6 +27,8 @@ import org.scalajs.dom
 import scala.scalajs.js
 import scala.concurrent.{Future, ExecutionContext}
 import scala.util.control.NonFatal
+import scala.collection.mutable.ArrayBuffer
+import scala.scalajs.concurrent.JSExecutionContext
 
 /** One native Ember session in the shared UI runtime. Markdown remains the form boundary. */
 private[editor] final class NativeEditorAdapter(
@@ -51,7 +45,7 @@ private[editor] final class NativeEditorAdapter(
     onMarkdownChanged: String => Unit,
     onFocusChanged: Boolean => Unit
 ) extends AutoCloseable {
-  private given ExecutionContext = scala.scalajs.concurrent.JSExecutionContext.queue
+  private given ExecutionContext = JSExecutionContext.queue
   private val generator          = NodeIdGenerator.sequential("editor")
   private val history            = new History()
   private val holder             = new CompositionHolder()
@@ -95,11 +89,11 @@ private[editor] final class NativeEditorAdapter(
   private var drop: DropController                      = null
   private var media: NativeMediaCoordinator[dom.File]   = null
   private var picker: BrowserMediaPicker                = null
-  private val cleanups     = scala.collection.mutable.ArrayBuffer.empty[() => Unit]
-  private var applying     = false
-  private var lastMarkdown = ""
-  private var closed       = false
-  private val fileInput    =
+  private val cleanups                                  = ArrayBuffer.empty[() => Unit]
+  private var applying                                  = false
+  private var lastMarkdown                              = ""
+  private var closed                                    = false
+  private val fileInput                                 =
     surface.ownerDocument.createElement("input").asInstanceOf[dom.HTMLInputElement]
 
   private def decode(source: String): Document = {
@@ -542,7 +536,8 @@ private[editor] final class NativeEditorAdapter(
       if (available && event.button == 0 && !event.shiftKey && !event.ctrlKey && !event.metaKey)
         event.target match {
           case image: dom.HTMLImageElement =>
-            Option(image.getAttribute("data-ember-node")).map(NodeId.apply)
+            Option(image.getAttribute("data-ember-node"))
+              .map(NodeId.apply)
               .filter(id => session.document.node(id).exists(_.isInstanceOf[ImageNode]))
               .foreach { id =>
                 event.preventDefault()

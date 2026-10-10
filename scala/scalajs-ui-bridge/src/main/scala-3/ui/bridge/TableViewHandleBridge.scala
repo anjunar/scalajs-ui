@@ -1,14 +1,9 @@
 package ui.bridge
 
-import ui.control.table.{
-  ColumnResizePolicy,
-  TableDirection,
-  TableSelectionMode,
-  TableSort,
-  TableView
-}
+import ui.control.table.{ColumnResizePolicy, TableDirection, TableSelectionMode, TableSort, TableView}
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
+import ui.control.table.TableColumn
 
 /** Minimal imperative table contract; all operations remain owned by the Scala component. */
 final class TableViewHandleBridge(private val table: TableView[js.Any]) extends js.Object {
@@ -17,7 +12,7 @@ final class TableViewHandleBridge(private val table: TableView[js.Any]) extends 
     if (!validIndex(rowIndex) || !validIndex(columnIndex)) null
     else
       Option(table.getVisibleLeafColumn(columnIndex.toInt))
-        .map(_.asInstanceOf[ui.control.table.TableColumn[js.Any, js.Any]])
+        .map(_.asInstanceOf[TableColumn[js.Any, js.Any]])
         .fold[js.Any | Null](null)(_.getCellData(rowIndex.toInt))
   def getCellObservableValue(
       rowIndex: Double,
@@ -26,7 +21,7 @@ final class TableViewHandleBridge(private val table: TableView[js.Any]) extends 
     if (!validIndex(rowIndex) || !validIndex(columnIndex)) null
     else
       Option(table.getVisibleLeafColumn(columnIndex.toInt))
-        .map(_.asInstanceOf[ui.control.table.TableColumn[js.Any, js.Any]])
+        .map(_.asInstanceOf[TableColumn[js.Any, js.Any]])
         .flatMap(column => Option(column.getCellObservableValue(rowIndex.toInt)))
         .fold[ReadOnlyPropertyHandle[js.Any] | Null](null)(new ReadOnlyPropertyHandle(_))
 
@@ -91,7 +86,7 @@ final class TableViewHandleBridge(private val table: TableView[js.Any]) extends 
     columnAt(columnIndex).exists(column =>
       validIndex(rowIndex) && table.edit(
         rowIndex.toInt,
-        column.asInstanceOf[ui.control.table.TableColumn[js.Any, js.Any]]
+        column.asInstanceOf[TableColumn[js.Any, js.Any]]
       )
     )
   def updateEdit(value: js.Any): Boolean             = table.updateEdit(value)

@@ -182,9 +182,9 @@ class CarouselSpec extends AnyFlatSpec with Matchers {
   }
 
   "Carousel side previews" should "show one to three unique neighbors per side" in {
-    val hosts                     = mutable.ArrayBuffer.empty[CarouselTestHostElement]
-    val cursor                    = new CarouselEventCursor(hosts += _, browser = true)
-    val items                     = ListProperty[String](js.Array("0", "1", "2", "3", "4", "5", "6"))
+    val hosts  = mutable.ArrayBuffer.empty[CarouselTestHostElement]
+    val cursor = new CarouselEventCursor(hosts += _, browser = true)
+    val items  = ListProperty[String](js.Array("0", "1", "2", "3", "4", "5", "6"))
     var control: Carousel[String] = null
 
     val root = Runtime.mount(
@@ -198,7 +198,7 @@ class CarouselSpec extends AnyFlatSpec with Matchers {
       cursor
     )
 
-    val carouselHost = hosts.find(_.tagName == "section").get
+    val carouselHost                               = hosts.find(_.tagName == "section").get
     def slide(index: Int): CarouselTestHostElement =
       hosts.find(_.attribute("data-slide-index").contains(index.toString)).get
     def hasClass(index: Int, name: String): Boolean =
@@ -280,4 +280,3 @@ class CarouselSpec extends AnyFlatSpec with Matchers {
       )
     }
 }
-

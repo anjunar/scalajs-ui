@@ -1,5 +1,7 @@
 package ui.router
 
+import ui.core.i18n.I18nLocale
+
 final case class RouterState(
     path: String,
     browserPath: String,
@@ -7,7 +9,7 @@ final case class RouterState(
     queryParams: QueryParams,
     search: String,
     hash: String,
-    locale: Option[ui.core.i18n.I18nLocale]
+    locale: Option[I18nLocale]
 ) {
   def url: String =
     s"$browserPath$search$hash"

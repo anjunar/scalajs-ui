@@ -25,7 +25,10 @@ import org.scalajs.dom.{HTMLDivElement, HTMLElement}
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
-
+import org.scalajs.dom.HTMLTextAreaElement
+import scala.util.control.NonFatal
+import ui.core.state.ListProperty
+import ui.forms.validators.Validator
 
 /** A Markdown-valued editor.
   *
@@ -90,7 +93,7 @@ final class Editor private[editor] (
       installControlObservers()
       registerWithForm()
       valueProperty.set(MarkdownImages.discardEmbedded(valueProperty.get))
-      validators += new ui.forms.validators.Validator[String] {
+      validators += new Validator[String] {
         def validate(value: String): Option[String] =
           MarkdownImages
             .validationError(value, mediaUrlPolicy)
@@ -249,7 +252,7 @@ final class Editor private[editor] (
     if (cursor.isBrowser) {
       domElement[HTMLElement](fallbackHost)
         .flatMap(host => Option(host.querySelector("textarea")))
-        .collect { case input: org.scalajs.dom.HTMLTextAreaElement => input }
+        .collect { case input: HTMLTextAreaElement => input }
         .filter(input => input.value != input.textContent)
         .foreach(input => publishMarkdown(input.value))
       mountNative()
@@ -390,7 +393,7 @@ final class Editor private[editor] (
           nativeAdapter = adapter
           presentationError.set(None)
         } catch {
-          case scala.util.control.NonFatal(error) =>
+          case NonFatal(error) =>
             adapter.close()
             markdownModeProperty.set(true)
             presentationError.set(Some(Option(error.getMessage).getOrElse("")))
@@ -440,7 +443,7 @@ final class Editor private[editor] (
     Option(nativeAdapter).foreach { adapter =>
       try adapter.syncMarkdown(value)
       catch {
-        case scala.util.control.NonFatal(error) =>
+        case NonFatal(error) =>
           markdownModeProperty.set(true)
           presentationError.set(Some(Option(error.getMessage).getOrElse("")))
           syncPresentation(editableProperty.get)
@@ -500,7 +503,7 @@ object Editor {
 
   def valueProperty(using editor: Editor): Property[String] = editor.valueProperty
 
-  def errorsProperty(using editor: Editor): ui.core.state.ListProperty[String] = editor.errors
+  def errorsProperty(using editor: Editor): ListProperty[String] = editor.errors
 
   def toolbarMode(using editor: Editor): EditorToolbarMode = editor.toolbarMode
 

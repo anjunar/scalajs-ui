@@ -3,6 +3,7 @@ package ui.core.render
 import ui.core.async.AsyncRenderContext
 import org.scalajs.dom
 import ui.core.state.Disposable
+import scala.collection.mutable.ArrayBuffer
 
 final class HydratingCursor private (
     parent: dom.Node,
@@ -189,7 +190,7 @@ final class HydratingCursor private (
     val adoptedNodes =
       if (!adopt) Nil
       else {
-        val buffer  = scala.collection.mutable.ArrayBuffer.empty[HostNode]
+        val buffer  = ArrayBuffer.empty[HostNode]
         var current = startNode.nextSibling
         while (current != null && current != endNode) {
           buffer += DomNodes.wrap(current)
@@ -388,7 +389,7 @@ final class HydratingCursor private (
   }
 
   private def describePath(node: dom.Node): String = {
-    val parts   = scala.collection.mutable.ArrayBuffer.empty[String]
+    val parts   = ArrayBuffer.empty[String]
     var current = Option(node)
 
     while (current.nonEmpty && current.get.nodeType != dom.Node.DOCUMENT_NODE) {
@@ -452,8 +453,8 @@ final class HydratingCursor private (
 object HydratingCursor {
 
   private final class HydrationSession(enclosing: Option[HydrationSession] = None) {
-    private val cursors   = scala.collection.mutable.ArrayBuffer.empty[HydratingCursor]
-    private val callbacks = scala.collection.mutable.ArrayBuffer.empty[() => Unit]
+    private val cursors   = ArrayBuffer.empty[HydratingCursor]
+    private val callbacks = ArrayBuffer.empty[() => Unit]
     private var completed = false
     private var activated = false
     private var cancelled = false

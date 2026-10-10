@@ -25,4 +25,3 @@ private[bridge] object VBoxFactory extends ComponentFactory {
       body(new ComponentHandleBridge(self), new ScopeHandleBridge(self, childCursor))
     }
 }
-

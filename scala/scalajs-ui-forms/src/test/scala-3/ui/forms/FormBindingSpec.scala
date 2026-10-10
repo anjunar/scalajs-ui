@@ -83,4 +83,3 @@ class FormBindingSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(root)
   }
 }
-

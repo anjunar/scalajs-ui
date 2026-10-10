@@ -4,6 +4,7 @@ import ui.core.component.AbstractComponent
 import ui.core.render.Cursor
 
 import scala.scalajs.js
+import scala.collection.mutable.Map
 
 /** Name -> class. Mirrors `scalajs-ui-bridge`'s share of §3 in JAVASCRIPT_API.md: the registry
   * lives here, the typed wrappers live in `dsl.ts`.
@@ -14,7 +15,7 @@ import scala.scalajs.js
   * hold.
   */
 private[bridge] object ComponentRegistry {
-  private val factories = scala.collection.mutable.Map.empty[String, ComponentFactory]
+  private val factories = Map.empty[String, ComponentFactory]
 
   def register(name: String, factory: ComponentFactory): Unit =
     factories(name) = factory

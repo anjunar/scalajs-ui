@@ -5,7 +5,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import reflect.macros.ReflectMacros
 
-import java.util.UUID
+import java.util
 import scala.annotation.meta.field
 import scala.collection.immutable.ListMap
 import scala.scalajs.js
@@ -153,7 +153,10 @@ class JsonMapperSpec extends AnyFlatSpec with Matchers {
 
     val dot = JsonMapper.deserialize[Shape](literal(`@type` = "dot"))
     dot shouldBe a[Dot]
-    Reflect.lookupInstantiatableClass("ui.json.Dot").flatMap(_.getConstructor()).nonEmpty shouldBe true
+    Reflect
+      .lookupInstantiatableClass("ui.json.Dot")
+      .flatMap(_.getConstructor())
+      .nonEmpty shouldBe true
   }
 
   it should "accept a model class from JsonProperty" in {
@@ -230,7 +233,7 @@ class JsonMapperSpec extends AnyFlatSpec with Matchers {
 
   "JsonMapper value types" should "roundtrip options, maps, collections, UUIDs, and raw JSON" in {
     val mapper = JsonMapperSpec.mapper
-    val id     = UUID.fromString("92707f9f-a861-4d45-9d4b-47832fe06741")
+    val id     = util.UUID.fromString("92707f9f-a861-4d45-9d4b-47832fe06741")
     val model  = ValueTypes()
     model.optional.set(Some("present"))
     model.identifiers.set(ListMap("primary" -> id))
@@ -362,4 +365,3 @@ object JsonMapperSpec {
   def mapper: JsonMapper =
     JsonMapper(schemas*)
 }
-

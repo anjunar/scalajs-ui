@@ -47,7 +47,8 @@ private[editor] final class UiMarkdownCodec(
           widths.getOrElseUpdate(image.src, mutable.Queue.empty).enqueue(image.widthPx)
           MarkdownImages.format(image.copy(widthPx = None), policy)
         case None =>
-          failure = Some(FieldError.NotDecodable(name, labels.now(EditorMessages.invalidImageReference)))
+          failure =
+            Some(FieldError.NotDecodable(name, labels.now(EditorMessages.invalidImageReference)))
           matched.matched
       }
     }
@@ -77,7 +78,9 @@ private[editor] final class UiMarkdownCodec(
                     .flatMap(PositivePixels.parse)
                   val reference = MediaUrlPolicy.checked(policy, image.src.value)
                   if (reference.isEmpty)
-                    failure = Some(FieldError.NotDecodable(name, labels.now(EditorMessages.invalidImageAddress)))
+                    failure = Some(
+                      FieldError.NotDecodable(name, labels.now(EditorMessages.invalidImageAddress))
+                    )
                   image.copy(
                     width = width,
                     source = image.source
@@ -103,8 +106,10 @@ private[editor] final class UiMarkdownCodec(
                 .map(_.value))
           )
         )
-          failure =
-            Some(FieldError.NotRepresentable(name, Vector(labels.now(EditorMessages.invalidImageAddress))))
+          failure = Some(
+            FieldError
+              .NotRepresentable(name, Vector(labels.now(EditorMessages.invalidImageAddress)))
+          )
         widths
           .getOrElseUpdate(image.src.value, mutable.Queue.empty)
           .enqueue(image.width.map(_.value))

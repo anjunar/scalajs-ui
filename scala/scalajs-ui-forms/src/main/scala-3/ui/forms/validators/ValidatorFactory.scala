@@ -3,6 +3,7 @@ package ui.forms.validators
 import reflect.Annotation
 
 import scala.util.matching.Regex
+import scala.Null
 
 object ValidatorFactory {
 
@@ -103,7 +104,7 @@ object ValidatorFactory {
     validator.map(_.asInstanceOf[Validator[Any]])
   }
 
-  private def optionalMessage(parameters: Map[String, Any]): String | scala.Null =
+  private def optionalMessage(parameters: Map[String, Any]): String | Null =
     parameters.get("message").map(_.toString).filter(_.nonEmpty).orNull
 
   private def string(parameters: Map[String, Any], name: String, default: String): String =

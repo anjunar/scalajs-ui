@@ -25,4 +25,3 @@ private final class TabsEventCursor(onCreate: TabsTestHostElement => Unit) exten
 
   override def sub(host: HostElement): Cursor = this
 }
-

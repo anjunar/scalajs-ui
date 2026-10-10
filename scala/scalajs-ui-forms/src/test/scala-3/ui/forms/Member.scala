@@ -19,4 +19,3 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 private final case class Member(id: Int, name: String)
-

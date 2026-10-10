@@ -1,17 +1,17 @@
 package ui.forms.validators
 
 import java.time.{Instant, LocalDate, LocalDateTime, OffsetDateTime, ZonedDateTime}
-import java.util.Date
+import java.util
 import ui.core.i18n.{RuntimeMessage, i18n}
 import scala.scalajs.js
 import scala.util.Try
 import scala.util.matching.Regex
+import scala.Null
 
-final case class PastOrPresentValidator[V](message: String | scala.Null = null)
+final case class PastOrPresentValidator[V](message: String | Null = null)
     extends MessageValidator[V] {
   override protected def defaultMessage: RuntimeMessage = i18n"Must be in the past or present"
 
   def validate(value: V): Option[String] =
     ValidatorSupport.temporalConstraint(value, isPast = true, inclusive = true, resolvedMessage)
 }
-

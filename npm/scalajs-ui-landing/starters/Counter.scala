@@ -24,4 +24,3 @@ final class Counter extends AbstractComponent {
     }
   }
 }
-

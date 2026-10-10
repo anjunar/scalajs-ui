@@ -22,4 +22,3 @@ final case class RegistrationCredential(
     result
   }
 }
-

@@ -17,12 +17,15 @@ class RouterLoadingSpec extends AnyFlatSpec with Matchers {
 
   "Router loading" should "retain the current page and emit completion only after replacement" in {
     val pending = Promise[AbstractComponent]()
-    val router = new Router(Seq(
-      Route.view("/")(_ => Future.successful(page("home"))),
-      Route.view("/slow")(_ => pending.future)
-    ), "/")
-    val cursor = new SsrCursor()
-    val events = ArrayBuffer.empty[String]
+    val router  = new Router(
+      Seq(
+        Route.view("/")(_ => Future.successful(page("home"))),
+        Route.view("/slow")(_ => pending.future)
+      ),
+      "/"
+    )
+    val cursor      = new SsrCursor()
+    val events      = ArrayBuffer.empty[String]
     val completions = ArrayBuffer.empty[(String, Boolean, String)]
     router.onPageLoad(state => events += s"load:${state.path}")
     router.onPageResolved(state => {
@@ -49,14 +52,24 @@ class RouterLoadingSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "wait for nested outlets and emit once for the navigation" in {
-    val child = Promise[AbstractComponent]()
-    val router = new Router(Seq(Route.view("/parent", children = Seq(
-      Route.view("child")(_ => child.future)
-    ))(_ => Future.successful(Route.component {
-      text("parent") {}
-      Router.routerOutlet()
-    }))), "/parent/child")
-    val cursor = new SsrCursor()
+    val child  = Promise[AbstractComponent]()
+    val router = new Router(
+      Seq(
+        Route.view(
+          "/parent",
+          children = Seq(
+            Route.view("child")(_ => child.future)
+          )
+        )(_ =>
+          Future.successful(Route.component {
+            text("parent") {}
+            Router.routerOutlet()
+          })
+        )
+      ),
+      "/parent/child"
+    )
+    val cursor   = new SsrCursor()
     val resolved = ArrayBuffer.empty[String]
     router.onPageResolved(state => resolved += state.path)
     Runtime.mount(router, cursor)
@@ -71,16 +84,19 @@ class RouterLoadingSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "ignore superseded successes and failures while the latest page is pending" in {
-    val first = Promise[AbstractComponent]()
+    val first  = Promise[AbstractComponent]()
     val second = Promise[AbstractComponent]()
     val latest = Promise[AbstractComponent]()
-    val router = new Router(Seq(
-      Route.view("/")(_ => Future.successful(page("home"))),
-      Route.view("/first")(_ => first.future),
-      Route.view("/second")(_ => second.future),
-      Route.view("/latest")(_ => latest.future)
-    ), "/")
-    val cursor = new SsrCursor()
+    val router = new Router(
+      Seq(
+        Route.view("/")(_ => Future.successful(page("home"))),
+        Route.view("/first")(_ => first.future),
+        Route.view("/second")(_ => second.future),
+        Route.view("/latest")(_ => latest.future)
+      ),
+      "/"
+    )
+    val cursor   = new SsrCursor()
     val resolved = ArrayBuffer.empty[String]
     router.onPageResolved(state => resolved += state.path)
     Runtime.mount(router, cursor)
@@ -100,13 +116,17 @@ class RouterLoadingSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "finish an error forward only after its asynchronous boundary renders" in {
-    val failed = Promise[AbstractComponent]()
+    val failed   = Promise[AbstractComponent]()
     val boundary = Promise[AbstractComponent]()
-    val router = new Router(Seq(
-      Route.view("/")(_ => Future.successful(page("home"))),
-      Route.view("/broken")(_ => failed.future),
-      Route.error("/500", 500)(_ => boundary.future)
-    ), "/", RouterConfig(onFailure = _ => Some("/500"), renderErrorsOnServer = true))
+    val router   = new Router(
+      Seq(
+        Route.view("/")(_ => Future.successful(page("home"))),
+        Route.view("/broken")(_ => failed.future),
+        Route.error("/500", 500)(_ => boundary.future)
+      ),
+      "/",
+      RouterConfig(onFailure = _ => Some("/500"), renderErrorsOnServer = true)
+    )
     val cursor = new SsrCursor()
     val events = ArrayBuffer.empty[String]
     router.onPageLoad(state => events += s"load:${state.path}")
@@ -126,9 +146,9 @@ class RouterLoadingSpec extends AnyFlatSpec with Matchers {
 
   it should "allow listener removal and ignore pending work after disposal" in {
     val pending = Promise[AbstractComponent]()
-    val router = new Router(Seq(Route.view("/")(_ => pending.future)), "/")
-    val cursor = new SsrCursor()
-    val events = ArrayBuffer.empty[String]
+    val router  = new Router(Seq(Route.view("/")(_ => pending.future)), "/")
+    val cursor  = new SsrCursor()
+    val events  = ArrayBuffer.empty[String]
     val removed = router.onPageLoad(_ => events += "removed")
     removed.dispose()
     router.onPageLoad(_ => events += "load")
@@ -143,20 +163,30 @@ class RouterLoadingSpec extends AnyFlatSpec with Matchers {
 
   it should "finish at the fallback if an error outlet fails while another is still pending" in {
     val pending = Promise[AbstractComponent]()
-    val failed = Promise[AbstractComponent]()
-    var calls = 0
-    val router = new Router(Seq(
-      Route.view("/broken")(_ => Future.failed(new RuntimeException("broken"))),
-      Route.error("/500", 500, children = Seq(Route.error("child", 500)(_ => {
-        calls += 1
-        if (calls == 1) pending.future
-        else failed.future
-      })))(_ => Future.successful(Route.component {
-        Router.routerOutlet()
-        Router.routerOutlet()
-      }))
-    ), "/broken", RouterConfig(onFailure = _ => Some("/500/child"), renderErrorsOnServer = true))
-    val cursor = new SsrCursor()
+    val failed  = Promise[AbstractComponent]()
+    var calls   = 0
+    val router  = new Router(
+      Seq(
+        Route.view("/broken")(_ => Future.failed(new RuntimeException("broken"))),
+        Route.error(
+          "/500",
+          500,
+          children = Seq(Route.error("child", 500)(_ => {
+            calls += 1
+            if (calls == 1) pending.future
+            else failed.future
+          }))
+        )(_ =>
+          Future.successful(Route.component {
+            Router.routerOutlet()
+            Router.routerOutlet()
+          })
+        )
+      ),
+      "/broken",
+      RouterConfig(onFailure = _ => Some("/500/child"), renderErrorsOnServer = true)
+    )
+    val cursor   = new SsrCursor()
     val resolved = ArrayBuffer.empty[String]
     router.onPageResolved(state => resolved += state.path)
     Runtime.mount(router, cursor)
@@ -174,14 +204,17 @@ class RouterLoadingSpec extends AnyFlatSpec with Matchers {
 
   it should "allow a load listener to redirect without starting the superseded loader" in {
     var obsoleteLoads = 0
-    val router = new Router(Seq(
-      Route.view("/")(_ => Future.successful(page("home"))),
-      Route.view("/obsolete")(_ => {
-        obsoleteLoads += 1
-        Future.successful(page("obsolete"))
-      }),
-      Route.view("/latest")(_ => Future.successful(page("latest")))
-    ), "/")
+    val router        = new Router(
+      Seq(
+        Route.view("/")(_ => Future.successful(page("home"))),
+        Route.view("/obsolete")(_ => {
+          obsoleteLoads += 1
+          Future.successful(page("obsolete"))
+        }),
+        Route.view("/latest")(_ => Future.successful(page("latest")))
+      ),
+      "/"
+    )
     val cursor = new SsrCursor()
     val events = ArrayBuffer.empty[String]
     router.onPageLoad(state => {

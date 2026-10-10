@@ -35,17 +35,17 @@ private[editor] final class MarkdownRenderer(
 
 private object MarkdownRenderer {
   private sealed trait Block
-  private final case class Heading(level: Int, value: String)                      extends Block
-  private final case class Paragraph(value: String)                                extends Block
-  private final case class Quote(blocks: Seq[Block])                               extends Block
-  private final case class ListBlock(ordered: Boolean, items: Seq[String])         extends Block
-  private final case class CodeBlock(language: String, value: String)              extends Block
+  private final case class Heading(level: Int, value: String)              extends Block
+  private final case class Paragraph(value: String)                        extends Block
+  private final case class Quote(blocks: Seq[Block])                       extends Block
+  private final case class ListBlock(ordered: Boolean, items: Seq[String]) extends Block
+  private final case class CodeBlock(language: String, value: String)      extends Block
   private final case class TableBlock(
       header: Seq[String],
       alignments: Seq[Option[String]],
       rows: Seq[Seq[String]]
   ) extends Block
-  private case object HorizontalRule                                               extends Block
+  private case object HorizontalRule extends Block
 
   private final class Element(tag: String) extends AbstractComponent {
     override val tagName: String = tag

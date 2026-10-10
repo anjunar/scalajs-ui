@@ -215,4 +215,3 @@ class TabsSpec extends AnyFlatSpec with Matchers {
       )
     }
 }
-

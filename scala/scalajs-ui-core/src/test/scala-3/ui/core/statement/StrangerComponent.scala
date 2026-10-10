@@ -18,4 +18,3 @@ private final class StrangerComponent extends AbstractComponent {
       text("fremd") {}
     }
 }
-

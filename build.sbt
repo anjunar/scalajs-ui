@@ -283,14 +283,14 @@ lazy val uiEditor = Project(id = "scalajs-ui-editor", base = file("scala/scalajs
   .enablePlugins(ScalaJSPlugin)
   .dependsOn(uiForms, uiViewport)
   .settings(
-    name                                 := "scalajs-ui-editor",
-    moduleName                           := "scalajs-ui-editor",
+    name       := "scalajs-ui-editor",
+    moduleName := "scalajs-ui-editor",
     libraryDependencies ++= Seq(
       "com.anjunar" %% "scalajs-ember-browser-support" % "1.0.3",
-      "com.anjunar" %% "scalajs-ember-standard" % "1.0.3",
-      "com.anjunar" %% "scalajs-ember-toolbar" % "1.0.3",
-      "com.anjunar" %% "scalajs-ember-forms" % "1.0.3",
-      "com.anjunar" %% "scalajs-ember-table" % "1.0.3",
+      "com.anjunar" %% "scalajs-ember-standard"        % "1.0.3",
+      "com.anjunar" %% "scalajs-ember-toolbar"         % "1.0.3",
+      "com.anjunar" %% "scalajs-ember-forms"           % "1.0.3",
+      "com.anjunar" %% "scalajs-ember-table"           % "1.0.3",
       // Syntax highlighting for code blocks (ember X02) -- optional in ember, but
       // NativeEditorAdapter.scala always attaches it, so it is not optional here.
       "com.anjunar" %% "scalajs-ember-code-highlighting" % "1.0.3"
@@ -330,7 +330,7 @@ lazy val app = Project(id = "scalajs-ui-demo", base = file("scala/scalajs-ui-dem
     // Sie speist sitemap.xml/robots.txt (tools/) und ueber diesen Generator den
     // Scala-Code, der das vollstaendige Dokument inklusive Head rendert.
     siteConfigBasePathOverride := sys.env.get("UI_BASE_PATH"),
-    siteConfigUrlOverride := sys.env.get("UI_SITE_URL"),
+    siteConfigUrlOverride      := sys.env.get("UI_SITE_URL"),
     Compile / sourceGenerators += Def.task {
       SiteConfigGenerator(
         (LocalRootProject / baseDirectory).value / "site.config.json",
@@ -352,23 +352,27 @@ lazy val app = Project(id = "scalajs-ui-demo", base = file("scala/scalajs-ui-dem
 
 // Isolated test application: exercises the public Scala core API in real browsers. Never published
 // or linked into the production bridge; no editor implementation belongs to this repository.
-lazy val uiCoreBrowserTests = Project(id = "scalajs-ui-core-browser-tests", base = file("scala/scalajs-ui-core-browser-tests"))
-  .enablePlugins(ScalaJSPlugin)
-  .dependsOn(uiCore)
-  .settings(commonJsSettings)
-  .settings(
-    publish / skip := true,
-    Compile / fullLinkJS / scalaJSLinkerOutputDirectory :=
-      (LocalRootProject / baseDirectory).value / "target" / "core-browser-tests"
-  )
+lazy val uiCoreBrowserTests =
+  Project(id = "scalajs-ui-core-browser-tests", base = file("scala/scalajs-ui-core-browser-tests"))
+    .enablePlugins(ScalaJSPlugin)
+    .dependsOn(uiCore)
+    .settings(commonJsSettings)
+    .settings(
+      publish / skip                                      := true,
+      Compile / fullLinkJS / scalaJSLinkerOutputDirectory :=
+        (LocalRootProject / baseDirectory).value / "target" / "core-browser-tests"
+    )
 
 // Isolated browser fixture for Editor integration; never published.
-lazy val uiEditorBrowserTests = Project(id = "scalajs-ui-editor-browser-tests", base = file("scala/scalajs-ui-editor-browser-tests"))
+lazy val uiEditorBrowserTests = Project(
+  id = "scalajs-ui-editor-browser-tests",
+  base = file("scala/scalajs-ui-editor-browser-tests")
+)
   .enablePlugins(ScalaJSPlugin)
   .dependsOn(uiEditor)
   .settings(commonJsSettings)
   .settings(
-    publish / skip := true,
+    publish / skip                                      := true,
     Compile / fullLinkJS / scalaJSLinkerOutputDirectory :=
       (LocalRootProject / baseDirectory).value / "target" / "editor-browser-tests"
   )

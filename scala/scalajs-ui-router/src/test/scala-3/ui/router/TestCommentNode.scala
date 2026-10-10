@@ -12,4 +12,3 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
 private final class TestCommentNode(val text: String) extends CommentNode {
   override def renderHtml(): String = s"<!--$text-->"
 }
-

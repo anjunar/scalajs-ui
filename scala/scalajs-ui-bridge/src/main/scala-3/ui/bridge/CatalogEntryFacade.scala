@@ -16,4 +16,3 @@ private[bridge] trait CatalogEntryFacade extends js.Object {
   val key: MessageKeyFacade               = js.native
   val translations: js.Dictionary[String] = js.native
 }
-

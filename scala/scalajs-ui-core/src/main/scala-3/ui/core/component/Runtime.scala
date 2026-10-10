@@ -9,6 +9,9 @@ import ui.core.render.*
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.scalajs.js.timers.{clearTimeout, setTimeout}
+import java.lang.{Integer as JavaInteger}
+import scala.collection.mutable.HashMap
+import java.util
 
 object Runtime {
 
@@ -241,7 +244,7 @@ object Runtime {
     val wanted   = desired.toVector
     val size     = previous.length
     require(wanted.length == size, "Reordering requires every existing child exactly once.")
-    val positions = new java.util.IdentityHashMap[AbstractComponent, java.lang.Integer]()
+    val positions = new util.IdentityHashMap[AbstractComponent, JavaInteger]()
     previous.zipWithIndex.foreach { (component, index) => positions.put(component, index) }
     val order = new Array[Int](size)
     val seen  = new Array[Boolean](size)
@@ -343,7 +346,7 @@ object Runtime {
       component: AbstractComponent,
       parent: AbstractComponent
   ): Map[AnyRef, AnyRef] = {
-    val values = scala.collection.mutable.HashMap.from(component._contextValues)
+    val values                             = HashMap.from(component._contextValues)
     var current: Option[AbstractComponent] = Some(parent)
     while (current.nonEmpty) {
       current.get._contextValues.foreach { case (key, value) =>

@@ -9,6 +9,9 @@ import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.scalajs.concurrent.JSExecutionContext
+import ui.core.document.HeadEntry
 
 /** The seam where SSR, the router, i18n, the theme and the request context meet.
   *
@@ -24,7 +27,7 @@ class AppSsrSpec extends AsyncFlatSpec with Matchers {
   // The /rendering route resolves through setTimeout. ScalaTest's serial context cannot drive a
   // macrotask, so the suite runs on the JS queue instead.
   override implicit def executionContext: ExecutionContext =
-    scala.scalajs.concurrent.JSExecutionContext.queue
+    JSExecutionContext.queue
 
   private def desktopRequest: RequestContext =
     RequestContext.withUserAgent(
@@ -58,7 +61,7 @@ class AppSsrSpec extends AsyncFlatSpec with Matchers {
   }
 
   it should "render every design preview with semantic controls and isolated state" in {
-    scala.concurrent.Future
+    Future
       .sequence(
         for {
           design <- Seq("atlas", "flora", "terra", "ember")
@@ -101,12 +104,12 @@ class AppSsrSpec extends AsyncFlatSpec with Matchers {
 
   it should "keep document head entries and assets in stable order" in {
     val assets = Seq(
-      ui.core.document.HeadEntry(
+      HeadEntry(
         "asset:0",
         "link",
         Seq("rel" -> "stylesheet", "href" -> "/assets/app.css")
       ),
-      ui.core.document.HeadEntry(
+      HeadEntry(
         "asset:1",
         "script",
         Seq("type" -> "module", "src" -> "/assets/app.js")
@@ -145,7 +148,9 @@ class AppSsrSpec extends AsyncFlatSpec with Matchers {
       .renderToStringAsync(cursor => Runtime.mount(documentFor(desktopRequest, "/editor"), cursor))
       .map { html =>
         html should include("data-scalajs-ui-editor-format=\"markdown\"")
-        html should include("<textarea class=\"scalajs-ui-editor__markdown-textarea\" name=\"article\"")
+        html should include(
+          "<textarea class=\"scalajs-ui-editor__markdown-textarea\" name=\"article\""
+        )
         html should include("Readonly")
         html should include("Markdown")
         html should not include "scalajs-ui-editor__markdown-actions"

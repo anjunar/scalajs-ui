@@ -8,4 +8,3 @@ import ui.core.text.TextValue
 import java.util.regex.Matcher
 
 final case class StaleSource(source: String, fingerprint: MessageFingerprint)
-
