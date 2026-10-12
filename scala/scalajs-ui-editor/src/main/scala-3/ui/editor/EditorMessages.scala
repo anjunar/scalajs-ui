@@ -58,6 +58,9 @@ object EditorMessages {
   val visual              = i18n"Visual"
   val markdown            = i18n"Markdown"
   val toolbar             = i18n"Editor toolbar"
+  val formatting          = i18n"Formatting"
+  val moreTools           = i18n"More tools"
+  val closeTools          = i18n"Close tools"
   val invalidImages = i18n"Images require an internal URL and an optional positive pixel width."
   val unavailable   = i18n"The visual editor is unavailable."
   val unsupportedMarkdown =

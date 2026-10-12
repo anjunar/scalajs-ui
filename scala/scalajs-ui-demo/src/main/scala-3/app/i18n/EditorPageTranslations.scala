@@ -5,6 +5,10 @@ import ui.core.i18n.{CatalogEntry, i18n}
 
 object EditorPageTranslations {
   val entries: Seq[CatalogEntry] = Seq(
+    de(i18n"Formatting", "Formatierung"),
+    de(i18n"Insert", "Einfügen"),
+    de(i18n"More tools", "Weitere Werkzeuge"),
+    de(i18n"Close tools", "Werkzeuge schließen"),
     de(i18n"Editor", "Editor"),
     de(
       i18n"Markdown as the stable editor value in SSR and the browser.",

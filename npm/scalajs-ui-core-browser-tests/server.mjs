@@ -5,7 +5,7 @@ const output = new URL('../../target/core-browser-tests/', import.meta.url);
 // Fail loudly if the actual Scala.js test application has not been linked.
 await readFile(new URL('main.js', output));
 const editorOutput = new URL('../../target/editor-browser-tests/', import.meta.url);
-const editorHtml = `<!doctype html><html><head><style>.scalajs-ui-editor__surface {min-height: 6rem} .ember-toolbar button {margin: 2px}</style></head><body><div id="root"></div><script type="module">
+const editorHtml = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/editor-css/Editor.css"><link rel="stylesheet" href="/editor-css/Icons.css"><style>@font-face {font-family: 'Material Icons'; src: url('/material.ttf')} .scalajs-ui-editor__surface {min-height: 6rem}</style></head><body><div id="root"></div><script type="module">
 import { editorFixtures } from '/editor/main.js';
 window.fixtures = editorFixtures;
 </script></body></html>`;
@@ -25,6 +25,19 @@ const server = createServer(async (req, res) => {
   if (path === '/editor') {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.end(editorHtml);
+    return;
+  }
+  if (path === '/editor-css/Editor.css' || path === '/editor-css/NativeEditor.css') {
+    res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    res.end(await readFile(new URL('../scalajs-ui/form/' + path.split('/').pop(), import.meta.url)));
+    return;
+  }
+  if (path === '/editor-css/Icons.css' || path === '/material.ttf') {
+    const font = path === '/material.ttf';
+    res.setHeader('Content-Type', font ? 'font/ttf' : 'text/css; charset=utf-8');
+    res.end(await readFile(new URL(font
+      ? '../../scala/scalajs-ui-demo/src/main/webapp/src/material.ttf'
+      : '../scalajs-ui/base/Icons.css', import.meta.url)));
     return;
   }
   if (path === '/') {

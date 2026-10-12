@@ -81,7 +81,7 @@ private[editor] final class NativeEditorAdapter(
   private var view: DocumentView                        = null
   private var selection: SelectionPort                  = null
   private var input: BrowserInputController             = null
-  private var bar: EditorToolbar                        = null
+  private var bar: NativeEditorToolbar                  = null
   private var dialogWindow: Option[Viewport.WindowConf] = None
   private var closeDialog: () => Unit                   = () => ()
   private var dialogService: EditorDialogService        = null
@@ -491,12 +491,12 @@ private[editor] final class NativeEditorAdapter(
         .flatMap(element => Option(element.getAttribute("data-command")))
       if (bar != null) Runtime.unmount(bar)
       val translatedGroups = iconGroups
-      bar = new EditorToolbar(
+      bar = new NativeEditorToolbar(
         session,
         selection,
-        translatedGroups.flatMap(_.actions),
-        name = labels.now(EditorMessages.editText),
-        groups = if (ribbon) translatedGroups else Vector.empty
+        translatedGroups,
+        labels,
+        ribbon
       )
       Runtime.mount(bar, DomCursor.root(toolbar))
       focusedCommand.foreach { id =>
@@ -757,6 +757,7 @@ private[editor] final class NativeEditorAdapter(
   }
 
   def setEditable(editable: Boolean): Unit = if (input != null) {
+    if (!editable && bar != null) bar.closePanel()
     if (!editable) closeDialog()
     input.setMode(if (editable) EditorMode.Editable else EditorMode.ReadOnly)
     if (media != null) {

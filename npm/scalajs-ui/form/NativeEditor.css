@@ -65,7 +65,7 @@
   outline-offset: 1px;
 }
 .scalajs-ui-editor .ember-toolbar button:disabled { opacity: .38; cursor: default; }
-.scalajs-ui-editor .ember-toolbar button.material-icons { font-size: 19px; line-height: 1; }
+.scalajs-ui-editor .ember-toolbar button.material-icons { font-family: 'Material Icons', fantasy; font-size: 19px; line-height: 1; }
 .scalajs-ui-editor .ember-ribbon-group__caption {
   all: unset;
   display: flex;
@@ -80,8 +80,8 @@
 }
 .scalajs-ui-editor .ember-ribbon-group__chevron { display: none; font-size: 14px; }
 .scalajs-ui-editor .ember-ribbon-group__controls[hidden] { display: none; }
-.scalajs-ui-editor [data-command="bold"] { font-weight: 800 !important; }
-.scalajs-ui-editor [data-command="italic"] { font-style: italic !important; }
+.scalajs-ui-editor [data-command="bold"]:not(.material-icons) { font-weight: 800 !important; }
+.scalajs-ui-editor [data-command="italic"]:not(.material-icons) { font-style: italic !important; }
 .scalajs-ui-editor [data-command="inline-code"] { font-family: monospace !important; }
 .scalajs-ui-editor .ember-toolbar-status:empty { display: none; }
 .scalajs-ui-editor .ember-toolbar-status:not(:empty) {
@@ -177,15 +177,71 @@
   font-weight: 600;
 }
 .scalajs-ui-editor__markdown-actions { gap: 8px; align-items: center; }
-/* EditorToolbar makes only one section visible below the same breakpoint.  Keep the disclosure
-   inside the editor instead of turning the compact ribbon into a horizontally scrolling strip. */
-@media (max-width: 640px) {
-  .scalajs-ui-editor__toolbar:has(.ember-toolbar--ribbon) { overflow: visible; }
-  .scalajs-ui-editor .ember-toolbar--ribbon { flex-direction: column; min-width: 0; gap: 0; padding: 4px 8px; }
-  .scalajs-ui-editor .ember-toolbar--ribbon .ember-ribbon-group { border-right: 0; border-bottom: 1px solid var(--aj-line, #d7dce3); padding: 4px 0; }
-  .scalajs-ui-editor .ember-toolbar--ribbon .ember-ribbon-group:last-of-type { border-bottom: 0; }
-  .scalajs-ui-editor .ember-toolbar--ribbon .ember-ribbon-group__caption { justify-content: space-between; padding: 7px 4px; font-size: 12px; cursor: pointer; }
-  .scalajs-ui-editor .ember-toolbar--ribbon .ember-ribbon-group__chevron { display: inline-block; transition: transform .15s ease; }
-  .scalajs-ui-editor .ember-toolbar--ribbon .ember-ribbon-group__caption[aria-expanded="true"] .ember-ribbon-group__chevron { transform: rotate(180deg); }
-  .scalajs-ui-editor .ember-toolbar--ribbon .ember-ribbon-group__controls { grid-template-rows: repeat(auto-fill, 34px); grid-auto-flow: row; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); padding-top: 4px; }
+/* NativeEditorToolbar switches presentation at 640px. The six touch targets occupy one
+   52px row; the native popover escapes editor/window clipping without reserving document space. */
+.scalajs-ui-editor__toolbar:has(.scalajs-ui-editor__quickbar) { flex: 0 0 auto; }
+.scalajs-ui-editor .scalajs-ui-editor__quickbar {
+  min-width: 0;
+  padding: 4px 6px;
+  gap: 0;
+  flex-wrap: wrap;
+  justify-content: space-between;
 }
+.scalajs-ui-editor .scalajs-ui-editor__quickbar > button {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 8px;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+.scalajs-ui-editor__mobile-panel {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  padding: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--aj-line, #d7dce3);
+  border-radius: 12px;
+  background: var(--aj-surface-overlay, var(--aj-surface, #f8fafc));
+  color: var(--aj-ink, #172536);
+  box-shadow: 0 8px 28px #0003;
+}
+.scalajs-ui-editor__mobile-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 8px;
+  font: 600 14px/1.4 system-ui, sans-serif;
+}
+.scalajs-ui-editor__mobile-panel-heading button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 20px;
+}
+.scalajs-ui-editor .scalajs-ui-editor__mobile-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+  gap: 4px;
+  padding: 4px 0 0;
+}
+.scalajs-ui-editor .scalajs-ui-editor__mobile-actions button {
+  min-width: 0;
+  min-height: 44px;
+  justify-content: flex-start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+  padding: 8px;
+  font-size: 14px;
+  border-color: var(--aj-line, #d7dce3);
+}
+.scalajs-ui-editor .scalajs-ui-editor__mobile-actions .ember-toolbar-status { grid-column: 1 / -1; }

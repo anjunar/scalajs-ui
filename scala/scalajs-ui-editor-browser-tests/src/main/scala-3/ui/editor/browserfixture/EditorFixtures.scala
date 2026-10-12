@@ -8,6 +8,7 @@ import ui.core.i18n.{I18n, I18nLocale, I18nResolver, I18nRuntime, MessageCatalog
 import ui.core.render.{Cursor, DomCursor}
 import ui.core.state.Property
 import ui.editor.{Editor, EditorMessages, MediaUploadStatus, NativeEditorBinding}
+import ui.editor.plugins.*
 import ui.viewport.Viewport.viewport
 
 /** Browser test application only; exercises the real editor and its application I18n context. */
@@ -22,9 +23,17 @@ object EditorFixtures {
     locale,
     I18nResolver(
       MessageCatalog(
-        I18n.entry(EditorMessages.undo.key).translations(I18nLocale("de")     -> "Rückgängig"),
-        I18n.entry(EditorMessages.redo.key).translations(I18nLocale("de")     -> "Wiederholen"),
-        I18n.entry(EditorMessages.bold.key).translations(I18nLocale("de")     -> "Fett"),
+        I18n.entry(EditorMessages.undo.key).translations(I18nLocale("de")       -> "Rückgängig"),
+        I18n.entry(EditorMessages.redo.key).translations(I18nLocale("de")       -> "Wiederholen"),
+        I18n.entry(EditorMessages.bold.key).translations(I18nLocale("de")       -> "Fett"),
+        I18n.entry(EditorMessages.formatting.key).translations(I18nLocale("de") -> "Formatierung"),
+        I18n.entry(EditorMessages.insert.key).translations(I18nLocale("de")     -> "Einfügen"),
+        I18n
+          .entry(EditorMessages.moreTools.key)
+          .translations(I18nLocale("de") -> "Weitere Werkzeuge"),
+        I18n
+          .entry(EditorMessages.closeTools.key)
+          .translations(I18nLocale("de") -> "Werkzeuge schließen"),
         I18n.entry(EditorMessages.history.key).translations(I18nLocale("de")  -> "Verlauf"),
         I18n.entry(EditorMessages.editText.key).translations(I18nLocale("de") -> "Text bearbeiten"),
         I18n.entry(EditorMessages.editLink.key).translations(I18nLocale("de") -> "Link bearbeiten"),
@@ -50,6 +59,8 @@ object EditorFixtures {
           if (initialLocale.nonEmpty) I18nRuntime.provide(language)
           viewport {
             control = Editor.editor("body", standalone = true) {
+              basePlugin(); headingPlugin(); listPlugin(); linkPlugin(); imagePlugin()
+              codePlugin(); horizontalRulePlugin(); tablePlugin()
               Editor.value = "Original text"
               summon[Editor].onNativeSession = Some(value => {
                 binding = value; mountedSessions += 1
@@ -68,7 +79,8 @@ object EditorFixtures {
   @JSExport def sessions(): Int               = mountedSessions
   @JSExport def pending(count: Int): Unit     =
     control.mediaStatusProperty.set(MediaUploadStatus(pending = count))
-  @JSExport def dispose(): Unit = {
+  @JSExport def setEditable(value: Boolean): Unit = control.editableProperty.set(value)
+  @JSExport def dispose(): Unit                   = {
     if (root != null) { Runtime.unmount(root); root = null }
   }
 }
