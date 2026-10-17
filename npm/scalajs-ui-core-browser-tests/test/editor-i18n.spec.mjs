@@ -33,6 +33,8 @@ test('clicking an existing image edits its metadata without inserting another im
   await dialog.getByLabel('Image address', { exact: true }).fill('/media/example.png');
   await dialog.getByLabel('Alternative text', { exact: true }).fill('Original description');
   await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
+  // The full application stylesheet animates window dismissal before unmounting it.
+  await expect(dialog).toHaveCount(0);
   const image = surface.locator('img');
   await expect(image).toHaveCount(1);
   await image.click();

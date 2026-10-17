@@ -75,7 +75,7 @@ final class EditorSpec extends AnyFlatSpec with Matchers {
     } finally Runtime.unmount(root)
   }
 
-  it should "render an edit link in readonly mode and a Markdown textarea in editable mode" in {
+  it should "render a toolbar view selector and a no-script mode link" in {
     val readonly = Runtime.renderToString { cursor =>
       Runtime.mount(
         new EditorRoot {
@@ -89,6 +89,8 @@ final class EditorSpec extends AnyFlatSpec with Matchers {
       )
     }
 
+    readonly should include("scalajs-ui-editor__view-selector")
+    readonly should not include "scalajs-ui-editor__markdown-actions"
     readonly should include("href=\"?article.editor=editable\"")
     readonly should include("<h1 class=\"editor-heading-h1\"")
     readonly should not include "<textarea"
@@ -131,6 +133,7 @@ final class EditorSpec extends AnyFlatSpec with Matchers {
 
     html should include("<textarea")
     html should not include "scalajs-ui-editor__markdown-actions"
+    html should not include "scalajs-ui-editor__view-selector"
   }
 
   it should "derive its mode from UrlScope and preserve the remaining route URL" in {
@@ -216,6 +219,7 @@ final class EditorSpec extends AnyFlatSpec with Matchers {
           override protected def content(using AbstractComponent, Cursor): Unit =
             editor("summary", standalone = true) {
               placeholder = "Write a summary"
+              showModeActions = false
               editable = false
             }
         },

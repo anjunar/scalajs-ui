@@ -6,7 +6,7 @@ one runtime.
 
 | Version | Platform | Scala | License |
 | --- | --- | --- | --- |
-| 1.1.5 | Scala.js | 3.3 | MIT |
+| 1.1.6-SNAPSHOT | Scala.js | 3.3 | MIT |
 
 Documentation: [English](https://docs.anjunar.com/en/scalajs-ui) · [Deutsch](https://docs.anjunar.com/de/scalajs-ui)
 Website: [English](https://anjunar.com/en/scalajs-ui) · [Deutsch](https://anjunar.com/de/scalajs-ui)
@@ -24,12 +24,12 @@ addSbtPlugin("org.scala-js" % "sbt-scalajs" % "1.22.0")
 enablePlugins(ScalaJSPlugin)
 scalaJSUseMainModuleInitializer := true
 
-libraryDependencies += "com.anjunar" %% "scalajs-ui-core" % "1.1.5"     // components, DSL, state, SSR
-libraryDependencies += "com.anjunar" %% "scalajs-ui-router" % "1.1.5"   // routes, loaders, locale prefixes
-libraryDependencies += "com.anjunar" %% "scalajs-ui-controls" % "1.1.5" // tabs, carousel, tables, grids
-libraryDependencies += "com.anjunar" %% "scalajs-ui-forms" % "1.1.5"    // typed forms and inputs
-libraryDependencies += "com.anjunar" %% "scalajs-ui-viewport" % "1.1.5" // windows, overlays, notifications
-libraryDependencies += "com.anjunar" %% "scalajs-ui-editor" % "1.1.5"   // Markdown editor
+libraryDependencies += "com.anjunar" %% "scalajs-ui-core" % "1.1.6-SNAPSHOT"     // components, DSL, state, SSR
+libraryDependencies += "com.anjunar" %% "scalajs-ui-router" % "1.1.6-SNAPSHOT"   // routes, loaders, locale prefixes
+libraryDependencies += "com.anjunar" %% "scalajs-ui-controls" % "1.1.6-SNAPSHOT" // tabs, carousel, tables, grids
+libraryDependencies += "com.anjunar" %% "scalajs-ui-forms" % "1.1.6-SNAPSHOT"    // typed forms and inputs
+libraryDependencies += "com.anjunar" %% "scalajs-ui-viewport" % "1.1.6-SNAPSHOT" // windows, overlays, notifications
+libraryDependencies += "com.anjunar" %% "scalajs-ui-editor" % "1.1.6-SNAPSHOT"   // Markdown editor
 ```
 
 ## First example
@@ -204,14 +204,14 @@ One command sets the version in the Scala build, the npm workspaces, the demos, 
 in this README; `check-version` verifies the checked-in values without changing files, as CI does:
 
 ```bash
-npm run set-version -- 1.1.5
-npm run check-version -- 1.1.5
+npm run set-version -- 1.1.6-SNAPSHOT
+npm run check-version -- 1.1.6-SNAPSHOT
 ```
 
 After the release checks pass, publish the Maven artifacts and the npm packages:
 
 ```powershell
-.\scripts\publish-central.ps1 -Version 1.1.5
+.\scripts\publish-central.ps1 -Version 1.1.6-SNAPSHOT
 .\scripts\publish-npm.ps1
 ```
 

@@ -13,6 +13,8 @@ final class EditorI18nSpec extends AnyFlatSpec with Matchers {
     Property(I18nLocale.En),
     I18nResolver(
       MessageCatalog(
+        I18n.entry(EditorMessages.view.key).translations(I18nLocale("de")     -> "Ansicht"),
+        I18n.entry(EditorMessages.edit.key).translations(I18nLocale("de")     -> "Bearbeiten"),
         I18n.entry(EditorMessages.visual.key).translations(I18nLocale("de")   -> "Visuell"),
         I18n.entry(EditorMessages.readonly.key).translations(I18nLocale("de") -> "Lesemodus"),
         I18n.entry(EditorMessages.toolbar.key).translations(I18nLocale("de")  -> "Werkzeugleiste"),
@@ -54,11 +56,12 @@ final class EditorI18nSpec extends AnyFlatSpec with Matchers {
     try {
       control.mediaStatusProperty.set(MediaUploadStatus(pending = 2))
       cursor.collectHtml() should include("Uploading 2 image(s)…")
-      cursor.collectHtml() should include(">Visual</button>")
+      cursor.collectHtml() should include(">Edit</option>")
       language.setLocale(I18nLocale("de"))
       val translated = cursor.collectHtml()
-      translated should include(">Visuell</button>")
-      translated should include(">Lesemodus</a>")
+      translated should include(">Bearbeiten</option>")
+      translated should include(">Lesemodus</option>")
+      translated should include(">Ansicht</span>")
       translated should include("aria-label=\"Werkzeugleiste\"")
       translated should include("2 Bilder werden hochgeladen")
       control.valueProperty.get shouldBe "**Keep this**"

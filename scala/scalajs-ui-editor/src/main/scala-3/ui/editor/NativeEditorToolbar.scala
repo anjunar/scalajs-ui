@@ -12,8 +12,8 @@ import ui.core.render.{Cursor, DomNodes}
 import ui.core.state.Disposable
 
 /** Application presentation around Ember's commands. Resizing replaces only the toolbar, never the
-  * document view, selection port or history. Popup actions use the same native command buttons and
-  * keyboard navigation as the desktop ribbon.
+  * document view, selection port or history. Popup actions share the ribbon's commands, presented
+  * as labelled rows with vertical keyboard navigation.
   */
 private[editor] final class NativeEditorToolbar(
     session: EditorSession,
@@ -41,7 +41,7 @@ private[editor] final class NativeEditorToolbar(
   private val insertIds = Set("link", "image", "upload-image", "code-block", "table-insert", "rule")
   private var bar: EditorToolbar       = null
   private var panel: AbstractComponent = null
-  private var panelBar: EditorToolbar  = null
+  private var panelBar: MobileActions  = null
   private var contentCursor: Cursor    = null
   private var mobile                   = false
   private var openPanel                = ""
@@ -71,6 +71,88 @@ private[editor] final class NativeEditorToolbar(
     case "insert" => EditorMessages.insert
     case _        => EditorMessages.moreTools
   })
+
+  /** The popup has its own presentation: icon and full label, one column, one Tab stop. */
+  private final class MobileActions(items: Vector[ToolbarAction], name: String)
+      extends AbstractComponent {
+    val tagName         = "div"
+    private var buttons = Vector.empty[(ToolbarAction, AbstractComponent)]
+    private var current = 0
+
+    private def tabStops(): Unit = buttons.zipWithIndex.foreach { case ((action, button), index) =>
+      button.setAttribute("tabindex", if (index == current && action.state().enabled) "0" else "-1")
+    }
+
+    def refresh(): Unit = {
+      buttons.foreach { case (action, button) =>
+        val state = action.state()
+        if (state.enabled) button.removeAttribute("disabled")
+        else button.setAttribute("disabled", "")
+        state.pressed match {
+          case Some(value) => button.setAttribute("aria-pressed", value)
+          case None        => button.removeAttribute("aria-pressed")
+        }
+      }
+      if (!items.lift(current).exists(_.state().enabled))
+        current = items.indexWhere(_.state().enabled)
+      tabStops()
+    }
+
+    override def compose(cursor: Cursor): Unit = {
+      addClass("scalajs-ui-editor__mobile-actions")
+      setAttribute("role", "toolbar")
+      setAttribute("aria-label", name)
+      setAttribute("aria-orientation", "vertical")
+      items.zipWithIndex.foreach { case (action, index) =>
+        val button = new AbstractComponent {
+          val tagName                                = "button"
+          override def compose(cursor: Cursor): Unit = {
+            setAttribute("type", "button")
+            setAttribute("data-command", action.id)
+            setAttribute("aria-label", action.label)
+            val icon = new AbstractComponent {
+              val tagName                                = "span"
+              override def compose(cursor: Cursor): Unit = {
+                addClass("material-icons")
+                addClass("scalajs-ui-editor__mobile-action-icon")
+                setAttribute("aria-hidden", "true")
+                Runtime.mount(new TextComponent(action.icon.getOrElse("")), cursor, Some(this))
+              }
+            }
+            Runtime.mount(icon, cursor, Some(this))
+            Runtime.mount(new TextComponent(action.label), cursor, Some(this))
+            onHandler("focus") { _ => current = index; tabStops() }
+            onHandler("click") { _ =>
+              if (action.state().enabled && !session.isDisposed) action.activate()
+              refresh()
+            }
+            onHandler("keydown") { event =>
+              val key = event.raw.asInstanceOf[dom.KeyboardEvent]
+              if (!key.altKey && !key.ctrlKey && !key.metaKey) {
+                val enabled = items.indices.filter(i => items(i).state().enabled).toVector
+                if (enabled.nonEmpty) {
+                  val position    = enabled.indexOf(index)
+                  val destination = key.key match {
+                    case "ArrowDown" => Some(enabled((position + 1) % enabled.size))
+                    case "ArrowUp"   => Some(enabled((position - 1 + enabled.size) % enabled.size))
+                    case "Home"      => Some(enabled.head)
+                    case "End"       => Some(enabled.last)
+                    case _           => None
+                  }
+                  destination.foreach { next =>
+                    event.preventDefault()
+                    element(buttons(next)._2).focus()
+                  }
+                }
+              }
+            }
+          }
+        }
+        buttons :+= action -> Runtime.mount(button, cursor, Some(this))
+      }
+      refresh()
+    }
+  }
 
   def announce(value: String): Unit = {
     message = value
@@ -117,13 +199,14 @@ private[editor] final class NativeEditorToolbar(
     val below     = viewportTop + viewportHeight - bounds.bottom - 8
     val above     = bounds.top - viewportTop - 8
     val downward  = below >= above
-    val available = math.max(0, if (downward) below else above)
-    val width     = math.min(bounds.width, math.max(0, viewportWidth - 16))
+    val available = math.max(0, math.min(440, if (downward) below else above))
+    val width     = math.min(320, math.min(bounds.width, math.max(0, viewportWidth - 16)))
+    val anchor    = trigger(openPanel).map(_.getBoundingClientRect().left).getOrElse(bounds.left)
     val popup     = element(panel)
     popup.style.width = s"${width}px"
     popup.style.maxHeight = s"${available}px"
     popup.style.left =
-      s"${math.max(viewportLeft + 8, math.min(bounds.left, viewportLeft + viewportWidth - width - 8))}px"
+      s"${math.max(viewportLeft + 8, math.min(anchor, viewportLeft + viewportWidth - width - 8))}px"
     popup.style.top = s"${
         if (downward) bounds.bottom + 4 else bounds.top - popup.getBoundingClientRect().height - 4
       }px"
@@ -157,15 +240,7 @@ private[editor] final class NativeEditorToolbar(
           }
           Runtime.mount(header, cursor, Some(this))
           panelBar = Runtime.mount(
-            new EditorToolbar(
-              session,
-              selection,
-              panelActions(id).map(action =>
-                mobileAction(action).copy(icon = None, shortLabel = None)
-              ),
-              name = panelLabel(id),
-              extraClasses = Vector("scalajs-ui-editor__mobile-actions")
-            ),
+            new MobileActions(panelActions(id).map(mobileAction), panelLabel(id)),
             cursor,
             Some(this)
           )

@@ -9,7 +9,7 @@ Rich-text editing for Scala JS UI 1.0, backed by Ember in the browser and expose
 ## Installation
 
 ```scala
-libraryDependencies += "com.anjunar" %% "scalajs-ui-editor" % "1.1.5"
+libraryDependencies += "com.anjunar" %% "scalajs-ui-editor" % "1.1.6-SNAPSHOT"
 ```
 
 The module uses the published `scalajs-ember` libraries and the viewport for link and image dialogs.
@@ -95,6 +95,13 @@ history remain alive; dialog input is retained. The native toolbar component is 
 Ember takes its labels in the constructor. Explicit `editLabel` and `readonlyLabel` strings remain
 application-controlled. Messages returned by upload services or the editing engine keep their
 original diagnostic text.
+
+## View selection
+
+The toolbar contains one view selector for visual editing, readonly preview, and Markdown source.
+It stays available in every view, changes the current editor in place, and retains unsaved Markdown.
+`showModeActions = false` omits the selector for fixed read-only displays or application-owned controls.
+The separate Markdown button and readonly/edit action row are no longer rendered.
 
 ## SSR and non-JavaScript behavior
 

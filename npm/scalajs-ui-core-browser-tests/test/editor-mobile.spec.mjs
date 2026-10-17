@@ -85,6 +85,57 @@ test('formatting keeps the selected text through the quickbar and popup, undo an
   await expect.poll(() => value(page)).toContain('`Original`');
 });
 
+test('popup rows stay vertical and readable in every design and color scheme', async ({ page }) => {
+  await mount(page);
+  await selectOriginal(page);
+  for (const design of ['atlas', 'ember', 'flora', 'terra']) {
+    for (const scheme of ['light', 'dark']) {
+      await page.evaluate(({ design, scheme }) => {
+        document.documentElement.dataset.design = design;
+        document.documentElement.dataset.colorScheme = scheme;
+      }, { design, scheme });
+      for (const menu of ['Formatting', 'Insert', 'More tools']) {
+        await activate(page.getByRole('button', { name: menu, exact: true }));
+        const popup = panel(page);
+        const appearance = await popup.evaluate(element => {
+          const editor = document.querySelector('.scalajs-ui-editor-host');
+          const actions = element.querySelector('.scalajs-ui-editor__mobile-actions');
+          const rows = [...actions.querySelectorAll('button')].map(button => {
+            const r = button.getBoundingClientRect();
+            return { x: r.x, y: r.y, width: r.width, height: r.height,
+              label: button.getAttribute('aria-label'), text: button.textContent,
+              icon: button.querySelector('[aria-hidden="true"]').textContent };
+          });
+          return { rows, background: getComputedStyle(element).backgroundColor,
+            editorBackground: getComputedStyle(editor).backgroundColor,
+            font: getComputedStyle(actions.querySelector('button')).fontFamily,
+            appFont: getComputedStyle(document.documentElement).fontFamily,
+            scrollWidth: actions.scrollWidth, width: actions.clientWidth };
+        });
+        expect(appearance.background).toBe(appearance.editorBackground);
+        expect(appearance.font).toBe(appearance.appFont);
+        expect(appearance.scrollWidth).toBe(appearance.width);
+        for (const [index, row] of appearance.rows.entries()) {
+          expect(row.height).toBeGreaterThanOrEqual(44);
+          expect(row.text).toContain(row.label);
+          expect(row.icon).not.toBe('');
+          expect(row.x).toBe(appearance.rows[0].x);
+          expect(row.width).toBe(appearance.rows[0].width);
+          if (index) expect(row.y).toBeGreaterThanOrEqual(appearance.rows[index - 1].y + appearance.rows[index - 1].height);
+        }
+        if (design === 'ember' && menu === 'Formatting') {
+          const screenshot = test.info().outputPath(`mobile-formatting-${scheme}.png`);
+          await page.screenshot({ path: screenshot });
+          await test.info().attach(`mobile-formatting-${scheme}`, {
+            path: screenshot, contentType: 'image/png',
+          });
+        }
+        await activate(popup.getByRole('button', { name: 'Close tools' }));
+      }
+    }
+  }
+});
+
 test('link dialog applies to the selection retained while opening Insert', async ({ page }) => {
   await mount(page);
   await selectOriginal(page);
@@ -104,8 +155,18 @@ test('panels close with Escape, outside input and Tab and preserve keyboard focu
   await format.focus();
   await page.keyboard.press('Enter');
   await expect(panel(page).getByRole('button', { name: 'Inline code', exact: true })).toBeFocused();
-  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowDown');
   await expect(panel(page).getByRole('button', { name: 'Paragraph', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(panel(page).getByRole('button', { name: 'Inline code', exact: true })).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(panel(page).locator('.scalajs-ui-editor__mobile-actions button:enabled').last()).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(panel(page).getByRole('button', { name: 'Inline code', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(panel(page).locator('.scalajs-ui-editor__mobile-actions button:enabled').last()).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(panel(page).getByRole('button', { name: 'Inline code', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(panel(page)).toHaveCount(0);
   await expect(format).toBeFocused();

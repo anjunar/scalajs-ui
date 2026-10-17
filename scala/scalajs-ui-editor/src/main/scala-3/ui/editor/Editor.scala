@@ -8,8 +8,6 @@ import ui.core.dsl.ClassDsl.{addClass, classes}
 import ui.core.dsl.DslLayer
 import ui.core.dsl.DslLayer.render
 import ui.core.dsl.StyleDsl.*
-import ui.core.layout.Button.{button, buttonType}
-import ui.core.dsl.EventDsl.onClick
 import ui.core.layout.Condition.when
 import ui.core.layout.Div
 import ui.core.layout.Div.div
@@ -50,12 +48,9 @@ final class Editor private[editor] (
 
   override val valueProperty: Property[String] = Property("")
 
-  private val placeholderProperty  = Property("")
-  private val presentationError    = Property(Option.empty[String])
-  private lazy val labels          = EditorText(this)
-  private lazy val sourceModeLabel = markdownModeProperty.flatMap(source =>
-    labels.text(if (source) EditorMessages.visual else EditorMessages.markdown)
-  )
+  private val placeholderProperty                      = Property("")
+  private val presentationError                        = Property(Option.empty[String])
+  private lazy val labels                              = EditorText(this)
   private val markdownModeProperty                     = Property(false)
   private val plugins                                  = mutable.ArrayBuffer.empty[EditorPlugin]
   var mediaUploader: Option[MediaUploader]             = None
@@ -118,10 +113,47 @@ final class Editor private[editor] (
         div {
           classes = Seq("scalajs-ui-editor__shell")
 
-          toolbarHost = div {
-            classes = Seq("scalajs-ui-editor__toolbar")
+          div {
+            classes = "scalajs-ui-editor__toolbar-frame"
+            setDslAttribute("role", "group")
             ariaLabel = labels.text(EditorMessages.toolbar)
-            style { display = "none" }
+            if (!showModeActionsValue) style { display = "contents" }
+            toolbarHost = div {
+              classes = Seq("scalajs-ui-editor__toolbar")
+              ariaLabel = labels.text(EditorMessages.toolbar)
+              style { display = "none" }
+            }
+            if (showModeActionsValue) {
+              DslLayer.child(
+                new EditorViewSelector(
+                  editableProperty,
+                  markdownModeProperty,
+                  labels,
+                  editLabelValue.map(Property(_)).getOrElse(labels.text(EditorMessages.edit)),
+                  readonlyLabelValue
+                    .map(Property(_))
+                    .getOrElse(labels.text(EditorMessages.readonly))
+                )
+              ) {}
+              dynamic(editableProperty.map[AbstractComponent] { editable =>
+                if (editable)
+                  new EditorModeFallback(
+                    readonlyUrlValue.getOrElse(modeUrl(editable = false)),
+                    readonlyLabelValue
+                      .map(Property(_))
+                      .getOrElse(labels.text(EditorMessages.readonly)),
+                    readonly = true,
+                    onActivate = () => editableProperty.set(false)
+                  )
+                else
+                  new EditorModeFallback(
+                    editUrlValue.getOrElse(modeUrl(editable = true)),
+                    editLabelValue.map(Property(_)).getOrElse(labels.text(EditorMessages.edit)),
+                    readonly = false,
+                    onActivate = () => editableProperty.set(true)
+                  )
+              })
+            }
           }
 
           div {
@@ -144,35 +176,6 @@ final class Editor private[editor] (
               )
             ) {}
           }
-
-          if showModeActionsValue then
-            div {
-              classes = Seq("scalajs-ui-editor__markdown-actions")
-              button(sourceModeLabel) {
-                buttonType("button")
-                onClick { _ =>
-                  markdownModeProperty.set(!markdownModeProperty.get)
-                }
-              }
-              dynamic(editableProperty.map[AbstractComponent] { editable =>
-                if (editable)
-                  new MarkdownModeLink(
-                    readonlyUrlValue.getOrElse(modeUrl(editable = false)),
-                    readonlyLabelValue
-                      .map(Property(_))
-                      .getOrElse(labels.text(EditorMessages.readonly)),
-                    readonly = true,
-                    onActivate = () => editableProperty.set(false)
-                  )
-                else
-                  new MarkdownModeLink(
-                    editUrlValue.getOrElse(modeUrl(editable = true)),
-                    editLabelValue.map(Property(_)).getOrElse(labels.text(EditorMessages.edit)),
-                    readonly = false,
-                    onActivate = () => editableProperty.set(true)
-                  )
-              })
-            }
 
           div {
             setDslAttribute("role", "status")
@@ -346,7 +349,7 @@ final class Editor private[editor] (
     addDisposable(validators.observe(_ => validate()))
     addDisposable(dirtyProperty.observe(_ => validate()))
     addDisposable(editableProperty.observe { editable =>
-      setAttribute("aria-disabled", (!editable).toString)
+      setAttribute("aria-disabled", (!editable && !showModeActionsValue).toString)
       updateEditable(editable)
     })
     addDisposable(markdownModeProperty.observe { markdownMode =>

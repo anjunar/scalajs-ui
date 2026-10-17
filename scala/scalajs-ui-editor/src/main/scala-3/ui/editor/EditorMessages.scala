@@ -57,6 +57,7 @@ object EditorMessages {
   val readonly            = i18n"Readonly"
   val visual              = i18n"Visual"
   val markdown            = i18n"Markdown"
+  val view                = i18n"Editor view"
   val toolbar             = i18n"Editor toolbar"
   val formatting          = i18n"Formatting"
   val moreTools           = i18n"More tools"

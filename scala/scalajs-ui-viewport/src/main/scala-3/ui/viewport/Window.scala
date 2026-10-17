@@ -45,10 +45,12 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
         zIndex = conf.zIndex.map(_.toString)
       }
 
-      onClick { _ =>
-        Viewport.touchWindow(conf)
-        conf.onClick.foreach(_(this))
-      }
+      // Activate before a descendant's click handler can open another window. A bubbling click
+      // would otherwise bring this parent back over the window that was just created.
+      on("pointerdown") { _ => Viewport.touchWindow(conf) }
+      on("keydown") { _ => Viewport.touchWindow(conf) }
+      on("focusin") { _ => Viewport.touchWindow(conf) }
+      onClick { _ => conf.onClick.foreach(_(this)) }
 
       div {
         classes = Seq("ui-window__surface")

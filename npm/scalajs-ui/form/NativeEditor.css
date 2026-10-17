@@ -82,7 +82,7 @@
 .scalajs-ui-editor .ember-ribbon-group__controls[hidden] { display: none; }
 .scalajs-ui-editor [data-command="bold"]:not(.material-icons) { font-weight: 800 !important; }
 .scalajs-ui-editor [data-command="italic"]:not(.material-icons) { font-style: italic !important; }
-.scalajs-ui-editor [data-command="inline-code"] { font-family: monospace !important; }
+.scalajs-ui-editor .ember-toolbar [data-command="inline-code"]:not(.material-icons) { font-family: monospace !important; }
 .scalajs-ui-editor .ember-toolbar-status:empty { display: none; }
 .scalajs-ui-editor .ember-toolbar-status:not(:empty) {
   flex-basis: 100%;
@@ -201,47 +201,96 @@
   margin: 0;
   box-sizing: border-box;
   padding: 8px;
-  overflow: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
-  border: 1px solid var(--aj-line, #d7dce3);
-  border-radius: 12px;
-  background: var(--aj-surface-overlay, var(--aj-surface, #f8fafc));
+  border: 1px solid var(--aj-floating-border, var(--aj-line, #d7dce3));
+  border-radius: var(--aj-floating-radius, 8px);
+  background: var(--aj-floating-bg, var(--aj-surface, #f8fafc));
   color: var(--aj-ink, #172536);
-  box-shadow: 0 8px 28px #0003;
+  box-shadow: var(--aj-floating-shadow, 0 8px 28px #0003);
+  font: 400 14px/1.4 var(--font-interface, system-ui, sans-serif);
+}
+.scalajs-ui-editor__mobile-panel:popover-open {
+  display: flex;
+  flex-direction: column;
 }
 .scalajs-ui-editor__mobile-panel-heading {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  padding-left: 8px;
-  font: 600 14px/1.4 system-ui, sans-serif;
+  padding-inline-start: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--aj-line-soft, #d7dce3);
+  color: var(--aj-ink-muted, #526071);
+  font-weight: 600;
 }
 .scalajs-ui-editor__mobile-panel-heading button {
   min-width: 44px;
   min-height: 44px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--aj-control-radius, 5px);
   background: transparent;
   color: inherit;
   cursor: pointer;
   font-size: 20px;
 }
-.scalajs-ui-editor .scalajs-ui-editor__mobile-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  min-width: 0;
-  gap: 4px;
-  padding: 4px 0 0;
+.scalajs-ui-editor__mobile-panel-heading button:hover {
+  background: var(--aj-surface-hover, #e6effc);
+  color: var(--aj-ink, #172536);
 }
-.scalajs-ui-editor .scalajs-ui-editor__mobile-actions button {
+.scalajs-ui-editor__mobile-actions {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px;
+}
+.scalajs-ui-editor__mobile-actions button {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
   min-width: 0;
   min-height: 44px;
-  justify-content: flex-start;
+  margin: 0;
+  padding: 10px;
+  border: 0;
+  border-radius: var(--aj-control-radius, 5px);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
   white-space: normal;
   overflow-wrap: anywhere;
-  text-align: left;
-  padding: 8px;
-  font-size: 14px;
-  border-color: var(--aj-line, #d7dce3);
+  text-align: start;
 }
-.scalajs-ui-editor .scalajs-ui-editor__mobile-actions .ember-toolbar-status { grid-column: 1 / -1; }
+.scalajs-ui-editor__mobile-actions button:hover:not(:disabled) {
+  background: var(--aj-surface-hover, #e6effc);
+}
+.scalajs-ui-editor__mobile-actions button:is([aria-pressed="true"], [aria-pressed="mixed"]) {
+  color: var(--aj-accent-strong, #174c94);
+  background: var(--aj-accent-muted, #e6effc);
+  font-weight: 600;
+}
+.scalajs-ui-editor__mobile-actions button:disabled {
+  color: var(--aj-ink-muted, #526071);
+  opacity: .45;
+  cursor: default;
+}
+.scalajs-ui-editor__mobile-actions button:focus-visible,
+.scalajs-ui-editor__mobile-panel-heading button:focus-visible {
+  outline: 2px solid var(--aj-accent-ring, var(--aj-accent, #3977c5));
+  outline-offset: -2px;
+}
+.scalajs-ui-editor__mobile-action-icon {
+  flex: 0 0 24px;
+  width: 24px;
+  font-size: 20px;
+  text-align: center;
+}

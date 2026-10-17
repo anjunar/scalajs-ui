@@ -4,11 +4,14 @@ import org.scalajs.dom
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 import ui.core.component.{AbstractComponent, Runtime}
 import ui.core.dsl.DslLayer.render
+import ui.core.dsl.EventDsl.onClick
+import ui.core.layout.Button.button
 import ui.core.i18n.{I18n, I18nLocale, I18nResolver, I18nRuntime, MessageCatalog}
-import ui.core.render.{Cursor, DomCursor}
+import ui.core.render.{Cursor, DomCursor, HydratingCursor}
 import ui.core.state.Property
 import ui.editor.{Editor, EditorMessages, MediaUploadStatus, NativeEditorBinding}
 import ui.editor.plugins.*
+import ui.viewport.Viewport
 import ui.viewport.Viewport.viewport
 
 /** Browser test application only; exercises the real editor and its application I18n context. */
@@ -23,6 +26,9 @@ object EditorFixtures {
     locale,
     I18nResolver(
       MessageCatalog(
+        I18n.entry(EditorMessages.view.key).translations(I18nLocale("de")       -> "Ansicht"),
+        I18n.entry(EditorMessages.edit.key).translations(I18nLocale("de")       -> "Bearbeiten"),
+        I18n.entry(EditorMessages.readonly.key).translations(I18nLocale("de")   -> "Lesemodus"),
         I18n.entry(EditorMessages.undo.key).translations(I18nLocale("de")       -> "Rückgängig"),
         I18n.entry(EditorMessages.redo.key).translations(I18nLocale("de")       -> "Wiederholen"),
         I18n.entry(EditorMessages.bold.key).translations(I18nLocale("de")       -> "Fett"),
@@ -52,20 +58,59 @@ object EditorFixtures {
     dispose()
     mountedSessions = 0
     locale.set(I18nLocale(Option(initialLocale).filter(_.nonEmpty).getOrElse("en")))
+    root = Runtime.mount(new EditorFixtureRoot(initialLocale), DomCursor.root(container))
+  }
+
+  @JSExport def mountHydrated(container: dom.Element, initialLocale: String): Unit = {
+    dispose()
+    mountedSessions = 0
+    locale.set(I18nLocale(initialLocale))
+    container.innerHTML =
+      Runtime.renderToString(cursor => Runtime.mount(new EditorFixtureRoot(initialLocale), cursor))
+    val cursor = HydratingCursor.root(container)
+    root = Runtime.mount(new EditorFixtureRoot(initialLocale), cursor)
+    cursor.completeHydration()
+  }
+
+  private final class EditorFixtureRoot(initialLocale: String) extends AbstractComponent {
+    val tagName                                = "main"
+    override def compose(cursor: Cursor): Unit = render(this, cursor) {
+      if (initialLocale.nonEmpty) I18nRuntime.provide(language)
+      viewport {
+        control = Editor.editor("body", standalone = true) {
+          basePlugin(); headingPlugin(); listPlugin(); linkPlugin(); imagePlugin()
+          codePlugin(); horizontalRulePlugin(); tablePlugin()
+          Editor.value = "Original text"
+          summon[Editor].onNativeSession = Some(value => {
+            binding = value; mountedSessions += 1
+          })
+        }
+      }
+    }
+  }
+
+  private def stackedWindow(title: String, next: Option[String]): Viewport.WindowConf =
+    Viewport.WindowConf(title, widthPx = 300, heightPx = 240, mobileSheet = false) {
+      next.foreach { successor =>
+        button(s"Open $successor") {
+          onClick { _ =>
+            Viewport.addWindow(
+              stackedWindow(successor, if (successor == "Second") Some("Third") else None)
+            )
+          }
+        }
+      }
+    }
+
+  @JSExport def mountWindows(container: dom.Element): Unit = {
+    dispose()
     root = Runtime.mount(
       new AbstractComponent {
         val tagName                                = "main"
-        override def compose(cursor: Cursor): Unit = render(this, cursor) {
-          if (initialLocale.nonEmpty) I18nRuntime.provide(language)
-          viewport {
-            control = Editor.editor("body", standalone = true) {
-              basePlugin(); headingPlugin(); listPlugin(); linkPlugin(); imagePlugin()
-              codePlugin(); horizontalRulePlugin(); tablePlugin()
-              Editor.value = "Original text"
-              summon[Editor].onNativeSession = Some(value => {
-                binding = value; mountedSessions += 1
-              })
-            }
+        override def compose(cursor: Cursor): Unit = {
+          setStyle("height", "100vh")
+          render(this, cursor) {
+            viewport { Viewport.addWindow(stackedWindow("First", Some("Second"))) }
           }
         }
       },
