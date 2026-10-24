@@ -2,6 +2,7 @@ import { catalogEntry, i18n, type CatalogEntry } from "@anjunar/scalajs-ui-core"
 
 export const entries: readonly CatalogEntry[] = [
   catalogEntry(i18n`Overview`, { de: "Übersicht" }),
+  catalogEntry(i18n`One runtime, two APIs: explore UI capabilities through TypeScript.`, { de: "Eine Runtime, zwei APIs: UI-Fähigkeiten über TypeScript erkunden." }),
   catalogEntry(i18n`What @anjunar/scalajs-ui-* is and where to start.`, { de: "Was @anjunar/scalajs-ui-* ist und wo du startest." }),
   catalogEntry(i18n`A TypeScript facade over Scala JS UI 1.0 -- one route per capability, the running component next to the source that produced it.`, { de: "Eine TypeScript-Fassade über Scala JS UI 1.0 – eine Route pro Fähigkeit, die laufende Komponente neben ihrem Quelltext." }),
   catalogEntry(i18n`The ambient-scope DSL: reactive state, control flow, elements, lifecycle.`, { de: "Die DSL mit Ambient-Scope: reaktiver Zustand, Kontrollfluss, Elemente und Lebenszyklus." }),

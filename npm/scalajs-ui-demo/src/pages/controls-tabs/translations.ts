@@ -6,6 +6,7 @@ export const entries: readonly CatalogEntry[] = [
   catalogEntry(i18n`tabs() and tab(): compare active-only lifecycle disposal with state that survives in keep-mounted panels.`, { de: "tabs() und tab(): vergleiche die Active-only-Entsorgung mit Zustand, der in Keep-mounted-Panels erhalten bleibt." }),
   catalogEntry(i18n`Overview`, { de: "Übersicht" }),
   catalogEntry(i18n`Keyboard`, { de: "Tastatur" }),
+  catalogEntry(i18n`SSR`, { de: "SSR" }),
   catalogEntry(i18n`The active-only render mode (the default) mounts only this panel and disposes it when another tab becomes active.`, { de: "Der standardmäßige Active-only-Modus mountet nur dieses Panel und verwirft es beim Wechsel." }),
   catalogEntry(i18n`Arrow keys move focus between tabs; Home/End jump to the first/last one.`, { de: "Pfeiltasten bewegen den Fokus zwischen Tabs; Home/End springen zum ersten/letzten." }),
   catalogEntry(i18n`The selected tab's panel is what the server renders -- view source to see it in the initial HTML.`, { de: "Das Panel des gewählten Tabs rendert der Server – sieh im Quelltext das initiale HTML." }),

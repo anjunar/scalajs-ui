@@ -8,9 +8,18 @@ on:
 permissions:
   contents: read
 
+# One Pages deployment at a time. A pull request only needs its newest commit
+# verified, so superseded runs are cancelled there; pushes to master are not,
+# because cancelling a half-finished deploy would leave the site in whatever
+# state the previous one reached.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
 
@@ -30,7 +39,7 @@ jobs:
             ~/.cache/coursier
             ~/.sbt
             ~/.ivy2/cache
-          key: ${{ runner.os }}-sbt-${{ hashFiles('project/build.properties', 'project/plugins.sbt', 'build.sbt') }}
+          key: ${{ runner.os }}-sbt-${{ hashFiles('project/build.properties', 'project/plugins.sbt', 'project/build.sbt', 'build.sbt') }}
           restore-keys: |
             ${{ runner.os }}-sbt-
 
@@ -44,6 +53,16 @@ jobs:
       # The demo's SSR tests import the shared preference module from this workspace.
       - name: Install npm workspace
         run: npm ci --no-audit --no-fund
+
+      # build.sbt is the one source of the version; every package.json, README
+      # and demo footer has to agree with it (scripts/set-version.mjs --check).
+      - name: Check that every version field agrees with build.sbt
+        run: npm run check-version -- "$(sed -n 's/^version[[:space:]]*:=[[:space:]]*"\([^"]*\)".*/\1/p' build.sbt | head -n 1)"
+
+      # Every demo message needs its German translation; the English source
+      # would otherwise show up silently under /de/.
+      - name: Check demo translation coverage
+        run: npm run check:i18n
 
       - name: Scala test suite
         run: sbt --server "Test/testOnly *"
@@ -105,6 +124,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       pages: write

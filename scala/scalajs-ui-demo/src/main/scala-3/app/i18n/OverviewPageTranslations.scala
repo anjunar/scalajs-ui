@@ -18,24 +18,6 @@ object OverviewPageTranslations {
       i18n"A Property drives the text, and the event updates that same state after hydration.",
       "Eine Property steuert den Text und das Ereignis aktualisiert denselben Zustand nach der Hydration."
     ),
-    de(i18n"Origin story", "Entstehungsgeschichte"),
-    de(
-      i18n"After 17 years of looking for clarity, the project started to feel less like a thesis and more like relief.",
-      "Nach 17 Jahren auf der Suche nach Klarheit fühlte sich das Projekt immer weniger wie eine Abschlussarbeit und immer mehr wie eine Erleichterung an."
-    ),
-    de(
-      i18n"Scala JS UI 1.0 is the answer I wanted after living with frameworks that promised simplicity but quietly handed over control. It chooses explicit lifecycles, honest reactivity, and a DSL that stays readable when the codebase grows.",
-      "Scala JS UI 1.0 ist die Antwort, die ich mir nach der Arbeit mit Frameworks gewünscht habe, die Einfachheit versprachen, aber stillschweigend die Kontrolle übernahmen. Es setzt auf explizite Lebenszyklen, ehrliche Reaktivität und eine DSL, die auch bei wachsender Codebasis lesbar bleibt."
-    ),
-    de(i18n"Vision", "Vision"),
-    de(
-      i18n"A documentation site that feels like a real workbench.",
-      "Eine Dokumentationsseite, die sich wie eine echte Werkbank anfühlt."
-    ),
-    de(
-      i18n"The showcase should not just prove that components render. It should show how Scala JS UI 1.0 is meant to feel: declarative, server-stable, reactive in the browser, and readable enough that you can still nod to it six months later.",
-      "Die Showcase soll nicht nur beweisen, dass Komponenten rendern. Sie soll zeigen, wie sich Scala JS UI 1.0 anfühlen soll: deklarativ, serverstabil, reaktiv im Browser und so lesbar, dass man auch sechs Monate später noch zustimmend nicken kann."
-    ),
     de(i18n"SSR", "SSR"),
     de(
       i18n"Server HTML and client hydration share the same structure.",

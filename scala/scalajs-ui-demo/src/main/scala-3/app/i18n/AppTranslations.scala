@@ -65,10 +65,6 @@ object AppTranslations {
       "Scala JS UI 1.0 · Scala.js und TypeScript · eine Runtime."
     ),
     de(i18n"Light", "Hell"),
-    de(i18n"Dark", "Dunkel"),
-    de(
-      i18n"Pure Scala.js architecture, rebuilt around the modules that actually exist here.",
-      "Reine Scala.js-Architektur, neu aufgebaut rund um die Module, die hier tatsächlich vorhanden sind."
-    )
+    de(i18n"Dark", "Dunkel")
   )
 }

@@ -10,11 +10,6 @@ object AppRouterBoundaryTranslations {
       i18n"The requested address does not match a route in this application.",
       "Die angeforderte Adresse entspricht keiner Route in dieser Anwendung."
     ),
-    de(i18n"Loading route", "Route wird geladen"),
-    de(
-      i18n"The route loader is still working. Existing SSR content remains visible during hydration.",
-      "Der Routen-Loader arbeitet noch. Vorhandener SSR-Inhalt bleibt während der Hydration sichtbar."
-    ),
     de(i18n"Route unavailable", "Route nicht verfügbar"),
     de(
       i18n"This page could not be loaded. Internal error details are not exposed to visitors.",

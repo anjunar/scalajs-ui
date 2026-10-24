@@ -138,6 +138,32 @@ object TableViewPageTranslations {
     de(
       i18n"A standard cell edits the property its column resolved for the row.",
       "Eine Standardzelle bearbeitet die Property, die ihre Spalte für die Zeile aufgelöst hat."
+    ),
+    de(i18n"Auto-fit column", "Spalte automatisch anpassen"),
+    de(i18n"Hide column", "Spalte ausblenden"),
+    de(
+      i18n"Disabled rows (V05) stay visible and keyboard-reachable, but cannot be selected or edited.",
+      "Deaktivierte Zeilen (V05) bleiben sichtbar und per Tastatur erreichbar, lassen sich aber weder auswählen noch bearbeiten."
+    ),
+    de(
+      i18n"Toggle disabling books before 2000",
+      "Deaktivierung der Bücher vor 2000 umschalten"
+    ),
+    de(
+      i18n"Dragging the \"Book\" group's own edge resizes Title and Author together, spilling into Year only once both are at their own limit.",
+      "Das Ziehen der eigenen Kante der Gruppe \"Book\" ändert Titel und Autor gemeinsam; auf Jahr greift es erst über, wenn beide an ihrer eigenen Grenze sind."
+    ),
+    de(
+      i18n"The snap-to-grid policy replaces every built-in strategy at once, including how the \"Book\" group's own edge behaves.",
+      "Die Snap-to-grid-Strategie ersetzt alle eingebauten Strategien auf einmal, einschließlich des Verhaltens der eigenen Kante der Gruppe \"Book\"."
+    ),
+    de(
+      i18n"The Year cell highlights itself when it is focused or selected (D05), using the same per-cell state a custom row already gets for the whole row.",
+      "Die Jahr-Zelle hebt sich hervor, wenn sie fokussiert oder ausgewählt ist (D05) – mit demselben Zellzustand, den eine eigene Zeile bereits für die ganze Zeile erhält."
+    ),
+    de(
+      i18n"Toggle snap-to-grid resize policy",
+      "Snap-to-grid-Größenstrategie umschalten"
     )
   )
 }

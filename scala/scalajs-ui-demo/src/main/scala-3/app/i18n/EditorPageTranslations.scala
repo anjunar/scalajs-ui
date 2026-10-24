@@ -28,11 +28,6 @@ object EditorPageTranslations {
     de(i18n"Write the article...", "Artikel schreiben …"),
     de(i18n"Readonly", "Schreibgeschützt"),
     de(i18n"Markdown", "Markdown"),
-    de(i18n"Readonly SSR preview", "Schreibgeschützte SSR-Vorschau"),
-    de(
-      i18n"The same Markdown value remains meaningful before JavaScript starts and when editing is disabled.",
-      "Derselbe Markdown-Wert bleibt vor dem JavaScript-Start und bei deaktivierter Bearbeitung aussagekräftig."
-    ),
     de(i18n"Contextual plugin DSL", "Kontextbezogene Plugin-DSL"),
     de(
       i18n"Install only the editing capabilities needed by a field; the value remains Markdown.",
