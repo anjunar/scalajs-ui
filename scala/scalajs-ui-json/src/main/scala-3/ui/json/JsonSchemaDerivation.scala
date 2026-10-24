@@ -60,6 +60,13 @@ object JsonSchemaDerivation {
       current match {
         case AppliedType(raw, args) if !isModel(raw) => args.foreach(visit)
         case _ if isModel(current)                   =>
+          // The runtime descriptors know classes with properties, not enum cases: an enum would
+          // pass derivation and fail on the first value with an unresolvable runtime descriptor.
+          if (current.typeSymbol.flags.is(Flags.Enum))
+            report.errorAndAbort(
+              s"${current.show} is an enum, which JsonSchema does not map. " +
+                "Carry its case name in a String property instead."
+            )
           val name = current.typeSymbol.fullName
           if (!models.contains(name)) {
             models(name) = current

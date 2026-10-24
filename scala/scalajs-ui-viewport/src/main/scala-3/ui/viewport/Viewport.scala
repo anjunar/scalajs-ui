@@ -92,10 +92,15 @@ final class Viewport extends AbstractComponent {
 
   private[viewport] def addWindow(conf: Viewport.WindowConf): Viewport.WindowConf = {
     attach(conf, "window")
+    // Adding is showing: a window closed before -- and possibly still fading out -- comes back
+    // visible, and the removal its close scheduled must not take it away again.
+    conf.pendingRemoval.dispose()
+    conf.pendingRemoval = Disposable.empty
     if (!windows.exists(_ eq conf)) {
       placeWindow(conf)
       windows += conf
     }
+    conf.visible.set(true)
     touchWindow(conf)
     conf
   }
@@ -209,7 +214,8 @@ final class Viewport extends AbstractComponent {
   private[viewport] def closeWindow(conf: Viewport.WindowConf): Unit =
     if (owns(conf)) {
       conf.visible.set(false)
-      schedule(Viewport.windowFadeOutMs) {
+      conf.pendingRemoval.dispose()
+      conf.pendingRemoval = schedule(Viewport.windowFadeOutMs) {
         removeWindow(conf)
       }
     }
@@ -222,14 +228,14 @@ final class Viewport extends AbstractComponent {
 
   private[viewport] def touchWindow(conf: Viewport.WindowConf): Unit =
     if (owns(conf)) {
-      var z = 0
-      windows.foreach { current =>
-        if (!current.eq(conf)) {
-          current.zIndex.set(z)
-          z += 1
-        }
-      }
-      conf.zIndex.set(z)
+      // Only the touched window moves, to the top; the others keep their order among themselves.
+      windows.iterator
+        .filterNot(_ eq conf)
+        .toVector
+        .sortBy(_.zIndex.get)
+        .zipWithIndex
+        .foreach { case (other, z) => other.zIndex.set(z) }
+      conf.zIndex.set(windows.length - 1)
     }
 
   private def uniqueId(prefix: String): String = {
@@ -246,6 +252,7 @@ final class Viewport extends AbstractComponent {
   private def removeWindow(conf: Viewport.WindowConf): Unit = {
     val index = windows.indexWhere(_ eq conf)
     if (index >= 0) windows.remove(index)
+    conf.pendingRemoval = Disposable.empty
     conf.detachFrom(this)
   }
 
@@ -261,7 +268,8 @@ final class Viewport extends AbstractComponent {
     conf.detachFrom(this)
   }
 
-  private def schedule(delayMs: Int)(action: => Unit): Unit = {
+  /** Runs `action` after `delayMs`; the result cancels it. Dispose cancels whatever is pending. */
+  private def schedule(delayMs: Int)(action: => Unit): Disposable = {
     var pending      = true
     var cancellation = Disposable.empty
     val handle       = setTimeout(math.max(0, delayMs)) {
@@ -275,9 +283,11 @@ final class Viewport extends AbstractComponent {
       if (pending) {
         pending = false
         clearTimeout(handle)
+        scheduledActions.remove(cancellation)
       }
     }
     scheduledActions.add(cancellation)
+    cancellation
   }
 
   private def disposeState(): Unit = {
@@ -309,11 +319,11 @@ object Viewport {
   enum WindowPlacement     { case Cascaded, Centered }
   enum WindowCloseBehavior { case Remove, Hide       }
 
-  private val notificationFadeOutMs = 250
-  private val windowFadeOutMs       = 300
-  private val windowBaseOffsetPx    = 72.0
-  private val windowStepPx          = 28.0
-  private val windowMarginPx        = 8.0
+  private val notificationFadeOutMs     = 250
+  private[viewport] val windowFadeOutMs = 300
+  private val windowBaseOffsetPx        = 72.0
+  private val windowStepPx              = 28.0
+  private val windowMarginPx            = 8.0
 
   private[viewport] final case class VisibleArea(
       left: Double,
@@ -417,10 +427,13 @@ object Viewport {
       val autoHeight: Boolean = false
   ) extends OwnedConf {
     private[viewport] var userPositioned: Boolean = false
-    val widthProperty: Property[Double]           = Property(widthPx.toDouble)
-    val heightProperty: Property[Double]          = Property(heightPx.toDouble)
-    val titleProperty: Property[String]           = Property("")
-    private var titleBinding: Disposable          = Disposable.empty
+
+    /** The removal a close scheduled for after the fade-out, until it ran or was cancelled. */
+    private[viewport] var pendingRemoval: Disposable = Disposable.empty
+    val widthProperty: Property[Double]              = Property(widthPx.toDouble)
+    val heightProperty: Property[Double]             = Property(heightPx.toDouble)
+    val titleProperty: Property[String]              = Property("")
+    private var titleBinding: Disposable             = Disposable.empty
 
     def title: ReadOnlyProperty[String] =
       titleProperty

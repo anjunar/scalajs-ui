@@ -1,6 +1,5 @@
 package ui.router
 
-import ui.core.context.CrawlScope
 import ui.core.context.UrlScope
 import ui.core.component.{AbstractComponent, AbstractCustomComponent, Runtime}
 import ui.core.di.Context
@@ -13,17 +12,24 @@ import org.scalajs.dom
 
 import scala.concurrent.ExecutionContext
 import scala.collection.mutable.ArrayBuffer
-import scala.scalajs.js
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 import ui.core.async.AsyncRenderContext
 
-class Router(
+class Router private[router] (
     routes: Seq[Route],
     initialUrl: String,
-    config: RouterConfig = RouterConfig()
+    config: RouterConfig,
+    history: RouterHistory
 )(using ec: ExecutionContext)
     extends AbstractCustomComponent {
+
+  def this(
+      routes: Seq[Route],
+      initialUrl: String,
+      config: RouterConfig = RouterConfig()
+  )(using ec: ExecutionContext) =
+    this(routes, initialUrl, config, RouterHistory.Browser)
 
   private var renderToken           = 0
   private var routeAbortController  = Option.empty[dom.AbortController]
@@ -100,10 +106,6 @@ class Router(
   override def compose(cursor: Cursor): Unit = {
     Router.RouterContext.provide(this)(using this)
 
-    // Virtualizing controls need only the current path for their crawl link, not the router. The
-    // dependency therefore points this way: the router knows CrawlScope; scalajs-ui-controls knows no routing.
-    CrawlScope.provide(CrawlScope(() => stateProperty.get.path))(using this)
-
     initializeStateIfNeeded()
 
     asyncCursorContext = cursor.asyncContext
@@ -152,20 +154,38 @@ class Router(
 
   def navigate(path: String, replace: Boolean = false): Unit = {
     val nextState = resolve(path, Some(currentLocale))
-    val changed   = nextState != stateProperty.get
 
     if (browserEnabled) {
       pendingScroll = Some(nextState.url -> nextState.fragment)
 
-      if (replace) dom.window.history.replaceState(null, "", nextState.url)
-      else dom.window.history.pushState(null, "", nextState.url)
+      // A navigation to the entry already shown replaces it: the active link clicked twice must
+      // not stack a duplicate entry for Back to walk through.
+      if (replace || nextState == stateProperty.get) history.replaceState(nextState.url)
+      else history.pushState(nextState.url)
     }
 
+    applyState(nextState)
+    if (!loadingProperty.get) schedulePendingScroll()
+  }
+
+  /** Adopts the entry the browser moved to on Back/Forward.
+    *
+    * The entry is the browser's: its URL is read, never written back, and its scroll position is
+    * the browser's to restore. Writing it would drop the fragment the entry was created with and
+    * scrolling would override the restored position -- so neither happens here.
+    */
+  private def restoreHistoryEntry(): Unit = {
+    pendingScroll = None
+    applyState(resolve(currentBrowserUrl(), Some(currentLocale)))
+  }
+
+  private def applyState(nextState: RouterState): Unit = {
+    val changed = nextState != stateProperty.get
+
     stateProperty.set(nextState)
-    synchronizeI18n(stateProperty.get)
+    synchronizeI18n(nextState)
     // Resolve outside Property's notification chain: lifecycle listeners may themselves navigate.
     if (changed && isBound && !isDisposed) resolveCurrentRoute()
-    if (!loadingProperty.get) schedulePendingScroll()
   }
 
   def localizedPath(path: String, locale: I18nLocale): String =
@@ -465,32 +485,15 @@ class Router(
 
   private def installPopStateListener(): Unit =
     if (browserEnabled) {
-      val listener: js.Function1[dom.Event, Unit] =
-        _ => navigate(currentBrowserUrl(), replace = true)
-
-      dom.window.addEventListener("popstate", listener)
-
-      addDisposable { () =>
-        dom.window.removeEventListener("popstate", listener)
-      }
+      addDisposable(history.onPopState(() => restoreHistoryEntry()))
     }
 
   private def schedulePendingScroll(): Unit =
     if (browserEnabled && pendingScroll.nonEmpty) {
-      dom.window.requestAnimationFrame { _ =>
+      history.afterPaint { () =>
         pendingScroll.foreach { case (url, fragment) =>
-          if (stateProperty.get.url == url && !loadingProperty.get) {
-            fragment match {
-              case Some(id) =>
-                Option(dom.document.getElementById(id)).foreach { target =>
-                  target.scrollIntoView()
-                  pendingScroll = None
-                }
-
-              case None =>
-                dom.window.scrollTo(0, 0)
-                pendingScroll = None
-            }
+          if (stateProperty.get.url == url && !loadingProperty.get && history.scrollTo(fragment)) {
+            pendingScroll = None
           }
         }
       }
@@ -511,6 +514,9 @@ class Router(
 
     override def compose(cursor: Cursor): Unit = {
       RouteRenderContext.provide(renderContext)(using this)
+      // Virtualizing controls need only the current URL and a way to navigate, not the router. The
+      // dependency therefore points this way: the router knows UrlScope; scalajs-ui-controls knows
+      // no routing.
       UrlScope.provide(
         UrlScope(() => renderContext.state.url) { (url, replace) =>
           renderContext.router.navigate(url, replace)
@@ -555,9 +561,6 @@ object Router {
     current.getOrElse {
       throw new IllegalStateException("No Router found in the current component tree.")
     }
-
-  def appPathFor(url: String, config: RouterConfig = RouterConfig()): String =
-    RouterUrlResolver.resolve(url, config).path
 
   def navigate(path: String)(using component: AbstractComponent): Unit =
     requireCurrent.navigate(path)

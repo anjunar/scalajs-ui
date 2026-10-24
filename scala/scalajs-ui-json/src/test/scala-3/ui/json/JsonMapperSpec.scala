@@ -8,6 +8,7 @@ import reflect.macros.ReflectMacros
 import java.util
 import scala.annotation.meta.field
 import scala.collection.immutable.ListMap
+import scala.compiletime.testing.typeCheckErrors
 import scala.scalajs.js
 import scala.scalajs.js.Dynamic.literal
 import scala.scalajs.reflect.Reflect
@@ -270,6 +271,76 @@ class JsonMapperSpec extends AnyFlatSpec with Matchers {
       .asInstanceOf[js.Dynamic]
       .selectDynamic("nested")
       .asInstanceOf[String] shouldBe "untouched"
+  }
+
+  it should "carry Long values beyond the safe integer range as strings of digits" in {
+    val mapper   = JsonMapperSpec.mapper
+    val safeMax  = 9007199254740991L
+    val unsafe   = safeMax + 2
+    val examples = Seq(safeMax, -safeMax, unsafe, -unsafe, Long.MaxValue, Long.MinValue)
+
+    examples.foreach { number =>
+      val model = ValueTypes()
+      model.longNumber.set(number)
+
+      val json    = mapper.serialize(model, JsonMapperSpec.valueTypesMeta)
+      val written = json.selectDynamic("longNumber")
+
+      // A JavaScript number while it is exact; the digits as a string once it would not be.
+      if (number >= -safeMax && number <= safeMax) js.typeOf(written) shouldBe "number"
+      else written.asInstanceOf[String] shouldBe number.toString
+
+      mapper.deserialize[ValueTypes](json, JsonMapperSpec.valueTypesMeta).longNumber.get shouldBe
+        number
+    }
+
+    // Either representation is read, whatever the range.
+    mapper
+      .deserialize[ValueTypes](literal(longNumber = "42"), JsonMapperSpec.valueTypesMeta)
+      .longNumber
+      .get shouldBe 42L
+    mapper
+      .deserialize[ValueTypes](literal(longNumber = 42), JsonMapperSpec.valueTypesMeta)
+      .longNumber
+      .get shouldBe 42L
+  }
+
+  it should "reject a JSON value of the wrong type and name the field" in {
+    val mapper = JsonMapperSpec.mapper
+
+    val stringForInt = intercept[IllegalArgumentException] {
+      mapper.deserialize[AnnotatedPerson](
+        literal(fullName = "Grace", age = "41"),
+        JsonMapperSpec.annotatedPersonMeta
+      )
+    }
+    stringForInt.getMessage should include("AnnotatedPerson.age")
+    stringForInt.getMessage should include("Expected a number, got string")
+
+    val stringForBoolean = intercept[IllegalArgumentException] {
+      mapper.deserialize[ValueTypes](
+        literal(flags = js.Array("yes")),
+        JsonMapperSpec.valueTypesMeta
+      )
+    }
+    stringForBoolean.getMessage should include("ValueTypes.flags")
+    stringForBoolean.getMessage should include("Expected a boolean, got string")
+
+    val nested = intercept[IllegalArgumentException] {
+      mapper.deserialize[Profile](
+        literal(id = "profile-1", info = literal(id = "info-1", firstName = 7)),
+        JsonMapperSpec.profileMeta
+      )
+    }
+    nested.getMessage should include("Profile.info: ")
+    nested.getMessage should include("NestedInfo.firstName: Expected a string, got number")
+  }
+
+  it should "refuse to derive a schema for a model with an enum field" in {
+    val errors = typeCheckErrors("summon[ui.json.JsonSchema[ui.json.Painted]]")
+
+    errors should not be empty
+    errors.map(_.message).mkString should include("Paint is an enum")
   }
 
   it should "map a single map property as an inline JSON object" in {

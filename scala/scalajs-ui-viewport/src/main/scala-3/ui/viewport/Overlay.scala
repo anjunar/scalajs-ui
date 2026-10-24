@@ -74,7 +74,8 @@ final class Overlay private[viewport] (conf: Viewport.OverlayConf) extends Abstr
           val spaceAbove = anchorRect.top - conf.marginViewportPx
           if (spaceBelow < measuredHeight && spaceAbove > spaceBelow) aboveTop else belowTop
         } else belowTop
-      val top = preferredTop.max(conf.marginViewportPx).min(viewportHeight - conf.marginViewportPx)
+      val top =
+        Overlay.clampTop(preferredTop, measuredHeight, viewportHeight, conf.marginViewportPx)
 
       overlayElement.style.left = s"${left}px"
       overlayElement.style.top = s"${top}px"
@@ -108,15 +109,19 @@ final class Overlay private[viewport] (conf: Viewport.OverlayConf) extends Abstr
 
     // Position immediately so the initial layout does not wait for a frame. Subsequent changes
     // are event-driven; scroll is captured on the document because the anchor may live in a
-    // scrollable element rather than in the window itself.
+    // scrollable element rather than in the window itself. The overlay's own size is content, so
+    // it is observed: the first measurement happens before the content has laid out.
     applyPosition()
     dom.window.addEventListener("resize", reposition)
     dom.window.addEventListener("scroll", reposition)
     dom.document.addEventListener("scroll", reposition, true)
+    val sizeObserver = new dom.ResizeObserver((_, _) => schedulePosition())
+    sizeObserver.observe(overlayElement)
 
     Disposable {
       disposed = true
       animationFrame.foreach(dom.window.cancelAnimationFrame)
+      sizeObserver.disconnect()
       dom.window.removeEventListener("resize", reposition)
       dom.window.removeEventListener("scroll", reposition)
       dom.document.removeEventListener("scroll", reposition, true)
@@ -125,6 +130,21 @@ final class Overlay private[viewport] (conf: Viewport.OverlayConf) extends Abstr
 }
 
 object Overlay {
+
+  /** The top edge that keeps an overlay of `height` inside the viewport: never above the margin,
+    * and only as far down as its bottom edge still fits. Too tall for the viewport, it sits at the
+    * margin and overflows at the bottom, where it can scroll.
+    */
+  private[viewport] def clampTop(
+      preferred: Double,
+      height: Double,
+      viewportHeight: Double,
+      margin: Double
+  ): Double = {
+    val maximum = math.max(margin, viewportHeight - height - margin)
+    preferred.max(margin).min(maximum)
+  }
+
   def overlay(
       body: Overlay ?=> Cursor ?=> Unit
   )(using AbstractComponent, Cursor): AbstractComponent =

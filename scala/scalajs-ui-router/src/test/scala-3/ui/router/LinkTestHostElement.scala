@@ -49,10 +49,11 @@ private final class LinkTestHostElement(val tagName: String) extends HostElement
 
   def hasListener(eventName: String): Boolean = listeners.contains(eventName)
 
-  def fireClick(): Boolean = {
+  /** Dispatches a click; `rawEvent` stands in for the browser's `MouseEvent`. */
+  def fireClick(rawEvent: Any = null): Boolean = {
     var prevented = false
     listeners("click")(new UiEvent {
-      override def raw: Any                = null
+      override def raw: Any                = rawEvent
       override def preventDefault(): Unit  = prevented = true
       override def stopPropagation(): Unit = ()
     })

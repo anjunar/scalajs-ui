@@ -81,6 +81,37 @@ class NestedRouteSpec extends AnyFlatSpec with Matchers {
     childLoads shouldBe 0
   }
 
+  it should "render an index child in the outlet on the parent's own path" in {
+    val routes =
+      Seq(
+        Route.view(
+          "/teams/:team",
+          children = Seq(
+            Route.view("") { context =>
+              Future.successful(Route.component {
+                text(s"team-index:${context.pathParams("team")}") {}
+              })
+            },
+            Route.view("posts/:slug")(_ => Future.successful(Route.component {}))
+          )
+        ) { _ =>
+          Future.successful(Route.component {
+            div {
+              text("team-layout") {}
+              Router.routerOutlet()
+            }
+          })
+        }
+      )
+
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(new Router(routes, "/teams/core"), cursor)
+    }
+
+    html should include("team-layout")
+    html should include("team-index:core")
+  }
+
   it should "retain parameters on every match in the route chain" in {
     val matches =
       RouteMatcher.resolve(

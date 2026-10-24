@@ -3,6 +3,7 @@ package ui.webauthn
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 import scala.scalajs.js.typedarray.{ArrayBuffer, Uint8Array}
+import scala.util.control.NonFatal
 
 object WebAuthnCodecs {
 
@@ -11,7 +12,9 @@ object WebAuthnCodecs {
     */
   def creationOptionsFromJson(value: js.Dynamic): PublicKeyCredentialCreationOptions =
     nativeParser("parseCreationOptionsFromJSON")
-      .map(_(value).asInstanceOf[PublicKeyCredentialCreationOptions])
+      .map(
+        parseNatively(_, value, "creation options").asInstanceOf[PublicKeyCredentialCreationOptions]
+      )
       .getOrElse(creationOptionsFallback(value))
 
   def creationOptionsFromJson(json: String): PublicKeyCredentialCreationOptions =
@@ -22,7 +25,9 @@ object WebAuthnCodecs {
     */
   def requestOptionsFromJson(value: js.Dynamic): PublicKeyCredentialRequestOptions =
     nativeParser("parseRequestOptionsFromJSON")
-      .map(_(value).asInstanceOf[PublicKeyCredentialRequestOptions])
+      .map(
+        parseNatively(_, value, "request options").asInstanceOf[PublicKeyCredentialRequestOptions]
+      )
       .getOrElse(requestOptionsFallback(value))
 
   def requestOptionsFromJson(json: String): PublicKeyCredentialRequestOptions =
@@ -188,6 +193,16 @@ object WebAuthnCodecs {
       val method = api.selectDynamic(name)
       if (js.typeOf(method) == "function") Some((value: js.Any) => method.call(api, value))
       else None
+    }
+
+  /** The browser's parser reports invalid input as a `TypeError`. Callers see the same exception as
+    * from the fallback, so they handle one kind regardless of which parser ran.
+    */
+  private def parseNatively(parse: js.Any => js.Any, value: js.Dynamic, label: String): js.Any =
+    try parse(value)
+    catch {
+      case NonFatal(error) =>
+        throw new IllegalArgumentException(s"Invalid WebAuthn $label", error)
     }
 
   private def nativeCredentialJson(credential: PublicKeyCredential): Option[js.Dynamic] =

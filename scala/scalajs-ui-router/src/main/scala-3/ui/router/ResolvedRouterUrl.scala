@@ -1,6 +1,6 @@
 package ui.router
 
-import ui.core.i18n.{I18nLocale, I18nRuntime}
+import ui.core.i18n.I18nLocale
 
 private[router] final case class ResolvedRouterUrl(
     path: String,

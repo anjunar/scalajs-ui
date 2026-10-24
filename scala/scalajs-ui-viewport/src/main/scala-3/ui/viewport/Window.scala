@@ -163,23 +163,19 @@ final class Window(conf: Viewport.WindowConf) extends AbstractComponent {
       case _ => dom.window.innerWidth.toDouble
     }
 
-  private def keepInsideViewport(): Unit = {
-    if (conf.placement == Viewport.WindowPlacement.Centered) {
-      if (conf.autoHeight) host match {
-        case browser: DomHostElement =>
-          browser.node match {
-            case element: dom.HTMLElement => positionMeasured(element)
-            case _                        => ()
-          }
-        case _ => ()
-      }
-      else Viewport.constrainWindow(conf)
-      return
+  /** After a browser resize: the viewport clamps to its visible area, for every placement. An
+    * auto-height window is measured first, since its height is the content's.
+    */
+  private def keepInsideViewport(): Unit =
+    if (conf.autoHeight) host match {
+      case browser: DomHostElement =>
+        browser.node match {
+          case element: dom.HTMLElement => positionMeasured(element)
+          case _                        => ()
+        }
+      case _ => ()
     }
-    val width   = math.min(conf.widthProperty.get, math.max(0.0, viewportWidth - 16.0))
-    val maxLeft = math.max(8.0, viewportWidth - width - 8.0)
-    conf.leftPx.set(conf.leftPx.get.max(8.0).min(maxLeft))
-  }
+    else Viewport.constrainWindow(conf)
 
   private def stopResize(): Unit = {
     val cleanup = activeResizeCleanup

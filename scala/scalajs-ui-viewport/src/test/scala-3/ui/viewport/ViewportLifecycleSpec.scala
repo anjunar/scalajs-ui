@@ -63,6 +63,46 @@ class ViewportLifecycleSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(fixture.root)
   }
 
+  it should "keep the order of the other windows when one is brought to the front" in {
+    val fixture = mountViewport()
+    val a       = Viewport.WindowConf("A") {}
+    val b       = Viewport.WindowConf("B") {}
+    val c       = Viewport.WindowConf("C") {}
+
+    fixture.viewport.addWindow(a)
+    fixture.viewport.addWindow(b)
+    fixture.viewport.addWindow(c)
+
+    def bottomToTop = Seq(a, b, c).sortBy(_.zIndex.get).map(_.title.get)
+
+    bottomToTop shouldBe Seq("A", "B", "C")
+
+    fixture.viewport.touchWindow(a)
+    bottomToTop shouldBe Seq("B", "C", "A")
+
+    fixture.viewport.touchWindow(b)
+    bottomToTop shouldBe Seq("C", "A", "B")
+    Seq(a, b, c).map(_.zIndex.get).sorted shouldBe Seq(0, 1, 2)
+
+    Runtime.unmount(fixture.root)
+  }
+
+  it should "show a window again that is re-added while it closes" in {
+    val fixture = mountViewport()
+    val conf    = Viewport.WindowConf("Inspector") {}
+
+    fixture.viewport.addWindow(conf)
+    fixture.viewport.closeWindow(conf)
+    conf.visible.get shouldBe false
+
+    fixture.viewport.addWindow(conf)
+
+    conf.visible.get shouldBe true
+    fixture.viewport.windows.toSeq shouldBe Seq(conf)
+
+    Runtime.unmount(fixture.root)
+  }
+
   it should "hide a closing window immediately and remove it only after the fade" in {
     val fixture = mountViewport()
     val conf    = Viewport.WindowConf("Closing") {}
@@ -120,6 +160,17 @@ class ViewportLifecycleSpec extends AnyFlatSpec with Matchers {
     // The scheduled removal must not run against a disposed viewport.
     noException should be thrownBy Runtime.unmount(fixture.root)
     fixture.viewport.windows shouldBe empty
+  }
+
+  "Overlay placement" should "keep the bottom edge inside the viewport" in {
+    // Fits below the anchor: stays where preferred.
+    Overlay.clampTop(100, 200, 800, 8) shouldBe 100
+    // Would overflow at the bottom: pulled up so the bottom edge sits on the margin.
+    Overlay.clampTop(700, 200, 800, 8) shouldBe 592
+    // Taller than the viewport: sits at the top margin instead of being pushed out of view.
+    Overlay.clampTop(300, 1000, 800, 8) shouldBe 8
+    // Unknown height before the first layout: only the top margin applies.
+    Overlay.clampTop(-20, 0, 800, 8) shouldBe 8
   }
 
   "Centered placement" should "center a window within the visible area" in {

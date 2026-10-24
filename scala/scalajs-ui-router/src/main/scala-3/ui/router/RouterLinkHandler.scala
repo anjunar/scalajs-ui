@@ -2,16 +2,19 @@ package ui.router
 
 import ui.core.component.AbstractComponent
 import ui.core.di.Context
-import ui.core.dsl.DslLayer
-import ui.core.layout.Anchor
-import ui.core.render.Cursor
+import ui.core.i18n.I18nLocale
 import ui.core.state.ReadOnlyProperty
 
+/** @param locale
+  *   The locale `hrefForAppPath` localizes with, when URLs carry one. Links re-read their href when
+  *   it changes.
+  */
 final case class RouterLinkHandler(
     navigate: String => Unit,
     currentPath: ReadOnlyProperty[String],
     hrefForAppPath: String => String,
-    appPathFor: String => String = RouterUrlResolver.normalizePath
+    appPathFor: String => String = RouterUrlResolver.normalizePath,
+    locale: Option[ReadOnlyProperty[I18nLocale]] = None
 )
 
 object RouterLinkHandler {

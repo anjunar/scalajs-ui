@@ -14,6 +14,11 @@ private[json] object JsonValueCodec {
     "java.math.BigDecimal"
   )
 
+  /** Beyond this a JavaScript number has no exact integers: a Long outside it travels as a string
+    * of digits, like a decimal.
+    */
+  private val MaxSafeInteger = 9007199254740991L
+
   def serializePrimitive(value: Any, typeName: String): js.Any =
     typeName match {
       // Written as a string of digits: a JavaScript number would round them and drop the scale (120.00 to 120).
@@ -30,7 +35,9 @@ private[json] object JsonValueCodec {
       case "scala.Float" | "float" =>
         value.asInstanceOf[Float].toDouble
       case "scala.Long" | "long" =>
-        value.asInstanceOf[Long].toDouble
+        val number = value.asInstanceOf[Long]
+        if (number >= -MaxSafeInteger && number <= MaxSafeInteger) number.toDouble
+        else number.toString
       case "scala.Short" | "short" =>
         value.asInstanceOf[Short].toDouble
       case "scala.Byte" | "byte" =>
@@ -43,25 +50,64 @@ private[json] object JsonValueCodec {
         value.toString
     }
 
+  /** The JSON type is checked before the cast. The casts are unchecked under the optimizer's
+    * semantics, so a string where a number is declared would otherwise not fail but read as
+    * garbage.
+    */
   def deserializePrimitive(value: js.Any, typeName: String): Any =
     typeName match {
-      case "scala.Int" | "int"         => value.asInstanceOf[Double].toInt
-      case "scala.Double" | "double"   => value.asInstanceOf[Double]
-      case "scala.Float" | "float"     => value.asInstanceOf[Double].toFloat
-      case "scala.Long" | "long"       => value.asInstanceOf[Double].toLong
-      case "scala.Short" | "short"     => value.asInstanceOf[Double].toShort
-      case "scala.Byte" | "byte"       => value.asInstanceOf[Double].toByte
-      case "scala.Boolean" | "boolean" => value.asInstanceOf[Boolean]
+      case "scala.Int" | "int"         => number(value).toInt
+      case "scala.Double" | "double"   => number(value)
+      case "scala.Float" | "float"     => number(value).toFloat
+      case "scala.Long" | "long"       => long(value)
+      case "scala.Short" | "short"     => number(value).toShort
+      case "scala.Byte" | "byte"       => number(value).toByte
+      case "scala.Boolean" | "boolean" => boolean(value)
       case "scala.Char" | "char"       =>
-        value.toString.headOption.getOrElse('\u0000')
+        string(value).headOption.getOrElse('\u0000')
+      case "scala.Predef.String" | "java.lang.String" =>
+        string(value)
       case "java.util.UUID" =>
-        util.UUID.fromString(uuidValue(value.toString))
+        util.UUID.fromString(uuidValue(string(value)))
       case "java.math.BigDecimal" =>
         decimal(value)
       case decimalType if DecimalTypes.contains(decimalType) =>
         BigDecimal(decimal(value))
       case _ =>
         value
+    }
+
+  private def number(value: js.Any): Double =
+    js.typeOf(value) match {
+      case "number" => value.asInstanceOf[Double]
+      case other    => throw new IllegalArgumentException(s"Expected a number, got $other")
+    }
+
+  /** Written as a number inside the safe integer range and as a string of digits beyond it; both
+    * are read, whichever range the value is in.
+    */
+  private def long(value: js.Any): Long =
+    js.typeOf(value) match {
+      case "number" => value.asInstanceOf[Double].toLong
+      case "string" =>
+        try value.asInstanceOf[String].trim.toLong
+        catch {
+          case _: NumberFormatException =>
+            throw new IllegalArgumentException(s"Expected an integer, got '$value'")
+        }
+      case other => throw new IllegalArgumentException(s"Expected an integer, got $other")
+    }
+
+  private def boolean(value: js.Any): Boolean =
+    js.typeOf(value) match {
+      case "boolean" => value.asInstanceOf[Boolean]
+      case other     => throw new IllegalArgumentException(s"Expected a boolean, got $other")
+    }
+
+  private def string(value: js.Any): String =
+    js.typeOf(value) match {
+      case "string" => value.asInstanceOf[String]
+      case other    => throw new IllegalArgumentException(s"Expected a string, got $other")
     }
 
   /** A decimal as a string of digits keeps them all; as a JSON number it is what `JSON.parse` made

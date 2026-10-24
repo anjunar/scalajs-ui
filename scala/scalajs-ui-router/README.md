@@ -45,7 +45,7 @@ val appRouter = Router.router(routes)
 
 ```scala
 Router.routerOutlet()
-RouterLink.routerLink("/users/42", "User 42") {}
+RouterLink.routerLink("/users/42") { text("User 42") {} }
 ```
 
 `Route.view` creates a normal route, `Route.error` creates a route with a 4xx or 5xx status, and `Route.component` wraps a component DSL body in a route result. Child routes are declared with `children = Seq(...)` on `Route.view`.
@@ -53,7 +53,7 @@ RouterLink.routerLink("/users/42", "User 42") {}
 ## Core concepts
 
 - `RouteContext` exposes the matched route, path parameters, query parameters, and router state.
-- `RouterConfig` controls base paths, initial URLs, failure handling, and whether errors render during SSR.
+- `RouterConfig` controls the base path, failure handling, and whether errors render during SSR. The initial URL is the `Router` constructor's; `Router.router` reads it from the browser when none is given.
 - `RouterState` and `Router.responseStatus` are reactive values for the current match and response status.
 - `QueryParams` preserves repeated query values and provides `get`, `getAll`, and `contains`.
 - Localized URL handling integrates with the core i18n runtime when a locale is configured.

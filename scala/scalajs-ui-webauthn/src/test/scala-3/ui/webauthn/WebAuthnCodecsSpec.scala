@@ -216,4 +216,22 @@ class WebAuthnCodecsSpec extends AnyFlatSpec with Matchers {
       calls.toSeq shouldBe Seq("creation:Y3JlYXRl:true", "request:cmVxdWVzdA:true")
     } finally global.updateDynamic("PublicKeyCredential")(previous)
   }
+
+  it should "report invalid input from the browser's parser like the fallback does" in {
+    val global = js.Dynamic.global.globalThis
+    val api    = js.Dynamic.literal()
+    api.updateDynamic("parseCreationOptionsFromJSON")(js.ThisFunction.fromFunction2 {
+      (_: js.Dynamic, _: js.Dynamic) =>
+        throw js.JavaScriptException(js.TypeError("challenge is not base64url"))
+    })
+    val previous = global.selectDynamic("PublicKeyCredential")
+    global.updateDynamic("PublicKeyCredential")(api)
+    try {
+      val error = intercept[IllegalArgumentException] {
+        WebAuthnCodecs.creationOptionsFromJson(js.Dynamic.literal(challenge = "not valid"))
+      }
+      error.getMessage should include("creation options")
+      error.getCause shouldBe a[js.JavaScriptException]
+    } finally global.updateDynamic("PublicKeyCredential")(previous)
+  }
 }

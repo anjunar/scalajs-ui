@@ -80,7 +80,17 @@ private[json] object JsonDeserializer {
           val fieldName = JsonMetadata.fieldName(property)
           if (jsonObject.contains(fieldName)) {
             val fieldContext = context.child(property.propertyType)
-            val mappedValue  = deserialize(jsonObject(fieldName), fieldContext)
+            val mappedValue  =
+              try deserialize(jsonObject(fieldName), fieldContext)
+              catch {
+                case error: IllegalArgumentException =>
+                  // Named from the outside in, so a failure deep in a nested object reads as the
+                  // path to it: `Profile.info: NestedInfo.firstName: ...`.
+                  throw new IllegalArgumentException(
+                    s"${descriptor.typeName}.$fieldName: ${error.getMessage}",
+                    error
+                  )
+              }
             assign(instance, descriptor, property, mappedValue)
           }
         }

@@ -27,7 +27,10 @@ object Main {
     given ExecutionContext = ExecutionContext.global
 
     val async = new AsyncRenderContext()
-    val url   = s"${dom.window.location.pathname}${dom.window.location.search}"
+    // The fragment belongs to the URL the router starts from, as it does for every later entry;
+    // the server never sees it, so only attributes that carry the URL can differ after hydration.
+    val location = dom.window.location
+    val url      = s"${location.pathname}${location.search}${location.hash}"
 
     val request =
       RequestContext.withUserAgent(dom.window.navigator.userAgent)

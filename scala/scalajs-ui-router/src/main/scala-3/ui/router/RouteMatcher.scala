@@ -34,7 +34,15 @@ object RouteMatcher {
       case Some(prefixParams) =>
         matches(route, routePath, targetPath) match {
           case Some(params) =>
-            Some(List(RouteMatch(route, routePath, params)))
+            // The parent's own path is also its index child's: a child declared as "" or "/"
+            // renders in the outlet when nothing more specific follows.
+            val indexMatches =
+              route.children.iterator
+                .filter(child => join(routePath, child.path) == routePath)
+                .map(child => resolveRoute(routePath, child, targetPath))
+                .collectFirst { case Some(childMatches) => childMatches }
+
+            Some(RouteMatch(route, routePath, params) :: indexMatches.getOrElse(Nil))
 
           case None =>
             route.children.iterator
@@ -90,7 +98,9 @@ object RouteMatcher {
           } else {
             None
           }
-        } else if (routeSegment == requestSegment) {
+        } else if (decode(routeSegment) == decode(requestSegment)) {
+          // Literal segments compare decoded, like parameters: the browser sends `/caf%C3%A9`
+          // for a route declared as `/café`.
           Some(params)
         } else {
           None
