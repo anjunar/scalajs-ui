@@ -12,20 +12,12 @@ Set-Location $repoRoot
 $npmCache = Join-Path $repoRoot "target\npm-publish-cache"
 New-Item -ItemType Directory -Force -Path $npmCache | Out-Null
 
-# Keep the order dependency-aware. The CSS package comes first because scalajs-ui-core
-# declares its matching major as a peer dependency. scalajs-ui-demo stays private.
-$packageDirectories = @(
-    "scalajs-ui",
-    "scalajs-ui-core",
-    "scalajs-ui-bridge",
-    "scalajs-ui-json",
-    "scalajs-ui-router",
-    "scalajs-ui-controls",
-    "scalajs-ui-viewport",
-    "scalajs-ui-forms",
-    "scalajs-ui-editor",
-    "scalajs-ui-webauthn"
-)
+# The release set and its dependency-aware order come from one place,
+# scripts/release-packages.mjs (private packages such as scalajs-ui-demo are not in it).
+$packageDirectories = @(& node (Join-Path $PSScriptRoot "release-packages.mjs"))
+if ($LASTEXITCODE -ne 0 -or $packageDirectories.Count -eq 0) {
+    throw "scripts/release-packages.mjs failed or returned no packages."
+}
 $releaseVersion = $null
 
 function Invoke-CheckedCommand {

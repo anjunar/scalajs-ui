@@ -39,6 +39,7 @@ hydration.
 
 ```scala
 import ui.core.component.{AbstractComponent, Runtime}
+import ui.core.dsl.DslLayer.render
 import ui.core.dsl.EventDsl.onClick
 import ui.core.layout.Button.button
 import ui.core.layout.Div.div
@@ -51,13 +52,15 @@ import org.scalajs.dom
 final class CounterApp extends AbstractComponent {
   val tagName = "main"
 
-  override def compose(cursor: Cursor): Unit = {
-    val count = Property(0)
-    vbox {
-      div { text(count.map(value => s"Count: $value")) {} }
-      button("Increment") { onClick(_ => count.set(count.get + 1)) }
+  override def compose(cursor: Cursor): Unit =
+    // `render` puts this component and its cursor in scope; the DSL functions below need both.
+    render(this, cursor) {
+      val count = Property(0)
+      vbox {
+        div { text(count.map(value => s"Count: $value")) {} }
+        button("Increment") { onClick(_ => count.set(count.get + 1)) }
+      }
     }
-  }
 }
 
 object Main {
@@ -208,10 +211,12 @@ npm run set-version -- 1.1.6-SNAPSHOT
 npm run check-version -- 1.1.6-SNAPSHOT
 ```
 
-After the release checks pass, publish the Maven artifacts and the npm packages:
+`sbt --server publishSigned` sends a `-SNAPSHOT` build straight to the Central snapshot repository. Releases go
+through the Central Portal instead: set a release version (`npm run set-version -- X.Y.Z`), run the gates, then
+publish the Maven bundle and the npm packages. Both publish scripts have a `.sh` twin for POSIX shells.
 
 ```powershell
-.\scripts\publish-central.ps1 -Version 1.1.6-SNAPSHOT
+.\scripts\publish-central.ps1
 .\scripts\publish-npm.ps1
 ```
 

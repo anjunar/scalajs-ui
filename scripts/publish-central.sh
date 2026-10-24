@@ -13,7 +13,7 @@ usage() {
 Usage: scripts/publish-central.sh [options]
 
 Options:
-  --version VERSION             Publish VERSION instead of reading build.sbt
+  --version VERSION             Expected release version; fails when build.sbt disagrees
   --publishing-type TYPE        AUTOMATIC or USER_MANAGED (default: AUTOMATIC)
   --deployment-name NAME        Sonatype deployment name
   --poll-seconds SECONDS        Delay between status checks (default: 10)
@@ -65,16 +65,30 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 cd "$REPO_ROOT"
 
-if [[ -z "$VERSION" ]]; then
-  VERSION="$(sed -n \
-    -e 's/^[[:space:]]*version[[:space:]]*:=[[:space:]]*"\([^"].*\)".*/\1/p' \
-    -e 's/^[[:space:]]*ThisBuild[[:space:]]*\/[[:space:]]*version[[:space:]]*:=[[:space:]]*"\([^"].*\)".*/\1/p' \
-    build.sbt | head -n 1)"
-fi
+BUILD_VERSION="$(sed -n \
+  -e 's/^[[:space:]]*version[[:space:]]*:=[[:space:]]*"\([^"].*\)".*/\1/p' \
+  -e 's/^[[:space:]]*ThisBuild[[:space:]]*\/[[:space:]]*version[[:space:]]*:=[[:space:]]*"\([^"].*\)".*/\1/p' \
+  build.sbt | head -n 1)"
 
-if [[ -z "$VERSION" ]]; then
+if [[ -z "$BUILD_VERSION" ]]; then
   echo "Could not read the version from build.sbt." >&2
   exit 1
+fi
+
+# sbt publishes whatever build.sbt says. An explicit --version therefore cannot
+# change what is uploaded; it only states what the caller expects to upload.
+if [[ -z "$VERSION" ]]; then
+  VERSION="$BUILD_VERSION"
+elif [[ "$VERSION" != "$BUILD_VERSION" ]]; then
+  echo "build.sbt is at ${BUILD_VERSION}, not ${VERSION}. Run 'npm run set-version -- ${VERSION}' first." >&2
+  exit 2
+fi
+
+# publishTo in build.sbt sends -SNAPSHOT builds straight to the Central snapshot
+# repository; nothing lands in target/sona-staging and there is no bundle to upload.
+if [[ "$VERSION" == *-SNAPSHOT ]]; then
+  echo "${VERSION} is a snapshot. 'sbt --server publishSigned' publishes it directly; this script uploads release bundles only." >&2
+  exit 2
 fi
 
 if [[ -z "$DEPLOYMENT_NAME" ]]; then
@@ -187,10 +201,19 @@ for ((attempt = 1; attempt <= MAX_POLLS; attempt++)); do
       printf '%s\n' "$STATUS_JSON"
       exit 0
       ;;
-    FAILED|VALIDATED)
+    FAILED)
       echo "Deployment ended with status ${DEPLOYMENT_STATE}."
       printf '%s\n' "$STATUS_JSON"
       exit 1
+      ;;
+    VALIDATED)
+      # AUTOMATIC deployments pass through VALIDATED on their way to PUBLISHED.
+      # USER_MANAGED deployments stop here and wait for the release in the portal.
+      if [[ "$PUBLISHING_TYPE" == "USER_MANAGED" ]]; then
+        echo "Deployment validated. Publish it in the Central Portal to finish the release."
+        printf '%s\n' "$STATUS_JSON"
+        exit 0
+      fi
       ;;
   esac
 done

@@ -61,20 +61,16 @@ cd "$REPO_ROOT"
 NPM_CACHE="${REPO_ROOT}/target/npm-publish-cache"
 mkdir -p "$NPM_CACHE"
 
-# Keep the order dependency-aware. The CSS package comes first because scalajs-ui-core
-# declares its matching major as a peer dependency. scalajs-ui-demo stays private.
-PACKAGE_DIRECTORIES=(
-  scalajs-ui
-  scalajs-ui-core
-  scalajs-ui-bridge
-  scalajs-ui-json
-  scalajs-ui-router
-  scalajs-ui-controls
-  scalajs-ui-viewport
-  scalajs-ui-forms
-  scalajs-ui-editor
-  scalajs-ui-webauthn
-)
+# The release set and its dependency-aware order come from one place,
+# scripts/release-packages.mjs (private packages such as scalajs-ui-demo are not in it).
+PACKAGE_DIRECTORIES=()
+while IFS= read -r package_directory; do
+  PACKAGE_DIRECTORIES+=("$package_directory")
+done < <(node "${SCRIPT_DIR}/release-packages.mjs")
+if [[ ${#PACKAGE_DIRECTORIES[@]} -eq 0 ]]; then
+  echo "scripts/release-packages.mjs returned no packages." >&2
+  exit 1
+fi
 release_version=""
 
 for package_directory in "${PACKAGE_DIRECTORIES[@]}"; do

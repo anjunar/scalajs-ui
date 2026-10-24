@@ -192,7 +192,6 @@ async function updateScalaReadmes(nextVersion) {
       next = next.replace(/^(\| )\d+\.\d+\.\d+[^ |]*( \|)/m, `$1${nextVersion}$2`);
       next = replaceExactlyOnce(next, /^(npm run set-version -- )\S+$/m, `$1${nextVersion}`, "README set-version example");
       next = replaceExactlyOnce(next, /^(npm run check-version -- )\S+$/m, `$1${nextVersion}`, "README check-version example");
-      next = replaceExactlyOnce(next, /^(\.\\scripts\\publish-central\.ps1 -Version )\S+$/m, `$1${nextVersion}`, "README Maven publish example");
     }
     await record(path, current, next);
   }

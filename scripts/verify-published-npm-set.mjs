@@ -3,19 +3,12 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { releasePackageDirectories } from "./release-packages.mjs";
+
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const packageDirectories = [
-  "scalajs-ui",
-  "scalajs-ui-core",
-  "scalajs-ui-bridge",
-  "scalajs-ui-json",
-  "scalajs-ui-router",
-  "scalajs-ui-controls",
-  "scalajs-ui-viewport",
-  "scalajs-ui-forms",
-  "scalajs-ui-editor",
-  "scalajs-ui-webauthn",
-];
+// The release set is derived from the workspaces (scripts/release-packages.mjs), so a new
+// package is verified here the moment it exists.
+const packageDirectories = await releasePackageDirectories();
 
 const manifests = await Promise.all(
   packageDirectories.map(async (directory) =>

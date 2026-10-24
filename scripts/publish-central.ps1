@@ -58,8 +58,20 @@ function Invoke-Curl {
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repoRoot
 
+# sbt publishes whatever build.sbt says. An explicit -Version therefore cannot
+# change what is uploaded; it only states what the caller expects to upload.
+$buildVersion = Get-BuildVersion
 if (-not $Version) {
-    $Version = Get-BuildVersion
+    $Version = $buildVersion
+}
+elseif ($Version -ne $buildVersion) {
+    throw "build.sbt is at $buildVersion, not $Version. Run 'npm run set-version -- $Version' first."
+}
+
+# publishTo in build.sbt sends -SNAPSHOT builds straight to the Central snapshot
+# repository; nothing lands in target\sona-staging and there is no bundle to upload.
+if ($Version.EndsWith("-SNAPSHOT")) {
+    throw "$Version is a snapshot. 'sbt --server publishSigned' publishes it directly; this script uploads release bundles only."
 }
 
 if (-not $DeploymentName) {
@@ -138,10 +150,18 @@ for ($attempt = 1; $attempt -le $MaxPolls; $attempt++) {
         exit 0
     }
 
-    if ($status.deploymentState -eq "FAILED" -or ($status.deploymentState -eq "VALIDATED" -and $PublishingType -eq "USER_MANAGED")) {
+    if ($status.deploymentState -eq "FAILED") {
         Write-Host "Deployment ended with status $($status.deploymentState)."
         $status | ConvertTo-Json -Depth 10
         exit 1
+    }
+
+    # AUTOMATIC deployments pass through VALIDATED on their way to PUBLISHED.
+    # USER_MANAGED deployments stop here and wait for the release in the portal.
+    if ($status.deploymentState -eq "VALIDATED" -and $PublishingType -eq "USER_MANAGED") {
+        Write-Host "Deployment validated. Publish it in the Central Portal to finish the release."
+        $status | ConvertTo-Json -Depth 10
+        exit 0
     }
 }
 
