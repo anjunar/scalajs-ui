@@ -53,7 +53,7 @@
     cursor: pointer;
 }
 
-.ui-virtual-list-footer .ui-virtualized-page-button:disabled {
+.ui-virtual-list-footer .ui-virtualized-page-button[aria-disabled="true"] {
     opacity: 0.45;
     cursor: default;
 }

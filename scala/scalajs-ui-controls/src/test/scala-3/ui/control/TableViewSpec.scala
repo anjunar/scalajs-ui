@@ -144,6 +144,21 @@ class TableViewSpec extends AnyFlatSpec with Matchers {
     html.indexOf("ui-table-header-cell") should be < html.indexOf("ui:KeyedChildren:end")
   }
 
+  it should "own every column header through a header row that carries its ARIA row index" in {
+    val html = renderTable(Seq("Ada", "Grace")) {}
+
+    html should include("role=\"rowgroup\"")
+    html should include("class=\"ui-table-header-row\" role=\"row\" aria-rowindex=\"1\"")
+    html should include("role=\"columnheader\"")
+    html.indexOf("role=\"row\" aria-rowindex=\"1\"") should be < html.indexOf(
+      "role=\"columnheader\""
+    )
+    // Body rows continue the numbering below the header row, and the count covers both.
+    html should include("role=\"row\" aria-rowindex=\"2\"")
+    html should include("role=\"row\" aria-rowindex=\"3\"")
+    html should include("aria-rowcount=\"3\"")
+  }
+
   it should "reserve content-header height in table-row units" in {
     val html = renderTable(Seq("Alice", "Bob", "Cara")) {
       rowHeight = 40

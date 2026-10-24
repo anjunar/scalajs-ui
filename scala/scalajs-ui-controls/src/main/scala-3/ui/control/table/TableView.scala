@@ -18,8 +18,6 @@ import ui.core.statement.DynamicComponentRenderer.dynamic
 import ui.core.statement.KeyedChildren
 import org.scalajs.dom
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 import scala.collection.mutable
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
@@ -29,8 +27,6 @@ final class TableView[S] private (
     configure: TableView[S] ?=> Cursor ?=> Unit
 ) extends VirtualizedCollection[S](source),
       CrawlableCollection[S] {
-
-  private given ExecutionContext = ExecutionContext.global
 
   override val tagName: String = "div"
 
@@ -262,7 +258,11 @@ final class TableView[S] private (
         )
         DslLayer.child(new TableColumnResizeHandle(TableView.this, column)) {}
         columnHeaders.update(column, this)
-        addDisposable(Disposable { columnHeaders.remove(column) })
+        // Only unregister this slot. A column that changes header depth gets a fresh slot in its
+        // new row, and that row may have been reconciled before the old one is disposed.
+        addDisposable(Disposable {
+          if (columnHeaders.get(column).exists(_ eq this)) columnHeaders.remove(column)
+        })
         addDisposable(
           new TableColumnReorderGesture(
             TableView.this,
@@ -343,6 +343,40 @@ final class TableView[S] private (
         DslLayer.child(new TableColumnResizeHandle(TableView.this, column)) {}
       }
     }
+  }
+
+  /** One header row per depth, so every `columnheader` is owned by a `row` as the grid pattern
+    * requires and the row carries the `aria-rowindex` that body rows count on. `display: contents`
+    * keeps the slots direct grid items of the header content: placement stays per slot.
+    */
+  private final class HeaderRow(depth: Int, initial: Vector[HeaderEntry], browser: Boolean)
+      extends Div {
+    private val slots =
+      new KeyedChildren[(TableColumn[S, ?], Boolean), HeaderEntry, HeaderSlot](
+        initial,
+        entry => entry.column -> entry.leaf,
+        entry => new HeaderSlot(entry, browser),
+        (slot, entry) => slot.update(entry)
+      )
+
+    def update(entries: Vector[HeaderEntry]): Unit = slots.setItems(entries)
+
+    override def compose(cursor: Cursor): Unit = DslLayer.render(this, cursor) {
+      classes = Seq("ui-table-header-row")
+      setAttribute("role", "row")
+      setAttribute("aria-rowindex", (depth + 1).toString)
+      style { display = "contents" }
+      DslLayer.child(slots) {}
+    }
+  }
+
+  /** The header entries grouped by row. Every depth up to the header row count gets a row, so the
+    * markup matches `headerRowCountProperty` and the body rows' `aria-rowindex` offset.
+    */
+  private def currentHeaderRows: Vector[(Int, Vector[HeaderEntry])] = {
+    val entries = currentHeaderEntries
+    val rows    = entries.map(entry => entry.depth + entry.rowSpan).maxOption.getOrElse(1)
+    (0 until rows).toVector.map(depth => depth -> entries.filter(_.depth == depth))
   }
 
   /** Requested remote sort descriptors, not a promise that the corresponding load succeeded. */
@@ -952,9 +986,6 @@ final class TableView[S] private (
   def commitEdit(): Boolean                                 = editModel.commitEdit()
   def commitEdit(value: Any | Null): Boolean                = editModel.commitEdit(value)
   def cancelEdit(): Boolean                                 = editModel.cancelEdit()
-  def $getColumns: ListProperty[TableColumn[S, ?]]          = columns
-  def $getFixedCellSize: Double                             = rowHeightProperty.get
-  def setFixedCellSize(value: Double): Unit                 = rowHeightProperty.set(value)
 
   private[control] def registerColumn(column: TableColumn[S, ?]): Unit = {
     columnParentStack.headOption match {
@@ -1220,24 +1251,24 @@ final class TableView[S] private (
               )
             )
 
-            val initial = currentHeaderEntries
-            val keyed   = DslLayer.child(
-              new KeyedChildren[(TableColumn[S, ?], Boolean), HeaderEntry, HeaderSlot](
+            val initial = currentHeaderRows
+            val rows    = DslLayer.child(
+              new KeyedChildren[Int, (Int, Vector[HeaderEntry]), HeaderRow](
                 initial,
-                entry => entry.column -> entry.leaf,
-                entry => new HeaderSlot(entry, cursor.isBrowser),
-                (slot, entry) => slot.update(entry)
+                _._1,
+                (depth, entries) => new HeaderRow(depth, entries, cursor.isBrowser),
+                (row, entries) => row.update(entries._2)
               )
             ) {}
             var ready = !cursor.isHydrating
             addDisposable(columnStateRevisionProperty.observeWithoutInitial { _ =>
-              if (ready) keyed.setItems(currentHeaderEntries)
+              if (ready) rows.setItems(currentHeaderRows)
             })
             cursor.afterHydration { () =>
               if (!content.isDisposed) {
                 ready = true
-                val current = currentHeaderEntries
-                if (current != initial) keyed.setItems(current)
+                val current = currentHeaderRows
+                if (current != initial) rows.setItems(current)
               }
             }
           }
@@ -1511,7 +1542,10 @@ final class TableView[S] private (
         }
         position += 1
       }
-      if (browserRendering) {
+      // Not while hydrating: the slice is still the server's, and wireItemsObserver has already
+      // bootstrapped an empty remote source. The first viewport measurement releases hydrating and
+      // recomputes, which is when the browser's own range is requested.
+      if (browserRendering && !hydrating) {
         if (isPaging) requestPageLoad(start, end)
         else requestLazyLoadIfNecessary(start, end)
       }

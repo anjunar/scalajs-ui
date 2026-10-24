@@ -1,5 +1,6 @@
 package ui.control.carousel
 
+import ui.control.KeyboardEvents
 import ui.control.carousel.Carousel.Renderer
 import ui.control.carousel.CarouselSlide.carouselSlide
 import ui.core.component.AbstractComponent
@@ -16,8 +17,6 @@ import ui.core.render.{Cursor, UiEvent}
 import ui.core.state.{Disposable, ListProperty, Property, ReadOnlyProperty}
 import ui.core.statement.DynamicComponentRenderer.dynamic
 import ui.core.statement.Foreach.foreachIndexed
-
-import scala.scalajs.js
 
 final class Carousel[T] private[carousel] (
     configure: Carousel[T] ?=> Cursor ?=> Unit,
@@ -338,30 +337,26 @@ final class Carousel[T] private[carousel] (
   private def bumpNavigationRevision(): Unit =
     navigationRevisionProperty.setAlways(navigationRevisionProperty.get + 1)
 
+  /** The section is the focus target, but slide content bubbles to it as well: a text field or an
+    * ARIA widget inside a slide keeps its own arrow and Home/End keys.
+    */
   private def handleKeyDown(event: UiEvent): Unit =
-    keyboardKey(event).foreach {
-      case "ArrowRight" =>
-        event.preventDefault()
-        next()
-      case "ArrowLeft" =>
-        event.preventDefault()
-        previous()
-      case "Home" =>
-        event.preventDefault()
-        goTo(0)
-      case "End" =>
-        event.preventDefault()
-        goTo(slideCount - 1)
-      case _ => ()
-    }
-
-  private def keyboardKey(event: UiEvent): Option[String] =
-    event.raw match {
-      case raw: js.Object =>
-        val key = raw.asInstanceOf[js.Dynamic].selectDynamic("key")
-        Option.when(js.typeOf(key) == "string")(key.asInstanceOf[String])
-      case _ => None
-    }
+    if (KeyboardEvents.isPlain(event) && KeyboardEvents.targetAcceptsNavigation(event))
+      KeyboardEvents.key(event).foreach {
+        case "ArrowRight" =>
+          event.preventDefault()
+          next()
+        case "ArrowLeft" =>
+          event.preventDefault()
+          previous()
+        case "Home" =>
+          event.preventDefault()
+          goTo(0)
+        case "End" =>
+          event.preventDefault()
+          goTo(slideCount - 1)
+        case _ => ()
+      }
 }
 
 object Carousel {

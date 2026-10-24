@@ -35,6 +35,9 @@ class TabsSpec extends AnyFlatSpec with Matchers {
     html should include("tabindex=\"-1\"")
     html should include("Current location panel")
     html should not include "Chat panel"
+    // Ids are allocated in the browser after hydration; the server must not promise any.
+    html should not include "aria-controls"
+    html should not include "aria-labelledby"
   }
 
   it should "keep inactive panels mounted and hidden when configured" in {
@@ -64,6 +67,8 @@ class TabsSpec extends AnyFlatSpec with Matchers {
     cursor.collectHtml() should include("Current location panel")
     cursor.collectHtml() should include("Chat panel")
     cursor.collectHtml() should include("display: none")
+    // The visible panel has no display property at all, not an empty one.
+    cursor.collectHtml() should not include "style=\"display: \""
     locationRenders shouldBe 1
     chatRenders shouldBe 1
 
@@ -162,21 +167,83 @@ class TabsSpec extends AnyFlatSpec with Matchers {
     )
 
     val tabsHost = hosts.find(host => host.tagName == "section").get
+    val tablist  = hosts.find(_.attribute("role").contains("tablist")).get
     val triggers = hosts.filter(_.tagName == "button")
 
     triggers(1).fire("click") shouldBe false
     control.getSelectedIndex shouldBe 1
 
-    tabsHost.fire("keydown", js.Dynamic.literal(key = "ArrowLeft")) shouldBe true
+    // Keys are handled on the tablist, where only the triggers take focus. A key pressed inside
+    // panel content bubbles to the section, which has no listener to take it away.
+    tabsHost.hasListener("keydown") shouldBe false
+    tablist.fire("keydown", js.Dynamic.literal(key = "ArrowLeft")) shouldBe true
     control.getSelectedIndex shouldBe 0
 
-    tabsHost.fire("keydown", js.Dynamic.literal(key = "End")) shouldBe true
+    tablist.fire("keydown", js.Dynamic.literal(key = "End")) shouldBe true
+    control.getSelectedIndex shouldBe 1
+
+    // Shortcuts, composition and already handled keys belong to someone else.
+    tablist.fire("keydown", js.Dynamic.literal(key = "ArrowLeft", ctrlKey = true)) shouldBe false
+    tablist.fire("keydown", js.Dynamic.literal(key = "Home", metaKey = true)) shouldBe false
+    tablist.fire("keydown", js.Dynamic.literal(key = "Home", isComposing = true)) shouldBe false
+    tablist.fire(
+      "keydown",
+      js.Dynamic.literal(key = "Home", defaultPrevented = true)
+    ) shouldBe false
     control.getSelectedIndex shouldBe 1
 
     Runtime.unmount(root)
 
-    tabsHost.hasListener("keydown") shouldBe false
+    tablist.hasListener("keydown") shouldBe false
     triggers.foreach(_.hasListener("click") shouldBe false)
+  }
+
+  it should "pair triggers and panels through ids allocated after hydration" in {
+    val hosts         = mutable.ArrayBuffer.empty[TabsTestHostElement]
+    val cursor        = new TabsEventCursor(hosts += _, browser = true, deferredHydration = true)
+    var control: Tabs = null
+
+    val root = Runtime.mount(
+      new TabsTestRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit = {
+          control = tabs {
+            renderMode = RenderMode.KeepMountedHidden
+            tab("One") { div {} }
+            tab("Two") { div {} }
+          }
+          tabs {
+            tab("Other") { div {} }
+          }
+        }
+      },
+      cursor
+    )
+
+    val triggers = hosts.filter(_.tagName == "button")
+    def panels   = hosts.filter(_.attribute("role").contains("tabpanel"))
+
+    // Hydration claims the server markup, which carries no ids.
+    triggers.foreach(_.attribute("id") shouldBe None)
+    triggers.foreach(_.attribute("aria-controls") shouldBe None)
+    panels.foreach(_.attribute("aria-labelledby") shouldBe None)
+
+    cursor.completeHydration()
+
+    triggers.zip(panels).foreach { (trigger, panel) =>
+      trigger.attribute("id").get should startWith("ui-tabs-")
+      trigger.attribute("aria-controls") shouldBe panel.attribute("id")
+      panel.attribute("aria-labelledby") shouldBe trigger.attribute("id")
+    }
+    // Two instances on one page never share an id.
+    triggers.map(_.attribute("id").get).distinct.size shouldBe 3
+
+    // A panel mounted later joins the same scheme.
+    control.setSelectedIndex(1)
+    control.renderModeProperty.set(RenderMode.ActiveOnly)
+    panels.last.attribute("aria-labelledby") shouldBe triggers(1).attribute("id")
+    triggers(1).attribute("aria-controls") shouldBe panels.last.attribute("id")
+
+    Runtime.unmount(root)
   }
 
   it should "clamp a reactively bound selected index" in {

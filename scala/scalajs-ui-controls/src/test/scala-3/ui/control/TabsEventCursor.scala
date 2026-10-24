@@ -14,7 +14,32 @@ import org.scalatest.matchers.should.Matchers
 import scala.collection.mutable
 import scala.scalajs.js
 
-private final class TabsEventCursor(onCreate: TabsTestHostElement => Unit) extends Cursor {
+/** Renders into event-capable test hosts. With `browser`, components see a browser cursor; with
+  * `deferredHydration`, `afterHydration` callbacks wait for [[completeHydration]] the way they do
+  * under a real HydratingCursor.
+  */
+private final class TabsEventCursor(
+    onCreate: TabsTestHostElement => Unit,
+    browser: Boolean = false,
+    deferredHydration: Boolean = false
+) extends Cursor {
+  private val callbacks = mutable.ArrayBuffer.empty[() => Unit]
+  private var completed = !deferredHydration
+
+  override def isBrowser: Boolean   = browser
+  override def isHydrating: Boolean = !completed
+
+  override def afterHydration(callback: () => Unit): Unit =
+    if (completed) callback()
+    else callbacks += callback
+
+  override def completeHydration(): Unit = {
+    completed = true
+    val pending = callbacks.toVector
+    callbacks.clear()
+    pending.foreach(_())
+  }
+
   override def claimElement(tag: String): HostElement = {
     val host = new TabsTestHostElement(tag)
     onCreate(host)

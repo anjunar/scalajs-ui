@@ -244,23 +244,6 @@ class TableRow[S] private[control] (
     )
   }
 
-  private[control] def bind(
-      rowIndex: Int,
-      rowValue: S,
-      owner: TableView[S],
-      rowColumns: Seq[TableColumn[S, ?]]
-  ): Unit = {
-    bindItem(rowIndex, Some(rowValue), owner)
-  }
-
-  private[control] def bindPlaceholder(
-      rowIndex: Int,
-      owner: TableView[S],
-      rowColumns: Seq[TableColumn[S, ?]]
-  ): Unit = {
-    bindItem(rowIndex, None, owner)
-  }
-
   private def requireTableView(): TableView[S] =
     Option(ownerTable).getOrElse {
       throw new IllegalStateException("TableRow must be bound to a TableView before composition")
@@ -273,21 +256,4 @@ object TableRow {
       Cursor
   ): TableRow[S] =
     DslLayer.child(new TableRow[S](body)) {}
-
-  def rowItem[S](
-      rowIndex: Int,
-      rowValue: S,
-      tableView: TableView[S],
-      columns: Seq[TableColumn[S, ?]],
-      rowHeight: Double
-  )(using row: TableRow[S]): Unit =
-    row.bind(rowIndex, rowValue, tableView, columns)
-
-  def placeholderRow[S](
-      rowIndex: Int,
-      tableView: TableView[S],
-      columns: Seq[TableColumn[S, ?]],
-      rowHeight: Double
-  )(using row: TableRow[S]): Unit =
-    row.bindPlaceholder(rowIndex, tableView, columns)
 }

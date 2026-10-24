@@ -217,11 +217,6 @@ class TableCell[S, T] extends AbstractComponent {
       case None           => itemProperty.set(null)
     }
   }
-
-  private[control] def applyRenderedItem(item: T | Null, empty: Boolean): Unit = {
-    itemProperty.set(item)
-    emptyProperty.set(empty)
-  }
 }
 
 object TableCell {

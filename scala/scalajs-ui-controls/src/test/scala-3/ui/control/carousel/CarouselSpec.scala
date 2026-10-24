@@ -181,6 +181,73 @@ class CarouselSpec extends AnyFlatSpec with Matchers {
     nextButton.hasListener("click") shouldBe false
   }
 
+  it should "leave modified keys and keys from editable slide content alone" in {
+    val hosts                     = mutable.ArrayBuffer.empty[CarouselTestHostElement]
+    val cursor                    = new CarouselEventCursor(hosts += _, browser = true)
+    val items                     = ListProperty[String](js.Array("One", "Two", "Three"))
+    var control: Carousel[String] = null
+
+    val root = Runtime.mount(
+      new CarouselTestRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          control = carousel[String] {
+            Carousel.items = items
+          }
+      },
+      cursor
+    )
+
+    val carouselHost = hosts.find(_.tagName == "section").get
+
+    // An element as the keydown target sees it: `closest` finds a text-entry or widget ancestor,
+    // or it does not.
+    def element(insideConsumer: Boolean): js.Dynamic = {
+      val target = js.Dynamic.literal()
+      target.closest = ((_: String) => if (insideConsumer) target else null): js.Function1[
+        String,
+        js.Any
+      ]
+      target
+    }
+
+    // A text field inside a slide keeps its caret keys.
+    carouselHost.fire(
+      "keydown",
+      js.Dynamic.literal(key = "ArrowRight", target = element(insideConsumer = true))
+    ) shouldBe false
+    control.activeIndexProperty.get shouldBe 0
+
+    // Shortcuts, composition and already handled keys belong to someone else.
+    carouselHost.fire(
+      "keydown",
+      js.Dynamic.literal(key = "ArrowRight", ctrlKey = true)
+    ) shouldBe false
+    carouselHost.fire("keydown", js.Dynamic.literal(key = "End", altKey = true)) shouldBe false
+    carouselHost.fire("keydown", js.Dynamic.literal(key = "End", isComposing = true)) shouldBe false
+    carouselHost.fire(
+      "keydown",
+      js.Dynamic.literal(key = "End", defaultPrevented = true)
+    ) shouldBe false
+    control.activeIndexProperty.get shouldBe 0
+
+    // Plain slide content still navigates, and so does the focused section itself even though a
+    // widget selector would match it.
+    carouselHost.fire(
+      "keydown",
+      js.Dynamic.literal(key = "ArrowRight", target = element(insideConsumer = false))
+    ) shouldBe true
+    control.activeIndexProperty.get shouldBe 1
+
+    val section = element(insideConsumer = true)
+    carouselHost.fire(
+      "keydown",
+      js.Dynamic.literal(key = "End", target = section, currentTarget = section)
+    ) shouldBe true
+    control.activeIndexProperty.get shouldBe 2
+
+    Runtime.unmount(root)
+  }
+
   "Carousel side previews" should "show one to three unique neighbors per side" in {
     val hosts  = mutable.ArrayBuffer.empty[CarouselTestHostElement]
     val cursor = new CarouselEventCursor(hosts += _, browser = true)

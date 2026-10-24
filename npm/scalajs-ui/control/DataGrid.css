@@ -51,7 +51,7 @@
   cursor: pointer;
 }
 
-.ui-data-grid-footer .ui-virtualized-page-button:disabled {
+.ui-data-grid-footer .ui-virtualized-page-button[aria-disabled="true"] {
   opacity: 0.45;
   cursor: default;
 }

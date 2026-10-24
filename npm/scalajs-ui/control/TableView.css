@@ -32,6 +32,11 @@
   min-height: 100%;
 }
 
+/* One row per header depth for the accessibility tree; the cells stay direct grid items. */
+.ui-table-header-row {
+  display: contents;
+}
+
 .ui-table-body-wrapper {
   position: relative;
   flex: 1 1 auto;
@@ -76,7 +81,7 @@
   cursor: pointer;
 }
 
-.ui-virtualized-page-button:disabled {
+.ui-virtualized-page-button[aria-disabled="true"] {
   opacity: 0.45;
   cursor: default;
 }

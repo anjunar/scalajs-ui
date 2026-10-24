@@ -18,8 +18,6 @@ import ui.core.statement.Foreach.foreach
 import org.scalajs.dom
 
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 
@@ -28,8 +26,6 @@ final class DataGrid[T] private (
     configure: DataGrid[T] ?=> Cursor ?=> Unit
 ) extends VirtualizedCollection[T](source),
       CrawlableCollection[T] {
-
-  private given ExecutionContext = ExecutionContext.global
 
   override val tagName: String = "div"
 
@@ -315,7 +311,10 @@ final class DataGrid[T] private (
     else {
       val (start, end) = visibleRange(total)
       publishVisibleCells((start until end).map(cellFor))
-      if (browserRendering && end > start) {
+      // Not while hydrating: the slice is still the server's, and wireItemsObserver has already
+      // bootstrapped an empty remote source. The first viewport measurement releases hydrating and
+      // recomputes, which is when the browser's own range is requested.
+      if (browserRendering && !hydrating && end > start) {
         if (isPaging) requestPageLoad(start, end)
         else requestLazyLoadIfNecessary(start, end)
       }

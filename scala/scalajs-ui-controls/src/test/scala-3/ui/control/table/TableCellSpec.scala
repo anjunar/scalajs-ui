@@ -212,6 +212,10 @@ class TableCellSpec extends AnyFlatSpec with Matchers {
     initialHtml should include("grid-row: 1 / span 1")
     initialHtml should include("grid-row: 2 / span 1")
     initialHtml should include("aria-rowcount=\"3\"")
+    // One header row per depth; the body row continues below both.
+    initialHtml should include("class=\"ui-table-header-row\" role=\"row\" aria-rowindex=\"1\"")
+    initialHtml should include("class=\"ui-table-header-row\" role=\"row\" aria-rowindex=\"2\"")
+    initialHtml should include("role=\"row\" aria-rowindex=\"3\"")
 
     first.visible = false
     table.visibleLeafColumns.get shouldBe Vector(second)

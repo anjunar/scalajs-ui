@@ -1,16 +1,17 @@
 package ui.control.virtualized
 
+import ui.control.KeyboardEvents
 import ui.core.component.AbstractComponent
 import ui.core.context.UrlScope
 import ui.core.dsl.ClassDsl.classes
-import ui.core.dsl.EventDsl.onClick
+import ui.core.dsl.EventDsl.{on, onClick}
 import ui.core.layout.Anchor.{anchor, href}
 import ui.core.layout.Condition.when
 import ui.core.layout.Div
 import ui.core.layout.Div.div
 import ui.core.layout.TextComponent.text
 import ui.core.remote.RemoteListDataSource
-import ui.core.render.DomHostElement
+import ui.core.render.{DomHostElement, UiEvent}
 import ui.core.state.{CompositeDisposable, Disposable, ListDataSource, ListProperty, Property}
 import org.scalajs.dom
 
@@ -158,13 +159,6 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
     }
   }
 
-  protected def normalizePage(): Unit = {
-    val totalPages = pageCount(renderableCount)
-    if (totalPages > 0 && pageIndexProperty.get >= totalPages)
-      pageIndexProperty.set(totalPages - 1)
-    else if (pageIndexProperty.get < 0) pageIndexProperty.set(0)
-  }
-
   protected def pageCount(total: Int): Int =
     if (total <= 0) 0 else (total + pageSize - 1) / pageSize
 
@@ -244,8 +238,12 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
     }
 
   /** Uses the same element during SSR and the first browser render. Hydration cannot replace an SSR
-    * link with a button because it claims the existing DOM tree. An enabled link still gets the
-    * client-side pager behavior after hydration; without JavaScript its href remains usable.
+    * link with a button because it claims the existing DOM tree.
+    *
+    * An enabled link keeps its href in the browser too: the href is what makes an anchor
+    * keyboard-activatable (Enter) and what keeps it usable without JavaScript. The click handler
+    * prevents the navigation and pages in place instead. Only a disabled link has no href, which is
+    * what the stylesheets key on through `aria-disabled`.
     */
   private def renderPagingControl(label: String, pageDelta: Int)(using
       parent: AbstractComponent,
@@ -254,8 +252,6 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
     anchor(label) { link ?=>
       classes = Seq("ui-virtualized-page-button")
       link.setAttribute("role", "button")
-
-      var browserEnhanced = false
 
       def enabled: Boolean =
         if (pageDelta < 0) hasPreviousPage else hasNextPage
@@ -267,7 +263,7 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
         link.setAttribute("aria-disabled", (!active).toString)
         link.setAttribute("tabindex", if (active) "0" else "-1")
 
-        if (active && !browserEnhanced) {
+        if (active) {
           pagingHref(offset) match {
             case Some(target) => link.href = target
             case None         => link.removeAttribute("href")
@@ -278,16 +274,16 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
       link.addDisposable(itemStateRevisionProperty.observe(_ => updateState()))
 
       if (browserRendering) {
-        onClick { event =>
+        def activate(event: UiEvent): Unit = {
           event.preventDefault()
           if (enabled) setPageOffset(offset)
         }
 
-        cursor.afterHydration { () =>
-          if (!link.isDisposed) {
-            browserEnhanced = true
-            updateState()
-          }
+        onClick(activate)
+        // role="button" promises Space activation; by itself a link only activates on Enter.
+        on("keydown") { event =>
+          if (KeyboardEvents.isPlain(event) && KeyboardEvents.key(event).contains(" "))
+            activate(event)
         }
       }
     }
@@ -559,7 +555,9 @@ abstract class VirtualizedCollection[T](protected val dataSource: ListDataSource
       addDisposable(Disposable(observer.disconnect()))
     }
 
-    val listener: dom.Event => Unit = _ => scheduleViewportMeasure()
+    // A js.Function1, not a Scala function: the implicit conversion would allocate a new JS
+    // closure per use, and removeEventListener would then never see the one that was added.
+    val listener: js.Function1[dom.Event, Unit] = _ => scheduleViewportMeasure()
     dom.window.addEventListener("resize", listener)
     addDisposable(Disposable(dom.window.removeEventListener("resize", listener)))
   }

@@ -1,5 +1,6 @@
 package ui.control.tabs
 
+import ui.control.KeyboardEvents
 import ui.control.tabs.Tabs
 import ui.control.tabs.Tabs.{RenderMode, TabSpec}
 import ui.core.component.{AbstractComponent, AbstractCustomComponent}
@@ -9,13 +10,11 @@ import ui.core.dsl.DslLayer
 import ui.core.dsl.EventDsl.{on, onClick}
 import ui.core.layout.Button.{button, buttonType}
 import ui.core.layout.Div.div
-import ui.core.render.{Cursor, UiEvent}
+import ui.core.render.{Cursor, DomHostElement, HostElement, UiEvent}
 import ui.core.state.{ListProperty, Property, ReadOnlyProperty}
 import ui.core.statement.DynamicComponentRenderer.dynamic
 import ui.core.statement.Foreach.foreachIndexed
 import ui.core.text.TextValue
-
-import scala.scalajs.js
 
 final class Tabs(
     initialSelectedIndex: Int = 0,
@@ -31,6 +30,12 @@ final class Tabs(
   private[control] val contentRevisionProperty: Property[Int]       = Property(0)
   private val contentComponentProperty: Property[AbstractComponent] =
     Property(new EmptyTabsContent)
+
+  /** Prefix of the ids that pair each trigger with its panel (`aria-controls`/`aria-labelledby`).
+    * Allocated in the browser once hydration has claimed the server markup, which carries no ids:
+    * an id handed out during composition could not be reproduced by the server.
+    */
+  private[control] val idPrefixProperty: Property[Option[String]] = Property(None)
 
   def addTab(tab: TabSpec): Unit =
     tabsProperty += tab
@@ -51,11 +56,14 @@ final class Tabs(
     DslLayer.render(this, cursor) {
       addClass("ui-tabs")
       classIf("ui-tabs--empty", tabsProperty.map(_.isEmpty))
-      on("keydown")(handleKeyDown)
 
       div {
         classes = Seq("ui-tabs__header")
         setDslAttribute("role", "tablist")
+        // Arrow and Home/End keys act on the focused tab (WAI-ARIA tabs pattern). Listening on the
+        // tablist rather than the section keeps them away from panel content: an input inside a
+        // panel must keep its caret movement.
+        on("keydown")(handleKeyDown)
 
         foreachIndexed(tabsProperty) { (tab, index) =>
           val active = selectedIndexProperty.map(_ == index)
@@ -68,6 +76,12 @@ final class Tabs(
             trigger.addDisposable(active.observe { selected =>
               setDslAttribute("aria-selected", selected.toString)
               setDslAttribute("tabindex", if (selected) "0" else "-1")
+            })
+            trigger.addDisposable(idPrefixProperty.observe {
+              case Some(prefix) =>
+                setDslAttribute("id", Tabs.tabId(prefix, index))
+                setDslAttribute("aria-controls", Tabs.panelId(prefix, index))
+              case None => ()
             })
             onClick(_ => setSelectedIndex(index))
           }
@@ -85,6 +99,11 @@ final class Tabs(
     // replaces and disposes that tree during the same property notification.
     installObservers()
   }
+
+  override def afterCompose(cursor: Cursor): Unit =
+    if (cursor.isBrowser) cursor.afterHydration { () =>
+      if (!isDisposed) idPrefixProperty.set(Some(Tabs.nextIdPrefix(host)))
+    }
 
   private def installObservers(): Unit = {
     addDisposable(tabsProperty.observeChanges(_ => handleTabsChanged()))
@@ -133,7 +152,7 @@ final class Tabs(
     }
 
   private def handleKeyDown(event: UiEvent): Unit =
-    keyboardKey(event).foreach {
+    if (KeyboardEvents.isPlain(event)) KeyboardEvents.key(event).foreach {
       case "ArrowRight" | "ArrowDown" =>
         event.preventDefault()
         setSelectedIndex(getSelectedIndex + 1)
@@ -148,14 +167,6 @@ final class Tabs(
         setSelectedIndex(tabsProperty.length - 1)
       case _ => ()
     }
-
-  private def keyboardKey(event: UiEvent): Option[String] =
-    event.raw match {
-      case raw: js.Object =>
-        val key = raw.asInstanceOf[js.Dynamic].selectDynamic("key")
-        Option.when(js.typeOf(key) == "string")(key.asInstanceOf[String])
-      case _ => None
-    }
 }
 
 object Tabs {
@@ -165,6 +176,25 @@ object Tabs {
     case ActiveOnly
     case KeepMountedHidden
   }
+
+  private var idSequence = 0L
+
+  /** A page-unique id prefix. The document check only runs against a real DOM host; a test host has
+    * no document to collide in.
+    */
+  private def nextIdPrefix(host: HostElement): String = {
+    idSequence += 1
+    val prefix = s"ui-tabs-$idSequence-"
+    val taken  = host match {
+      case domHost: DomHostElement =>
+        domHost.node.ownerDocument.querySelector(s"[id^='$prefix']") != null
+      case _ => false
+    }
+    if (taken) nextIdPrefix(host) else prefix
+  }
+
+  private[control] def tabId(prefix: String, index: Int): String   = s"${prefix}tab-$index"
+  private[control] def panelId(prefix: String, index: Int): String = s"${prefix}panel-$index"
 
   final class TabSpec(
       val titleProperty: ReadOnlyProperty[String],
