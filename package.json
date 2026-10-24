@@ -12,7 +12,7 @@
     "build:landing": "npm run build --workspace npm/scalajs-ui-landing",
     "preview:landing": "npm run start --workspace npm/scalajs-ui-landing",
     "verify:landing": "npm run verify --workspace npm/scalajs-ui-landing",
-    "predev": "sbt --server \"scalajs-ui-demo/fastLinkJS\"",
+    "predev": "npm run generate:site-metadata && sbt --server \"scalajs-ui-demo/fastLinkJS\"",
     "dev": "node server/server.mjs",
     "prebuild:client": "npm run generate:site-metadata",
     "build:client": "vite build",
