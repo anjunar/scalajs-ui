@@ -349,9 +349,13 @@ describe("a mounted editor's session", () => {
     f.model.body.set("From the model");
     expect(seen).toHaveLength(0);
 
-    const toggle = f.root.querySelector<HTMLButtonElement>(".scalajs-ui-editor__markdown-actions button")!;
-    toggle.click();
-    toggle.click();
+    // Leaving and re-entering the visual view through the toolbar's view selector rebuilds the
+    // surface, so the editor lends a fresh session for it.
+    const view = f.root.querySelector<HTMLSelectElement>('select[name="editor-view"]')!;
+    for (const mode of ["markdown", "visual"]) {
+      view.value = mode;
+      view.dispatchEvent(new Event("change", { bubbles: true }));
+    }
     expect(f.lent).toHaveLength(2);
     const second = f.lent[1]!;
     expect(markdownOf(second)).toBe("From the model\n");

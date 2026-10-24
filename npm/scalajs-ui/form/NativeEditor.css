@@ -159,8 +159,7 @@
 .scalajs-ui-editor-dialog label { display: grid; gap: 6px; width: 100%; }
 .scalajs-ui-editor-dialog input { box-sizing: border-box; width: 100%; padding: 9px 11px; border: 1px solid var(--aj-line, #c5d3e3); border-radius: 5px; color: inherit; background: var(--aj-surface, #fff); }
 .scalajs-ui-editor-dialog [role="alert"] { width: 100%; margin: 0; }
-.scalajs-ui-editor-dialog button,
-.scalajs-ui-editor__markdown-actions button {
+.scalajs-ui-editor-dialog button {
   min-height: 34px;
   padding: 7px 14px;
   border: 1px solid var(--aj-line, #c5d3e3);
@@ -176,7 +175,6 @@
   color: var(--aj-accent-strong, #174c94);
   font-weight: 600;
 }
-.scalajs-ui-editor__markdown-actions { gap: 8px; align-items: center; }
 /* NativeEditorToolbar switches presentation at 640px. The six touch targets occupy one
    52px row; the native popover escapes editor/window clipping without reserving document space. */
 .scalajs-ui-editor__toolbar:has(.scalajs-ui-editor__quickbar) { flex: 0 0 auto; }

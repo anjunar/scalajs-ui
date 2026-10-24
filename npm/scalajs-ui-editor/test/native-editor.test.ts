@@ -33,7 +33,12 @@ function setup(
     button.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 }));
     button.click();
   }
-  return { root, model, surface, select, action };
+  function view(mode: "visual" | "markdown" | "readonly") {
+    const control = root.querySelector<HTMLSelectElement>('select[name="editor-view"]')!;
+    control.value = mode;
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  return { root, model, surface, select, action, view };
 }
 
 describe("native Ember in the UI Viewport", () => {
@@ -49,14 +54,18 @@ describe("native Ember in the UI Viewport", () => {
   });
   it("edits Markdown source and returns to the native view with the same form value", () => {
     const f = setup();
-    const toggle = f.root.querySelector<HTMLButtonElement>(".scalajs-ui-editor__markdown-actions button")!;
-    expect(toggle.textContent).toBe("Markdown"); toggle.click();
+    // The view lives in the toolbar's <select>, the same control the browser fixture drives.
+    const view = f.root.querySelector<HTMLSelectElement>('.scalajs-ui-editor__view-selector select[name="editor-view"]')!;
+    expect(view.value).toBe("visual");
+    expect(f.root.querySelector(".scalajs-ui-editor__markdown-actions")).toBeNull();
+    f.view("markdown");
     const source = f.root.querySelector<HTMLTextAreaElement>("textarea")!;
     source.value = "## Source heading"; source.dispatchEvent(new Event("input", { bubbles: true }));
     expect(f.model.body.get).toBe("## Source heading");
-    expect(toggle.textContent).toBe("Visual"); toggle.click();
+    expect(view.value).toBe("markdown");
+    f.view("visual");
     expect(f.surface.querySelector("h2")!.textContent).toBe("Source heading");
-    expect(toggle.textContent).toBe("Markdown");
+    expect(view.value).toBe("visual");
   });
   it("formats the real form value and keeps one tab stop across ribbon groups", () => {
     const f = setup(); f.select(); f.action("bold");
