@@ -311,10 +311,10 @@ final class DataGrid[T] private (
     else {
       val (start, end) = visibleRange(total)
       publishVisibleCells((start until end).map(cellFor))
-      // Not while hydrating: the slice is still the server's, and wireItemsObserver has already
-      // bootstrapped an empty remote source. The first viewport measurement releases hydrating and
-      // recomputes, which is when the browser's own range is requested.
-      if (browserRendering && !hydrating && end > start) {
+      // Also while hydrating: a saved crawl window may lie beyond what the client source holds, and
+      // its cells are already on screen from the server. Waiting for the first viewport measurement
+      // would leave them without data for a frame -- or for good where nothing measures.
+      if (browserRendering && end > start) {
         if (isPaging) requestPageLoad(start, end)
         else requestLazyLoadIfNecessary(start, end)
       }
