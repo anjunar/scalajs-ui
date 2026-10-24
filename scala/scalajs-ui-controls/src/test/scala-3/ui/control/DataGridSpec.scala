@@ -11,7 +11,7 @@ import ui.core.layout.Div.div
 import ui.core.layout.TextComponent.text
 import ui.core.render.{Cursor, SsrCursor}
 import ui.core.request.{RequestContext, RequestHeaders}
-import ui.core.state.{ListDataSource, ListProperty}
+import ui.core.state.{Disposable, ListDataSource, ListProperty}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -220,6 +220,85 @@ class DataGridSpec extends AnyFlatSpec with Matchers {
     html should not include "2:Item 2"
   }
 
+  "DataGrid cell stability" should "reposition cells on a viewport resize without remounting them" in {
+    val items   = ListProperty(js.Array((0 until 6).map(index => s"Item $index")*))
+    val cursor  = new SsrCursor()
+    val renders = new CountingRenderer
+    var control: DataGrid[String] = null
+
+    val root = Runtime.mount(
+      new AbstractComponent {
+        override val tagName: String = "main"
+
+        override def compose(contentCursor: Cursor): Unit =
+          DslLayer.render(this, contentCursor) {
+            control = dataGrid[String](items) {
+              itemWidthPx = 400
+              itemHeightPx = 100
+              gapPx = 0
+              overscanRows = 0
+              scrolling = true
+              cellRenderer = renders.renderer
+            }
+          }
+      },
+      cursor
+    )
+
+    renders.mounted shouldBe (0 until 6).toVector
+    cursor.collectHtml() should not include "left: 800px"
+
+    // Two columns become three: every cell after the first moves, none is composed again.
+    control.applyViewportSize(1200.0, 400.0)
+
+    renders.mounted shouldBe (0 until 6).toVector
+    renders.unmounted shouldBe Vector.empty
+    cursor.collectHtml() should include("left: 800px")
+    cursor.collectHtml().split("ui-data-grid-cell\"").length - 1 shouldBe 6
+    visibleText(cursor.collectHtml()) should include(
+      "0:Item 01:Item 12:Item 23:Item 34:Item 45:Item 5"
+    )
+
+    Runtime.unmount(root)
+  }
+
+  it should "mount and unmount exactly the row that enters and leaves on a one-row scroll" in {
+    val items   = ListProperty(js.Array((0 until 30).map(index => s"Item $index")*))
+    val cursor  = new SsrCursor()
+    val renders = new CountingRenderer
+    var control: DataGrid[String] = null
+
+    val root = Runtime.mount(
+      new AbstractComponent {
+        override val tagName: String = "main"
+
+        override def compose(contentCursor: Cursor): Unit =
+          DslLayer.render(this, contentCursor) {
+            control = dataGrid[String](items) {
+              itemWidthPx = 400
+              itemHeightPx = 100
+              gapPx = 0
+              overscanRows = 0
+              scrolling = true
+              cellRenderer = renders.renderer
+            }
+          }
+      },
+      cursor
+    )
+
+    renders.mounted shouldBe (0 until 10).toVector
+
+    control.scrollTopProperty.set(100)
+
+    renders.mounted shouldBe (0 until 12).toVector
+    renders.unmounted shouldBe Vector(0, 1)
+    visibleText(cursor.collectHtml()) should include("2:Item 2")
+    visibleText(cursor.collectHtml()) should include("11:Item 11")
+
+    Runtime.unmount(root)
+  }
+
   "DataGrid list lifecycle" should "track mutations and detach renderers on unmount" in {
     val items  = ListProperty(js.Array("Alice", "Cara"))
     val cursor = new SsrCursor()
@@ -307,6 +386,24 @@ class DataGridSpec extends AnyFlatSpec with Matchers {
 
   private def visibleText(html: String): String =
     html.replaceAll("<!--.*?-->", "").replaceAll("<[^>]+>", "")
+
+  /** Records every renderer invocation and every disposal of the cell it rendered into, so a test
+    * can tell a repositioned cell from a remounted one.
+    */
+  private final class CountingRenderer {
+    var mounted: Vector[Int]   = Vector.empty
+    var unmounted: Vector[Int] = Vector.empty
+
+    val renderer: Renderer[String] =
+      (item: String | Null, index: Int) => {
+        mounted :+= index
+        summon[AbstractComponent].addDisposable(Disposable { unmounted :+= index })
+        div {
+          if (item == null) addClass("remote-placeholder")
+          text(if (item == null) s"Loading $index" else s"$index:$item") {}
+        }
+      }
+  }
 
   private final class GridRoot(itemsProperty: ListDataSource[String]) extends AbstractComponent {
     override val tagName: String = "main"

@@ -38,6 +38,10 @@ final class DataGrid[T] private (
 
   prefetchItemsProperty.set(40)
 
+  /** The mounted window as absolute slots carrying only index and item. A cell's position is not
+    * part of its slot: the cell binds it to [[itemStateRevisionProperty]], so a viewport resize or
+    * a gap change moves the cells instead of remounting the whole window.
+    */
   private val visibleCellsProperty = ListProperty[DataGrid.VisibleCell[T]]()
   private val headerHeightProperty = Property(0.0)
 
@@ -61,8 +65,7 @@ final class DataGrid[T] private (
   override protected def crawlDefaultLimit: Int   = DataGrid.defaultLimit
   override protected def pagingUrlKey: String     = crawlIdProperty.get.getOrElse("grid")
 
-  private var lastVisibleCells                               = Vector.empty[DataGrid.VisibleCell[T]]
-  private var cellRendererBody: Option[DataGrid.Renderer[T]] = None
+  private var cellRendererBody: Option[DataGrid.Renderer[T]]                        = None
   private var toolbarBody: Option[AbstractComponent ?=> Cursor ?=> Unit]            = None
   private var headerBody: Option[AbstractComponent ?=> Cursor ?=> Unit]             = None
   private var loadingPlaceholderBody: Option[AbstractComponent ?=> Cursor ?=> Unit] = None
@@ -73,7 +76,8 @@ final class DataGrid[T] private (
 
   def setRenderer(renderer: DataGrid.Renderer[T]): Unit = {
     cellRendererBody = Option(renderer)
-    lastVisibleCells = Vector.empty
+    // Mounted cells composed the previous renderer; only a remount picks up the new one.
+    visibleCellsProperty.clear()
     refreshItemState()
   }
 
@@ -219,7 +223,7 @@ final class DataGrid[T] private (
             }
 
             foreach(visibleCellsProperty) { cell =>
-              DataGrid.dataGridCell(cell, cellRendererBody)
+              DataGrid.dataGridCell(this, cell)
             }
           }
         }
@@ -305,12 +309,21 @@ final class DataGrid[T] private (
     installItemObservers()
   }
 
+  /** Releasing hydration may move the surface from the server's absolute crawl slice to a layout
+    * relative to the page. The cells follow the geometry revision, so the release publishes one.
+    */
+  override protected def onViewportMeasured(): Unit = {
+    val releasingHydration = hydrating
+    super.onViewportMeasured()
+    if (releasingHydration && !hydrating) bumpItemState()
+  }
+
   override protected def recomputeVisible(): Unit = {
     val total = displayItemCount
-    if (total <= 0) publishVisibleCells(Seq.empty)
+    if (total <= 0) visibleCellsProperty.clear()
     else {
       val (start, end) = visibleRange(total)
-      publishVisibleCells((start until end).map(cellFor))
+      reconcileVisibleCells(start, end)
       // Also while hydrating: a saved crawl window may lie beyond what the client source holds, and
       // its cells are already on screen from the server. Waiting for the first viewport measurement
       // would leave them without data for a frame -- or for good where nothing measures.
@@ -321,28 +334,49 @@ final class DataGrid[T] private (
     }
   }
 
-  private def publishVisibleCells(cells: Seq[DataGrid.VisibleCell[T]]): Unit = {
-    val next = cells.toVector
-    if (next != lastVisibleCells) {
-      lastVisibleCells = next
-      visibleCellsProperty.setAll(next)
+  /** Brings the mounted window to `[start, end)` with the fewest mounts: slots that left the window
+    * are removed at either end, slots that stay keep their cell, and only the slots that entered
+    * are inserted. A slot whose item was replaced at the same index gets a fresh cell, since the
+    * renderer composed the previous item. Items compare by reference, not by equality: a source
+    * mutation that puts an equal-but-different object at a slot is a replacement.
+    */
+  private def reconcileVisibleCells(start: Int, end: Int): Unit = {
+    val dropBefore = visibleCellsProperty.iterator.takeWhile(_.index < start).length
+    if (dropBefore > 0) visibleCellsProperty.remove(0, dropBefore)
+    val keepUntil = visibleCellsProperty.iterator.takeWhile(_.index < end).length
+    if (keepUntil < visibleCellsProperty.length)
+      visibleCellsProperty.remove(keepUntil, visibleCellsProperty.length - keepUntil)
+
+    var position = 0
+    (start until end).foreach { index =>
+      val item = itemAt(index)
+      if (position >= visibleCellsProperty.length || visibleCellsProperty(position).index != index)
+        visibleCellsProperty.insert(position, new DataGrid.VisibleCell(index, item))
+      else if (!sameItem(visibleCellsProperty(position).item, item))
+        visibleCellsProperty.update(position, new DataGrid.VisibleCell(index, item))
+      position += 1
     }
   }
 
-  private def cellFor(index: Int): DataGrid.VisibleCell[T] = {
-    val columns    = columnCount
-    val localIndex = layoutIndex(index)
-    val row        = localIndex / columns
-    val column     = localIndex % columns
-    DataGrid.VisibleCell(
-      index = index,
-      item = itemAt(index),
-      top = row * rowStep,
-      left = outerGap + column * columnStep,
-      width = renderedItemWidth,
-      height = itemHeight
-    )
-  }
+  private def sameItem(previous: Option[T], next: Option[T]): Boolean =
+    (previous, next) match {
+      case (Some(a), Some(b)) => a.asInstanceOf[AnyRef] eq b.asInstanceOf[AnyRef]
+      case (None, None)       => true
+      case _                  => false
+    }
+
+  private def cellTop(index: Int): Double  = layoutIndex(index) / columnCount * rowStep
+  private def cellLeft(index: Int): Double =
+    outerGap + layoutIndex(index) % columnCount * columnStep
+
+  private def cellTopProperty(index: Int): ReadOnlyProperty[String] =
+    itemStateRevisionProperty.map(_ => px(cellTop(index)))
+  private def cellLeftProperty(index: Int): ReadOnlyProperty[String] =
+    itemStateRevisionProperty.map(_ => px(cellLeft(index)))
+  private def cellWidthProperty: ReadOnlyProperty[String] =
+    itemStateRevisionProperty.map(_ => px(renderedItemWidth))
+  private def cellHeightProperty: ReadOnlyProperty[String] =
+    itemStateRevisionProperty.map(_ => px(itemHeight))
 
   private def placeholderTextProperty: ReadOnlyProperty[String] =
     remoteStateRevisionProperty.map { _ =>
@@ -416,14 +450,10 @@ object DataGrid {
   private def emptyRenderer[T]: Renderer[T] =
     (_: T | Null, _: Int) => (_: AbstractComponent) ?=> (_: Cursor) ?=> ()
 
-  private[control] final case class VisibleCell[T](
-      index: Int,
-      item: Option[T],
-      top: Double,
-      left: Double,
-      width: Double,
-      height: Double
-  )
+  /** Identity of a mounted slot. Deliberately not a case class: two slots are the same only when
+    * they are the same slot, so the Foreach over the window never treats a new slot as the old one.
+    */
+  private[control] final class VisibleCell[T](val index: Int, val item: Option[T])
 
   def dataGrid[T](
       source: ListDataSource[T]
@@ -498,14 +528,17 @@ object DataGrid {
     grid.setEmptyPlaceholder(body)
 
   private def dataGridCell[T](
-      cell: VisibleCell[T],
-      renderer: Option[Renderer[T]]
+      grid: DataGrid[T],
+      cell: VisibleCell[T]
   )(using AbstractComponent, Cursor): DataGridCell[T] =
-    DslLayer.child(new DataGridCell(cell, renderer)) {}
+    DslLayer.child(new DataGridCell(grid, cell)) {}
 
+  /** One mounted slot. The cell owns its item and index for its whole life; its position is the
+    * grid's and follows the geometry revision, so a resize moves the cell without recomposing it.
+    */
   private final class DataGridCell[T](
-      cell: VisibleCell[T],
-      renderer: Option[Renderer[T]]
+      grid: DataGrid[T],
+      cell: VisibleCell[T]
   ) extends AbstractComponent {
     override val tagName: String = "div"
 
@@ -515,10 +548,10 @@ object DataGrid {
         if (cell.item.isEmpty) addClass("ui-data-grid-cell-loading")
         style {
           position = "absolute"
-          left = s"${cell.left}px"
-          top = s"${cell.top}px"
-          width = s"${cell.width}px"
-          height = s"${cell.height}px"
+          left = grid.cellLeftProperty(cell.index)
+          top = grid.cellTopProperty(cell.index)
+          width = grid.cellWidthProperty
+          height = grid.cellHeightProperty
           boxSizing = "border-box"
         }
 
@@ -526,7 +559,7 @@ object DataGrid {
           case Some(item) => item
           case None       => null
         }
-        renderer.foreach { renderCell => renderCell(value, cell.index) }
+        grid.cellRendererBody.foreach { renderCell => renderCell(value, cell.index) }
       }
   }
 }

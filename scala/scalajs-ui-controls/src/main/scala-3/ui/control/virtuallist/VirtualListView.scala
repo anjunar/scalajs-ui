@@ -35,6 +35,12 @@ final class VirtualListView[T] private (
   val overscanPxProperty: Property[Double]     = Property(240.0)
   val headerRowsProperty: Property[Int]        = Property(0)
 
+  /** The mounted window as absolute slots. A slot carries only its identity -- index and item -- so
+    * a cell stays mounted while its item is unchanged. Its position is not part of the slot:
+    * [[VirtualListCell]] binds `top` to [[itemStateRevisionProperty]], so a measurement moves the
+    * cells below it without remounting them. Before this, the slot carried `top` and `height` and
+    * the window was republished whole, which remounted every visible cell on every measurement.
+    */
   private val visibleSlotsProperty = ListProperty[VirtualListView.VisibleSlot[T]]()
   private val headerHeightProperty = Property(0.0)
 
@@ -52,19 +58,21 @@ final class VirtualListView[T] private (
   override protected def crawlDefaultLimit: Int   = VirtualListView.defaultLimit
   override protected def pagingUrlKey: String     = crawlIdProperty.get.getOrElse("list")
 
-  private var lastVisibleSlots = Vector.empty[VirtualListView.VisibleSlot[T]]
-  private var tailPaddingItems = defaultTailPadding
+  private var tailPaddingItems                                          = defaultTailPadding
   private var cellRendererBody: Option[VirtualListView.Renderer[T]]     = None
   private var headerBody: Option[AbstractComponent ?=> Cursor ?=> Unit] = None
   private var headerComponent: Div | Null                               = null
   private var compositionReady                                          = false
+  private val mountedCells            = mutable.Map.empty[Int, VirtualListCell[T]]
+  private var mountedCellMeasureFrame = 0
 
   def items: ListDataSource[T] = dataSource
 
   def setRenderer(renderer: VirtualListView.Renderer[T]): Unit = {
     cellRendererBody = Option(renderer)
     if (compositionReady) {
-      lastVisibleSlots = Vector.empty
+      // Mounted cells composed the previous renderer; only a remount picks up the new one.
+      visibleSlotsProperty.clear()
       refreshItemState()
     }
   }
@@ -173,7 +181,7 @@ final class VirtualListView[T] private (
             }
 
             foreach(visibleSlotsProperty) { slot =>
-              VirtualListCell.virtualListCell[T](slot, getRenderer, handleMeasuredHeight) {}
+              VirtualListCell.virtualListCell[T](this, slot) {}
             }
           }
 
@@ -193,6 +201,10 @@ final class VirtualListView[T] private (
       scheduleViewportMeasure()
       observeHeaderHeight(headerComponent, headerHeightProperty)
       observeViewportSize()
+      addDisposable(Disposable {
+        if (mountedCellMeasureFrame != 0) dom.window.cancelAnimationFrame(mountedCellMeasureFrame)
+        mountedCellMeasureFrame = 0
+      })
     }
 
   private def installObservers(): Unit = {
@@ -220,14 +232,23 @@ final class VirtualListView[T] private (
     installItemObservers()
   }
 
+  /** Releasing hydration may move the surface from the server's absolute crawl slice to a layout
+    * relative to the page. The cells follow the geometry revision, so the release publishes one.
+    */
+  override protected def onViewportMeasured(): Unit = {
+    val releasingHydration = hydrating
+    super.onViewportMeasured()
+    if (releasingHydration && !hydrating) bumpItemState()
+  }
+
   override protected def recomputeVisible(): Unit = {
     geometry.rebuildPrefixIfDirty()
     val total = displayItemCount
 
-    if (total <= 0) publishVisibleSlots(Seq.empty)
+    if (total <= 0) visibleSlotsProperty.clear()
     else {
       val (start, end) = visibleRange(total)
-      publishVisibleSlots((start until end).map(slotFor))
+      reconcileVisibleSlots(start, end)
       if (browserRendering && !hydrating && end > start) {
         if (isPaging) requestPageLoad(start, end)
         else requestLazyLoadIfNecessary(start, end)
@@ -235,11 +256,45 @@ final class VirtualListView[T] private (
     }
   }
 
+  /** Brings the mounted window to `[start, end)` with the fewest mounts: slots that left the window
+    * are removed at either end, slots that stay keep their cell, and only the slots that entered
+    * are inserted. A slot whose item was replaced at the same index gets a fresh cell, since the
+    * renderer composed the previous item. Items compare by reference, not by equality: a source
+    * mutation that puts an equal-but-different object at a slot is a replacement.
+    */
+  private def reconcileVisibleSlots(start: Int, end: Int): Unit = {
+    val dropBefore = visibleSlotsProperty.iterator.takeWhile(_.index < start).length
+    if (dropBefore > 0) visibleSlotsProperty.remove(0, dropBefore)
+    val keepUntil = visibleSlotsProperty.iterator.takeWhile(_.index < end).length
+    if (keepUntil < visibleSlotsProperty.length)
+      visibleSlotsProperty.remove(keepUntil, visibleSlotsProperty.length - keepUntil)
+
+    var position = 0
+    (start until end).foreach { index =>
+      val item = itemAt(index)
+      if (position >= visibleSlotsProperty.length || visibleSlotsProperty(position).index != index)
+        visibleSlotsProperty.insert(position, new VirtualListView.VisibleSlot(index, item))
+      else if (!sameItem(visibleSlotsProperty(position).item, item))
+        visibleSlotsProperty.update(position, new VirtualListView.VisibleSlot(index, item))
+      position += 1
+    }
+  }
+
+  private def sameItem(previous: Option[T], next: Option[T]): Boolean =
+    (previous, next) match {
+      case (Some(a), Some(b)) => a.asInstanceOf[AnyRef] eq b.asInstanceOf[AnyRef]
+      case (None, None)       => true
+      case _                  => false
+    }
+
+  /** Structural changes shift absolute indices, so their measurements are discarded and the cells
+    * that stay mounted are remeasured. An update replaces one slot's cell, which measures itself;
+    * an append shifts nothing.
+    */
   override protected def handleLocalItemsChange(change: ListProperty.Change[T]): Unit = {
     change match {
-      case ListProperty.UpdateAt(index, _, _, _) => invalidateVisibleSlot(index)
-      case ListProperty.Add(_, _)                => ()
-      case _                                     => resetMeasurements()
+      case ListProperty.UpdateAt(_, _, _, _) | ListProperty.Add(_, _) => ()
+      case _                                                          => resetMeasurements()
     }
     refreshItemState()
   }
@@ -247,39 +302,77 @@ final class VirtualListView[T] private (
   override protected def resetMeasurements(): Unit = {
     geometry.clear()
     tailPaddingItems = defaultTailPadding
-    lastVisibleSlots = Vector.empty
+    scheduleMountedCellMeasure()
   }
 
-  private def slotFor(index: Int): VirtualListView.VisibleSlot[T] =
-    VirtualListView.VisibleSlot(
-      index = index,
-      item = itemAt(index),
-      top =
-        if (pagedVisibleRange) geometry.offsetFor(index) - geometry.offsetFor(pageStart)
-        else geometry.offsetFor(index),
-      height = geometry.heightFor(index)
-    )
+  /** Distance of slot `index` from the top of the items surface. In a paged window the surface
+    * starts at the page, not at item 0.
+    */
+  private def slotTop(index: Int): Double = {
+    geometry.rebuildPrefixIfDirty()
+    if (pagedVisibleRange) geometry.offsetFor(index) - geometry.offsetFor(pageStart)
+    else geometry.offsetFor(index)
+  }
 
-  private def publishVisibleSlots(slots: Seq[VirtualListView.VisibleSlot[T]]): Unit = {
-    val next = slots.toVector
-    if (next != lastVisibleSlots) {
-      lastVisibleSlots = next
-      visibleSlotsProperty.setAll(next)
+  private[virtuallist] def slotTopProperty(index: Int): ReadOnlyProperty[String] =
+    itemStateRevisionProperty.map(_ => s"${slotTop(index)}px")
+
+  /** A cell reserves the estimate, never its own measurement: a measured minimum would keep a cell
+    * from shrinking again, since the resize that should report the smaller height could not happen.
+    */
+  private[virtuallist] def slotMinHeightProperty: ReadOnlyProperty[String] =
+    estimateHeightProperty.map(_ => s"${estimateHeight}px")
+
+  private[virtuallist] def registerCell(cell: VirtualListCell[T]): Unit = {
+    val index = cell.index
+    mountedCells.update(index, cell)
+    cell.addDisposable(Disposable {
+      if (mountedCells.get(index).contains(cell)) mountedCells.remove(index)
+    })
+  }
+
+  /** Cells that stay mounted across a reset still know their height; the geometry has forgotten it.
+    * One frame later they are read back in one batch, so one bump repositions everything.
+    */
+  private def scheduleMountedCellMeasure(): Unit =
+    if (browserRendering && mountedCellMeasureFrame == 0) {
+      mountedCellMeasureFrame = dom.window.requestAnimationFrame { _ =>
+        mountedCellMeasureFrame = 0
+        if (!isDisposed)
+          applyMeasurements(mountedCells.toVector.flatMap { (index, cell) =>
+            cell.measuredHeight.map(index -> _)
+          })
+      }
     }
-  }
-
-  private def invalidateVisibleSlot(index: Int): Unit =
-    if (lastVisibleSlots.exists(_.index == index)) lastVisibleSlots = Vector.empty
 
   private[virtuallist] def handleMeasuredHeight(index: Int, height: Double): Unit =
-    if (height > 0) {
+    applyMeasurements(Vector(index -> height))
+
+  /** Records measured heights and repositions the window once. Cells above the scroll anchor keep
+    * the anchor in place by shifting the scroll position by their accumulated delta; the scroll
+    * observer then recomputes the window.
+    */
+  private def applyMeasurements(measurements: Seq[(Int, Double)]): Unit =
+    if (!isDisposed) {
+      geometry.rebuildPrefixIfDirty()
       val anchorIndex =
         geometry.indexForOffset(math.max(0.0, scrollTopProperty.get - headerHeight))
-      geometry.updateHeight(index, height).foreach { delta =>
+      var anchorDelta = 0.0
+      var changed     = false
+      measurements.foreach { (index, height) =>
+        if (height > 0)
+          geometry.updateHeight(index, height).foreach { delta =>
+            changed = true
+            if (browserRendering && index < anchorIndex) anchorDelta += delta
+          }
+      }
+      if (changed) {
         geometry.rebuildPrefixIfDirty()
         bumpItemState()
-        if (browserRendering && index < anchorIndex && math.abs(delta) > 0.5) {
-          val adjusted = math.max(0.0, scrollTopProperty.get + delta)
+        val previous = scrollTopProperty.get
+        val adjusted =
+          if (math.abs(anchorDelta) > 0.5) math.max(0.0, previous + anchorDelta) else previous
+        if (adjusted != previous) {
           scrollTopProperty.set(adjusted)
           domElement(viewportComponent).foreach(_.scrollTop = adjusted)
         } else recomputeVisible()
@@ -329,12 +422,10 @@ object VirtualListView {
 
   private val defaultLimit = 50
 
-  private[control] final case class VisibleSlot[T](
-      index: Int,
-      item: Option[T],
-      top: Double,
-      height: Double
-  )
+  /** Identity of a mounted slot. Deliberately not a case class: two slots are the same only when
+    * they are the same slot, so the Foreach over the window never treats a new slot as the old one.
+    */
+  private[control] final class VisibleSlot[T](val index: Int, val item: Option[T])
 
   private def emptyRenderer[T]: Renderer[T] =
     (_: T | Null, _: Int) => (_: AbstractComponent) ?=> (_: Cursor) ?=> ()

@@ -738,7 +738,12 @@ final class TableView[S] private (
       }
 
   override protected def onViewportMeasured(): Unit = {
+    // Releasing hydration may move the surface from the server's absolute crawl slice to a layout
+    // relative to the page. Rows that stay mounted follow the geometry revision for their `top`,
+    // so the release publishes one -- as VirtualListView and DataGrid do.
+    val releasingHydration = hydrating
     super.onViewportMeasured()
+    if (releasingHydration && !hydrating) bumpItemState()
     flushScrollRequest()
     flushColumnScrollRequest()
   }

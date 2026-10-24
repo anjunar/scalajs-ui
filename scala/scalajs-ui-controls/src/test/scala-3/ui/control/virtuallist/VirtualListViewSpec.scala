@@ -11,7 +11,7 @@ import ui.core.layout.Div.div
 import ui.core.layout.TextComponent.text
 import ui.core.render.{Cursor, SsrCursor}
 import ui.core.request.{RequestContext, RequestHeaders}
-import ui.core.state.{ListDataSource, ListProperty}
+import ui.core.state.{Disposable, ListDataSource, ListProperty}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -170,6 +170,127 @@ class VirtualListViewSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(root)
   }
 
+  "VirtualListView cell stability" should "keep mounted cells when a measurement moves them" in {
+    val items   = ListProperty[String](js.Array((0 until 10).map(index => s"Item $index")*))
+    val cursor  = new SsrCursor()
+    val renders = new CountingRenderer
+    var control: VirtualListView[String] = null
+
+    val root = Runtime.mount(
+      new VirtualListTestRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          control = virtualList[String](items) {
+            estimateHeightPx = 40
+            overscanPx = 0
+            controlViewportHeight(100)
+            scrolling = true
+            cellRenderer = renders.renderer
+          }
+      },
+      cursor
+    )
+
+    renders.mounted shouldBe Vector(0, 1, 2)
+    renders.unmounted shouldBe Vector.empty
+
+    // Item 0 grows to two rows: items 1 and 2 move down, item 2 leaves the viewport. Neither the
+    // moved cell nor the surviving first cell is composed again.
+    control.handleMeasuredHeight(0, 80)
+
+    renders.mounted shouldBe Vector(0, 1, 2)
+    renders.unmounted shouldBe Vector(2)
+    cursor.collectHtml() should include("data-item-index=\"1\"")
+    cursor.collectHtml() should include("top: 80px")
+
+    // Growing further still only repositions.
+    control.handleMeasuredHeight(1, 60)
+
+    renders.mounted shouldBe Vector(0, 1, 2)
+    renders.unmounted shouldBe Vector(2)
+
+    Runtime.unmount(root)
+    renders.unmounted.sorted shouldBe Vector(0, 1, 2)
+  }
+
+  it should "mount and unmount exactly the cells that enter and leave on a one-row scroll" in {
+    val items   = ListProperty[String](js.Array((0 until 10).map(index => s"Item $index")*))
+    val cursor  = new SsrCursor()
+    val renders = new CountingRenderer
+    var control: VirtualListView[String] = null
+
+    val root = Runtime.mount(
+      new VirtualListTestRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          control = virtualList[String](items) {
+            estimateHeightPx = 40
+            overscanPx = 0
+            controlViewportHeight(120)
+            scrolling = true
+            cellRenderer = renders.renderer
+          }
+      },
+      cursor
+    )
+
+    renders.mounted shouldBe Vector(0, 1, 2)
+
+    control.scrollTopProperty.set(40)
+
+    renders.mounted shouldBe Vector(0, 1, 2, 3)
+    renders.unmounted shouldBe Vector(0)
+    visibleText(cursor.collectHtml()) should include("1:Item 12:Item 23:Item 3")
+
+    control.scrollTopProperty.set(80)
+
+    renders.mounted shouldBe Vector(0, 1, 2, 3, 4)
+    renders.unmounted shouldBe Vector(0, 1)
+
+    // Scrolling back re-enters one row at the top: the cell is inserted before the surviving ones.
+    control.scrollTopProperty.set(40)
+
+    renders.mounted shouldBe Vector(0, 1, 2, 3, 4, 1)
+    renders.unmounted shouldBe Vector(0, 1, 4)
+    visibleText(cursor.collectHtml()) should include("1:Item 12:Item 23:Item 3")
+
+    Runtime.unmount(root)
+  }
+
+  it should "replace only the cell whose item changed and keep the others across an insert" in {
+    val items   = ListProperty[String](js.Array("Alice", "Cara"))
+    val cursor  = new SsrCursor()
+    val renders = new CountingRenderer
+
+    val root = Runtime.mount(
+      new VirtualListTestRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          virtualList[String](items) {
+            estimateHeightPx = 40
+            overscanPx = 0
+            scrolling = true
+            cellRenderer = renders.renderer
+          }
+      },
+      cursor
+    )
+
+    renders.mounted shouldBe Vector(0, 1)
+
+    items.update(1, "Cleo")
+
+    renders.mounted shouldBe Vector(0, 1, 1)
+    renders.unmounted shouldBe Vector(1)
+    visibleText(cursor.collectHtml()) should include("0:Alice1:Cleo")
+
+    // Alice keeps her cell; slot 1 now shows Bob and Cleo moves into a new slot 2.
+    items.insert(1, "Bob")
+
+    renders.mounted shouldBe Vector(0, 1, 1, 1, 2)
+    renders.unmounted shouldBe Vector(1, 1)
+    visibleText(cursor.collectHtml()) should include("0:Alice1:Bob2:Cleo")
+
+    Runtime.unmount(root)
+  }
+
   "VirtualListView list lifecycle" should "track mutations and detach renderers on unmount" in {
     val items                            = ListProperty[String](js.Array("Alice", "Cara"))
     val cursor                           = new SsrCursor()
@@ -241,6 +362,24 @@ class VirtualListViewSpec extends AnyFlatSpec with Matchers {
         if (item == null) addClass("remote-placeholder")
         text(if (item == null) s"Loading $index" else s"$index:$item") {}
       }
+
+  /** Records every renderer invocation and every disposal of the cell it rendered into, so a test
+    * can tell a repositioned cell from a remounted one.
+    */
+  private final class CountingRenderer {
+    var mounted: Vector[Int]   = Vector.empty
+    var unmounted: Vector[Int] = Vector.empty
+
+    val renderer: Renderer[String] =
+      (item: String | Null, index: Int) => {
+        mounted :+= index
+        summon[AbstractComponent].addDisposable(Disposable { unmounted :+= index })
+        div {
+          if (item == null) addClass("remote-placeholder")
+          text(if (item == null) s"Loading $index" else s"$index:$item") {}
+        }
+      }
+  }
 
   private def controlViewportHeight(value: Double)(using list: VirtualListView[?]): Unit =
     list.viewportHeightProperty.set(value)
