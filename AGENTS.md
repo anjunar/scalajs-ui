@@ -17,7 +17,7 @@ Vollständiger Lauf über alle Module:
 sbt --server "Test/testOnly *"
 ```
 
-Das ist der Befehl, der vor einem Commit grün sein muss (aktuell 287 Tests).
+Das ist der Befehl, der vor einem Commit grün sein muss (Stand Oktober 2026: 589 Tests in 81 Suites).
 `sbt --server test` ist für die schnelle Schleife während der Arbeit gedacht.
 
 Für die npm-Seite ist `npm run verify --workspaces --if-present` das Äquivalent —
