@@ -18,13 +18,18 @@ const sitePath = siteConfig.basePath;
 const siteUrl = siteConfig.siteUrl;
 const scalaBasePath = `${sitePath}/scala`;
 const typescriptBasePath = `${sitePath}/typescript`;
+// How the Scala.js link learns the deploy values: a file that build.sbt's SiteConfigGenerator reads
+// on every run. The environment is not an option there -- a resident sbt server keeps the
+// environment of its first client. The Node tools below are fresh processes and take the env.
+const siteConfigOverride = resolve(projectRoot, "target", "site-config.override.json");
 
 await rm(pagesDir, { recursive: true, force: true });
 await mkdir(pagesDir, { recursive: true });
 
 const scalaEnv = pagesEnvironment(scalaBasePath, `${siteUrl}/scala`);
 await rm(scalaStaticDir, { recursive: true, force: true });
-await runSbt(["--server", "scalajs-ui-demo/fullLinkJS"], projectRoot, scalaEnv);
+await withSiteConfigOverride(scalaBasePath, `${siteUrl}/scala`, () =>
+  runSbt(["--server", "scalajs-ui-demo/fullLinkJS"], projectRoot, scalaEnv));
 await runNpm(["run", "build:client"], projectRoot, scalaEnv);
 await runNpm(["run", "build:server"], projectRoot, scalaEnv);
 await runNpm(["run", "prerender"], projectRoot, scalaEnv);
@@ -54,6 +59,17 @@ if (process.argv.includes("--check")) {
   await rename(pagesDir, docsDir);
   console.log("\nMoved dist/pages to docs:");
   await printTree(docsDir);
+}
+
+async function withSiteConfigOverride(basePath, deployUrl, body) {
+  await mkdir(dirname(siteConfigOverride), { recursive: true });
+  await writeFile(siteConfigOverride, `${JSON.stringify({ basePath, siteUrl: deployUrl }, null, 2)}\n`, "utf8");
+  try {
+    await body();
+  } finally {
+    // Never leave it behind: a later local link would silently build for the Pages prefix.
+    await rm(siteConfigOverride, { force: true });
+  }
 }
 
 function pagesEnvironment(basePath, deployUrl) {

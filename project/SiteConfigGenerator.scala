@@ -9,14 +9,21 @@ import sbt._
   *
   * Since the document head is rendered from Scala, every metadata field the head needs comes
   * through here as well -- there is no longer an index.html that a Vite plugin could fill in.
+  *
+  * The Pages orchestrator (tools/build-pages.mjs) builds the demo below its own URL prefix. It
+  * hands `basePath` and `siteUrl` over in `overrideFile`, which this generator reads on every run,
+  * and removes the file again afterwards. It used to pass them through the environment, which a
+  * resident sbt server keeps from its first client: with a server already running, the link
+  * silently used whatever prefix that first client had, and only the final base-href assertion of
+  * the Pages build noticed. A file read at task time is the same for every client of the server.
   */
 object SiteConfigGenerator {
 
   def apply(
       configFile: File,
+      overrideFile: File,
       sourceManagedDir: File,
-      basePathOverride: Option[String] = None,
-      siteUrlOverride: Option[String] = None
+      log: Logger
   ): Seq[File] = {
     val values = parse(IO.read(configFile))
 
@@ -26,17 +33,23 @@ object SiteConfigGenerator {
         sys.error(s"${configFile.getName} braucht den Schluessel \"$key\".")
       )
 
-    // The checked-in JSON remains the default for local development. The Pages
-    // orchestrator sets these variables while building one demo below its own
-    // URL prefix, so Scala SSR and Vite receive the same configuration without
-    // rewriting site.config.json.
-    val basePath = normalizeBasePath(
-      basePathOverride.filter(_.nonEmpty).getOrElse(required("basePath"))
-    )
-    val siteUrl = siteUrlOverride
-      .filter(_.nonEmpty)
-      .getOrElse(required("siteUrl"))
-      .stripSuffix("/")
+    // The checked-in JSON remains the default for local development; the override file exists
+    // only while the Pages orchestrator links one demo below its own prefix.
+    val overrides =
+      if (overrideFile.exists()) {
+        val parsed = parse(IO.read(overrideFile))
+        log.info(
+          s"${overrideFile.getName}: basePath=${parsed.getOrElse("basePath", "<unset>")} " +
+            s"siteUrl=${parsed.getOrElse("siteUrl", "<unset>")} (Pages build in progress)"
+        )
+        parsed
+      } else Map.empty[String, String]
+
+    def configured(key: String): String =
+      overrides.get(key).filter(_.nonEmpty).getOrElse(required(key))
+
+    val basePath = normalizeBasePath(configured("basePath"))
+    val siteUrl  = configured("siteUrl").stripSuffix("/")
 
     val target = sourceManagedDir / "app" / "SiteConfig.scala"
 

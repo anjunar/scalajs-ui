@@ -76,8 +76,7 @@ jobs:
       # Every Scala.js artifact needed before Verify is already linked. Left
       # running, the resident sbt server (a JVM) would sit through the whole
       # npm test run competing with it for the runner's CPU and memory, so
-      # shut it down here. It starts fresh again from tools/build-pages.mjs's
-      # own sbt calls below, which is required anyway -- see the note there.
+      # shut it down here. tools/build-pages.mjs starts a fresh one below.
       - name: Shut down sbt before verify
         run: sbt --client shutdown
 
@@ -101,11 +100,9 @@ jobs:
       - name: Verify every npm package and demo
         run: npm run verify --workspaces --if-present
 
-      # The Pages build runs two Scala.js links with different UI_BASE_PATH
-      # values. A shared sbt server keeps the environment from its first
-      # client, so it needs a fresh one for the first environment-sensitive
-      # link -- guaranteed here since sbt was shut down above and nothing
-      # between there and here starts a new one.
+      # The Scala.js link of the Pages build gets its deploy prefix from a file
+      # the orchestrator writes (target/site-config.override.json), so it does
+      # not matter whether an sbt server is already running.
       - name: Build and validate GitHub Pages output
         run: node tools/build-pages.mjs
 

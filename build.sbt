@@ -2,13 +2,6 @@ import org.scalajs.linker.interface.{ESVersion, ModuleKind, ModuleSplitStyle}
 import org.scalajs.sbtplugin.ScalaJSPlugin
 import sbt.url
 
-val siteConfigBasePathOverride = settingKey[Option[String]](
-  "Optional build-time base path override for the generated Scala site config."
-)
-val siteConfigUrlOverride = settingKey[Option[String]](
-  "Optional build-time site URL override for the generated Scala site config."
-)
-
 // ---------------------------------------------------------------------------
 // sbt 2.x
 //
@@ -329,14 +322,17 @@ lazy val app = Project(id = "scalajs-ui-demo", base = file("scala/scalajs-ui-dem
     // site.config.json ist die einzige Quelle fuer Deploy-Pfad und Site-Metadaten.
     // Sie speist sitemap.xml/robots.txt (tools/) und ueber diesen Generator den
     // Scala-Code, der das vollstaendige Dokument inklusive Head rendert.
-    siteConfigBasePathOverride := sys.env.get("UI_BASE_PATH"),
-    siteConfigUrlOverride      := sys.env.get("UI_SITE_URL"),
+    //
+    // Den Pages-Override (ein Demo unter eigenem URL-Praefix) uebergibt
+    // tools/build-pages.mjs als Datei, die der Task bei jedem Lauf liest -- nicht
+    // mehr ueber die Umgebung: ein laufender sbt-Server behaelt die Umgebung seines
+    // ersten Clients, und der Link bekam dann stillschweigend den falschen Praefix.
     Compile / sourceGenerators += Def.task {
       SiteConfigGenerator(
         (LocalRootProject / baseDirectory).value / "site.config.json",
+        (LocalRootProject / baseDirectory).value / "target" / "site-config.override.json",
         (Compile / sourceManaged).value,
-        siteConfigBasePathOverride.value,
-        siteConfigUrlOverride.value
+        streams.value.log
       )
     }.taskValue,
     // sbt 2 vereinheitlicht `target/` auf ein Verzeichnis in der Build-Wurzel.
