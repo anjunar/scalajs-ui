@@ -316,13 +316,14 @@ describe("imageCropper", () => {
 
 describe("fieldSet", () => {
   it("forwards errors and binding diagnostics through a nested dynamic form", () => {
+    // The fieldset adds no level to the model: the grouped subForm binds to the form's own `row`.
     const row = { name: property("Ada") };
     const root = document.createElement("div");
     let handle!: import("@anjunar/scalajs-ui-core").FormHandle;
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const app = mount(root, () => {
-        handle = form({ group: property(undefined) }, {}, () => {
+        handle = form({ row: property(row) }, {}, () => {
           fieldSet({ name: "group" }, () => subForm("row", row, {}, () => {
             inputContainer({ label: "Name" }, () => input("name"));
             input("typo");
@@ -331,10 +332,14 @@ describe("fieldSet", () => {
       });
       expect(handle.validateBindings()).toHaveLength(1);
       expect(handle.validateBindings()[0]).toContain("cannot bind control 'typo'");
+      // Both addresses reach the field: through the group, and directly, since the group is no
+      // model level.
       handle.setErrorResponses([{ message: "Grouped error", path: ["group", "row", "name"] }]);
       expect(root.querySelector(".ui-input-container__errors")?.textContent).toContain("Grouped error");
       handle.clearErrors();
       expect(root.querySelector(".ui-input-container__errors")?.textContent ?? "").toBe("");
+      handle.setErrorResponses([{ message: "Direct error", path: ["row", "name"] }]);
+      expect(root.querySelector(".ui-input-container__errors")?.textContent).toContain("Direct error");
       app.dispose();
     } finally { log.mockRestore(); }
   });

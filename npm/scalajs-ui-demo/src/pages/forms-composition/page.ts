@@ -19,9 +19,9 @@ export function formsCompositionPage(): void {
     div(() => {
       classes("flex", "flex-col", "gap-4");
 
-      // arrayForm must be a direct child of form/subForm so it can bind to the
-      // parent's ListProperty. A fieldSet intentionally creates a new form
-      // context for its children and would therefore hide model.tags.
+      // arrayForm binds to the enclosing form's ListProperty by name. A
+      // fieldSet around it would only group it visually -- it adds no level
+      // to the model -- so a plain div does the same job here.
       div(() => {
         classes("flex", "flex-col", "gap-2");
         arrayForm("tags", (index) => {

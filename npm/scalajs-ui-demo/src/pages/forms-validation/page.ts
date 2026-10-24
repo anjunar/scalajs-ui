@@ -68,10 +68,9 @@ export function formsValidationPage(): void {
   const temporal = ["past", "pastOrPresent", "future", "futureOrPresent"] as const;
   const boolean_ = ["assertTrue", "assertFalse"] as const;
 
-  // A plain div, not fieldSet(): fieldSet registers itself as a control of
-  // its own enclosing form (see /forms/composition), which logs a
-  // binding-failure message unless its name also happens to be a model
-  // field. Grouping fields visually here doesn't need that.
+  // A plain div: grouping the fields visually needs no <fieldset>. A
+  // fieldSet() would work as well -- it adds no level to the model, and the
+  // grouped inputs still bind to the form's own fields.
   function group(fields: readonly (keyof ValidationModel)[], render: (field: keyof ValidationModel) => void): void {
     div(() => {
       classes("flex", "flex-col", "gap-2");
