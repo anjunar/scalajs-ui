@@ -1,6 +1,6 @@
 package ui.forms.validators
 
-import java.time.{Instant, LocalDate}
+import java.time.{Instant, LocalDate, LocalDateTime}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import reflect.Annotation
@@ -44,6 +44,22 @@ class BuiltinValidatorsSpec extends AnyFlatSpec with Matchers {
     DigitsValidator[String](integer = 3, fraction = 2).validate("1234.5") should not be empty
   }
 
+  it should "read numeric strings exactly and treat non-numbers as absent" in {
+    val min        = MinValidator[String](1)
+    val decimalMin = DecimalMinValidator[String](BigDecimal(1))
+    val max        = DecimalMaxValidator[String](BigDecimal("12345678901234567890"))
+
+    noException should be thrownBy min.validate("1e400")
+    min.validate("1e400") should not be empty
+    decimalMin.validate("1e400") shouldBe None
+    Seq("NaN", "Infinity", "-Infinity", "abc").foreach { text =>
+      min.validate(text) shouldBe None
+      decimalMin.validate(text) shouldBe None
+    }
+    max.validate("12345678901234567890") shouldBe None
+    max.validate("12345678901234567891") should not be empty
+  }
+
   "Temporal validators" should "compare instants against the current time" in {
     PastValidator[Instant]().validate(Instant.now().minusSeconds(10)) shouldBe None
     FutureValidator[Instant]().validate(Instant.now().plusSeconds(10)) shouldBe None
@@ -71,6 +87,33 @@ class BuiltinValidatorsSpec extends AnyFlatSpec with Matchers {
     }
     PastOrPresentValidator[LocalDate]().validate(today) shouldBe None
     FutureOrPresentValidator[LocalDate]().validate(today) shouldBe None
+  }
+
+  it should "validate datetime-local and offset strings against the current time" in {
+    val now   = new js.Date()
+    val local = LocalDateTime.of(
+      now.getFullYear().toInt,
+      now.getMonth().toInt + 1,
+      now.getDate().toInt,
+      now.getHours().toInt,
+      now.getMinutes().toInt,
+      now.getSeconds().toInt
+    )
+    val pastLocal    = local.minusHours(1).toString
+    val futureLocal  = local.plusHours(1).toString
+    val pastOffset   = Instant.now().minusSeconds(3600).toString
+    val futureOffset = Instant.now().plusSeconds(3600).toString
+
+    PastValidator[String]().validate(pastLocal) shouldBe None
+    PastValidator[String]().validate(futureLocal) should not be empty
+    FutureValidator[String]().validate(futureLocal) shouldBe None
+    FutureValidator[String]().validate(pastLocal) should not be empty
+    PastOrPresentValidator[String]().validate(pastLocal) shouldBe None
+    FutureOrPresentValidator[String]().validate(futureLocal) shouldBe None
+
+    PastValidator[String]().validate(pastOffset) shouldBe None
+    PastValidator[String]().validate(futureOffset) should not be empty
+    FutureValidator[String]().validate(futureOffset) shouldBe None
   }
 
   "ValidatorFactory" should "create configured validators from reflection annotations" in {

@@ -13,6 +13,7 @@ import ui.control.table.TableView.tableView
 import ui.control.table.forms.TableComboBoxCell.comboBoxCell
 import ui.forms.ComboBox.*
 import ui.forms.Form.form
+import ui.forms.validators.NotNullValidator
 import ui.viewport.Viewport
 import ui.viewport.Viewport.viewport
 import org.scalatest.flatspec.AnyFlatSpec
@@ -181,6 +182,30 @@ class ComboBoxSpec extends AnyFlatSpec with Matchers {
     combo.openProperty.get shouldBe false
     combo.selectItem(members.head)
     combo.selectionProperty shouldBe empty
+
+    Runtime.unmount(root)
+  }
+
+  it should "clear a validation message as soon as an item is picked" in {
+    val cursor                  = new SsrCursor()
+    var combo: ComboBox[Member] = null
+    val root                    = Runtime.mount(
+      new ComboRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          combo = comboBox[Member]("owner", standalone = true) {
+            items = members
+            identityBy = _.id
+          }
+      },
+      cursor
+    )
+
+    combo.validators += NotNullValidator[Member]()
+    combo.validate(forceVisible = true) shouldBe Seq("Must not be null")
+    combo.errors.toSeq shouldBe Seq("Must not be null")
+
+    combo.selectItem(members.head)
+    combo.errors shouldBe empty
 
     Runtime.unmount(root)
   }

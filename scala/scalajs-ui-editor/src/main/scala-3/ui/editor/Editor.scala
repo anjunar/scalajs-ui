@@ -259,6 +259,9 @@ final class Editor private[editor] (
         .filter(input => input.value != input.textContent)
         .foreach(input => publishMarkdown(input.value))
       mountNative()
+      // Composition is over whichever view is showing -- an editor that starts in Markdown mode
+      // mounts no native editor and must not stay marked as loading.
+      setAttribute("data-scalajs-ui-editor-loading", "false")
     }
 
   override protected def setPlaceholder(value: String): Unit =
@@ -402,7 +405,6 @@ final class Editor private[editor] (
             presentationError.set(Some(Option(error.getMessage).getOrElse("")))
         }
         syncPresentation(editableProperty.get)
-        setAttribute("data-scalajs-ui-editor-loading", "false")
         // Outside the try: a failing listener is the application's error, not a reason to fall
         // back to the Markdown view.
         Option(nativeAdapter).foreach(mounted => onNativeSession.foreach(_(mounted.binding)))

@@ -23,6 +23,8 @@ class Form[M](
 
   override val valueProperty: Property[M] = Property(initialModel)
 
+  override val errors: ListProperty[String] = ListProperty()
+
   def setModel(model: M): Unit = valueProperty.set(model)
 
   override def compose(cursor: Cursor): Unit = {

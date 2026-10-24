@@ -18,10 +18,15 @@ trait Control[V] extends Editable { self: AbstractComponent =>
   val errors: ListProperty[String]               = ListProperty()
   val invalidProperty: ReadOnlyProperty[Boolean] = errors.map(_.nonEmpty)
 
-  private var errorMessages    = Vector.empty[RuntimeMessage]
-  private var renderingErrors  = false
-  private var observingLocale  = false
-  private val fallbackResolver = I18nResolver(MessageCatalog.empty)
+  // Two sources feed `errors`: the control's own validation, and messages handed in from outside
+  // through `setErrors` -- typically a server response. They are kept apart so that validating an
+  // untouched control can hide validator messages without discarding what the server said.
+  private var validatorMessages                     = Vector.empty[RuntimeMessage]
+  private var externalMessages                      = Vector.empty[RuntimeMessage]
+  private var externalMessagesUntilEdit: Disposable = Disposable.empty
+  private var renderingErrors                       = false
+  private var observingLocale                       = false
+  private val fallbackResolver                      = I18nResolver(MessageCatalog.empty)
 
   // Keep the public string property compatible with direct writes and clear/reset calls.
   self.addDisposable(errors.observeWithoutInitial { values =>
@@ -36,17 +41,30 @@ trait Control[V] extends Editable { self: AbstractComponent =>
 
   def setFocused(value: Boolean): Unit = focusedProperty.set(value)
 
-  def setErrors(values: IterableOnce[String]): Unit =
-    setErrorMessages(values.iterator.filter(_.nonEmpty).map(I18n.literal).toVector)
-
-  private def setErrorMessages(messages: Vector[RuntimeMessage]): Unit = {
-    errorMessages = messages
-    if (!observingLocale) I18nRuntime.current(using self).foreach { runtime =>
-      observingLocale = true
-      self.addDisposable(runtime.locale.observeWithoutInitial(_ => renderErrors()))
-    }
+  /** Replaces every displayed error with `values`. They stay until the control is cleared or its
+    * value changes; validating the control in between leaves them in place.
+    */
+  def setErrors(values: IterableOnce[String]): Unit = {
+    validatorMessages = Vector.empty
+    externalMessages = values.iterator.filter(_.nonEmpty).map(I18n.literal).toVector
+    externalMessagesUntilEdit.dispose()
+    externalMessagesUntilEdit =
+      if (externalMessages.isEmpty) Disposable.empty
+      else
+        valueProperty.observeWithoutInitial { _ =>
+          externalMessagesUntilEdit.dispose()
+          externalMessagesUntilEdit = Disposable.empty
+          externalMessages = Vector.empty
+          renderErrors()
+        }
     renderErrors()
   }
+
+  /** The messages the control's validation produces for its current value. A control with checks
+    * beyond its `validators` extends this, so that every message takes the same translatable route.
+    */
+  protected def validationMessages(): Vector[RuntimeMessage] =
+    validators.iterator.flatMap(_.validateMessage(valueProperty.get)).toVector
 
   private def resolve(message: RuntimeMessage): String =
     I18nRuntime
@@ -55,23 +73,26 @@ trait Control[V] extends Editable { self: AbstractComponent =>
       .getOrElse(fallbackResolver.resolve(message, I18nLocale.En))
 
   private def renderErrors(): Unit = {
+    if (!observingLocale) I18nRuntime.current(using self).foreach { runtime =>
+      observingLocale = true
+      self.addDisposable(runtime.locale.observeWithoutInitial(_ => renderErrors()))
+    }
     renderingErrors = true
-    try errors.setAll(errorMessages.map(resolve))
+    try errors.setAll((externalMessages ++ validatorMessages).map(resolve))
     finally renderingErrors = false
   }
 
   def validate(forceVisible: Boolean = false): Seq[String] = {
-    val validationErrors =
-      if (editableProperty.get)
-        validators.iterator.flatMap(_.validateMessage(valueProperty.get)).toVector
-      else Vector.empty
+    val validationErrors = if (editableProperty.get) validationMessages() else Vector.empty
 
     if (forceVisible || dirtyProperty.get) {
       if (forceVisible) dirtyProperty.set(true)
-      setErrorMessages(validationErrors)
+      validatorMessages = validationErrors
     } else {
-      errors.clear()
+      // Not touched yet: validator messages stay out of sight, external ones stay where they are.
+      validatorMessages = Vector.empty
     }
+    renderErrors()
 
     validationErrors.map(resolve)
   }

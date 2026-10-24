@@ -19,7 +19,12 @@ final class TextAreaInput(val name: String, val standalone: Boolean = false)
 
   override def compose(cursor: Cursor): Unit = {
     val content = cursor.claimTextAreaContent(valueProperty.get)
-    if (cursor.isHydrating) valueProperty.set(content.value)
+    // While the page hydrates, the textarea may already hold what the user typed before the client
+    // took over. The server-rendered text is its default value, so a different live value is an
+    // edit to keep. It is pushed once the control is registered -- earlier, the binding's initial
+    // sync from the model would overwrite it.
+    val hydratedEdit =
+      Option.when(cursor.isHydrating)(content.value).filter(_ != content.defaultValue)
 
     render(this, cursor) {
       setAttribute("name", name)
@@ -55,6 +60,11 @@ final class TextAreaInput(val name: String, val standalone: Boolean = false)
         )
         controller.register(this)
         addDisposable(() => controller.unregister(this))
+      }
+
+      hydratedEdit.foreach { value =>
+        dirtyProperty.set(true)
+        valueProperty.set(value)
       }
     }
   }

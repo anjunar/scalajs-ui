@@ -86,7 +86,6 @@ private[editor] final class NativeEditorAdapter(
   private var closeDialog: () => Unit                   = () => ()
   private var dialogService: EditorDialogService        = null
   private var clipboard: BrowserClipboardController     = null
-  private var drop: DropController                      = null
   private var media: NativeMediaCoordinator[dom.File]   = null
   private var picker: BrowserMediaPicker                = null
   private val cleanups                                  = ArrayBuffer.empty[() => Unit]
@@ -778,7 +777,6 @@ private[editor] final class NativeEditorAdapter(
     if (dialogService != null) dialogService.dispose()
     if (picker != null) picker.dispose()
     if (media != null) media.dispose()
-    if (drop != null) drop.dispose()
     if (clipboard != null) clipboard.dispose()
     if (bar != null) Runtime.unmount(bar)
     if (input != null) input.dispose()

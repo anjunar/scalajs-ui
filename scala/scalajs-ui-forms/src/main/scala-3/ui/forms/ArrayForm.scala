@@ -102,21 +102,16 @@ class ArrayForm[V](
       case _                      => Seq.empty
     }
 
-  def setErrorResponses(responses: Seq[ErrorResponse]): Unit =
-    responses
-      .filter(_.path.nonEmpty)
-      .groupBy(_.path.head.toIntOption)
-      .foreach {
-        case (Some(index), itemErrors) =>
-          mountedByIndex.get(index).foreach { control =>
-            val nestedErrors = itemErrors.map(_.withoutHead)
-            control match {
-              case nested: FormController => nested.setErrorResponses(nestedErrors)
-              case _                      => control.setErrors(nestedErrors.map(_.message))
-            }
-          }
-        case (None, _) => ()
+  /** An index leads to the item control; anything else addresses the array itself. */
+  def setErrorResponses(responses: Seq[ErrorResponse]): Unit = {
+    val (indexed, own) = responses.partition(_.path.headOption.exists(_.toIntOption.isDefined))
+    if (own.nonEmpty) setErrors(own.map(_.message))
+    indexed
+      .groupBy(_.path.head.toInt)
+      .foreach { case (index, itemErrors) =>
+        mountedByIndex.get(index).foreach(ErrorResponse.deliver(_, itemErrors.map(_.withoutHead)))
       }
+  }
 
   override def compose(cursor: Cursor): Unit =
     render(this, cursor) {

@@ -30,6 +30,25 @@ class FormBindingSpec extends AnyFlatSpec with Matchers {
     failure.getMessage should include("no readable property named 'mail'")
   }
 
+  it should "fail loudly in development mode when two controls share a name" in {
+    val account = new Account()
+
+    val failure = the[FormBindingException] thrownBy {
+      Runtime.mount(
+        new BindingRoot({
+          form(account) {
+            input("email") {}
+            input("email") {}
+          }
+        }),
+        new SsrCursor()
+      )
+    }
+
+    failure.getMessage should include("cannot register control 'email'")
+    failure.getMessage should include("already registered")
+  }
+
   it should "report the same failure through validateBindings" in {
     val account  = new Account()
     val formular = new Form[Account](account, Some(ReflectMacros.reflectWithAccessors[Account]))

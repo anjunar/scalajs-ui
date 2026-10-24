@@ -44,7 +44,7 @@ private[bridge] trait DynamicFormular extends FormController { self: AbstractCom
 
     fieldsByName.put(control.name, control)
     controls += control
-    bindNow(control)
+    if (bindsToModel(control)) bindNow(control)
     control.editableProperty.set(self.editableProperty.get)
   }
 
@@ -72,10 +72,14 @@ private[bridge] trait DynamicFormular extends FormController { self: AbstractCom
     * parent Property replaces the whole model object.
     */
   protected def rebindModel(): Unit =
-    controls.toSeq.foreach { control =>
+    controls.toSeq.filter(bindsToModel).foreach { control =>
       bindingsByControl.remove(control).foreach(_.dispose())
       bindNow(control)
     }
+
+  // A FieldSet has no model property of its own: it groups controls, which register here as well
+  // and bind individually.
+  private def bindsToModel(control: Control[?]): Boolean = !control.isInstanceOf[FieldSet]
 
   override def clearErrors(): Unit =
     controls.foreach { control =>

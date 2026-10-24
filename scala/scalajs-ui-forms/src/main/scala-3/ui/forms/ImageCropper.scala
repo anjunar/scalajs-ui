@@ -6,6 +6,7 @@ import ui.core.dsl.DslLayer
 import ui.core.dsl.DslLayer.render
 import ui.core.dsl.EventDsl.{on, onClick}
 import ui.core.dsl.StyleDsl.*
+import ui.core.i18n.{I18n, RuntimeMessage}
 import ui.core.layout.Button.{button, buttonType}
 import ui.core.layout.Div.div
 import ui.core.layout.HBox.hbox
@@ -57,7 +58,9 @@ final class ImageCropper private (
 
   private var fileInput: ImageCropperFileInput          = null
   private var previewBinding: Disposable                = Disposable.empty
+  private var activeReader: Disposable                  = Disposable.empty
   private var activeSession: ImageCropperDialog.Session = null
+  private var committingCrop                            = false
 
   override def compose(cursor: Cursor): Unit = {
     configure(using this)(using cursor)
@@ -180,7 +183,9 @@ final class ImageCropper private (
       }
 
       addDisposable(valueProperty.observe { value =>
-        sourceProperty.set(value)
+        // A value assigned from outside is also the image to crop from; a crop result is not,
+        // or a second crop would start from the already cut-down image.
+        if (!committingCrop) sourceProperty.set(value)
         bindPreview(value)
         validate()
       })
@@ -188,6 +193,7 @@ final class ImageCropper private (
       addDisposable(imageValidators.observe(_ => validate()))
       addDisposable(dirtyProperty.observe(_ => validate()))
       addDisposable(Disposable {
+        activeReader.dispose()
         previewBinding.dispose()
         Option(activeSession).foreach { session =>
           session.closed = true
@@ -211,23 +217,13 @@ final class ImageCropper private (
   override protected def setPlaceholder(value: String): Unit =
     placeholderProperty.set(Option(value).getOrElse(""))
 
-  override def validate(forceVisible: Boolean = false): Seq[String] = {
-    val validationErrors =
-      if (!editableProperty.get) Seq.empty
-      else {
-        val mediaErrors = validators.iterator.flatMap(_.validate(valueProperty.get)).toSeq
-        val data        = Option(valueProperty.get)
-          .flatMap(media => Option(media.data.get))
-          .getOrElse("")
-        mediaErrors ++ imageValidators.iterator.filterNot(_.validate(data)).map(_.message)
-      }
-
-    if (forceVisible || dirtyProperty.get) {
-      if (forceVisible) dirtyProperty.set(true)
-      errors.setAll(validationErrors)
-    } else errors.clear()
-
-    validationErrors
+  override protected def validationMessages(): Vector[RuntimeMessage] = {
+    val data = Option(valueProperty.get).flatMap(media => Option(media.data.get)).getOrElse("")
+    super.validationMessages() ++
+      imageValidators.iterator
+        .filterNot(_.validate(data))
+        .map(validator => I18n.literal(validator.message))
+        .toVector
   }
 
   def openEditor(): Option[Viewport.WindowConf] =
@@ -249,42 +245,53 @@ final class ImageCropper private (
     val selectedFile = fileInput.files.flatMap(files => Option(files.item(0))).orNull
     fileProperty.set(selectedFile)
 
+    // One read at a time: a new pick supersedes a read still in flight, and a finished read
+    // releases its listener instead of holding it for the life of the control.
+    activeReader.dispose()
     if (selectedFile != null) {
       val reader                                     = new FileReader()
-      val loadListener: js.Function1[dom.Event, Any] = _ =>
+      var subscription: Disposable                   = Disposable.empty
+      val loadListener: js.Function1[dom.Event, Any] = _ => {
+        subscription.dispose()
+        if (activeReader eq subscription) activeReader = Disposable.empty
         if (editableProperty.get) {
           Option(reader.result)
             .map(_.toString.trim)
             .filter(_.nonEmpty)
             .foreach { encoded =>
-              val previousValue = valueProperty.get
-              val previousDirty = dirtyProperty.get
-              val media         = mediaFromFile(selectedFile, encoded)
+              val previousValue  = valueProperty.get
+              val previousSource = sourceProperty.get
+              val previousDirty  = dirtyProperty.get
+              val media          = mediaFromFile(selectedFile, encoded)
               dirtyProperty.set(true)
               sourceProperty.set(media)
               valueProperty.set(media)
-              openCropWindow(media, previousValue, previousDirty)
+              openCropWindow(media, previousValue, previousDirty, previousSource)
             }
         }
+      }
 
       reader.addEventListener("load", loadListener)
-      addDisposable(Disposable {
+      subscription = Disposable {
         reader.removeEventListener("load", loadListener)
         if (reader.readyState == FileReader.LOADING) reader.abort()
-      })
+      }
+      activeReader = subscription
       reader.readAsDataURL(selectedFile)
     }
   }
 
   private def currentSource(): Option[Media] =
-    Option(sourceProperty.get)
-      .orElse(Option(valueProperty.get))
-      .filter(hasImageData)
+    Option(sourceProperty.get).filter(hasImageData)
+
+  private[forms] def activeCropSession: Option[ImageCropperDialog.Session] =
+    Option(activeSession).filterNot(_.closed)
 
   private def openCropWindow(
       source: Media,
       initialValue: Media = valueProperty.get,
-      initialDirty: Boolean = dirtyProperty.get
+      initialDirty: Boolean = dirtyProperty.get,
+      initialSource: Media = sourceProperty.get
   ): Viewport.WindowConf = {
     Option(activeSession).filterNot(_.closed) match {
       case Some(current) =>
@@ -293,7 +300,8 @@ final class ImageCropper private (
       case None =>
         val session = ImageCropperDialog.Session(
           initialValue = initialValue,
-          initialDirty = initialDirty
+          initialDirty = initialDirty,
+          initialSource = initialSource
         )
         val width  = max(520, positive(previewMaxWidthValue, 480) + 40)
         val height = max(460, positive(previewMaxHeightValue, 360) + 100)
@@ -312,6 +320,10 @@ final class ImageCropper private (
     }
   }
 
+  /** The dialog's live result while the session is open: shown as the value, never the source. */
+  private[forms] def previewCrop(session: ImageCropperDialog.Session, media: Media): Unit =
+    if (media != null && !session.closed) setCroppedValue(media)
+
   private[forms] def applyCropSession(
       session: ImageCropperDialog.Session,
       media: Media
@@ -321,7 +333,7 @@ final class ImageCropper private (
       session.closed = true
       activeSession = null
       dirtyProperty.set(true)
-      valueProperty.set(media)
+      setCroppedValue(media)
       committedValueProperty.set(media)
       closeCropWindow(session)
     }
@@ -333,10 +345,17 @@ final class ImageCropper private (
       if (!session.applied) {
         Option(fileInput).foreach(_.value_=(""))
         fileProperty.set(null)
-        valueProperty.set(session.initialValue)
+        setCroppedValue(session.initialValue)
+        sourceProperty.set(session.initialSource)
         dirtyProperty.set(session.initialDirty)
       }
     }
+
+  private def setCroppedValue(media: Media): Unit = {
+    committingCrop = true
+    try valueProperty.set(media)
+    finally committingCrop = false
+  }
 
   private[forms] def closeCropWindow(session: ImageCropperDialog.Session): Unit =
     Option(session.windowConf).foreach(Viewport.closeWindow)

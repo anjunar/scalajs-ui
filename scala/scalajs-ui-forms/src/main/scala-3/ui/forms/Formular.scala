@@ -19,6 +19,11 @@ trait Formular[M] extends FormController, Editable { self: AbstractComponent =>
 
   val fields: mutable.LinkedHashMap[String, Control[?]] = mutable.LinkedHashMap.empty
 
+  /** Errors addressed to the form itself -- an `ErrorResponse` with an empty path -- rather than to
+    * one of its controls.
+    */
+  def errors: ListProperty[String]
+
   private val bindingsByControl = mutable.Map.empty[Control[?], CompositeDisposable]
 
   /** Controls whose last binding attempt failed, by control name, with the reason. */
@@ -29,13 +34,22 @@ trait Formular[M] extends FormController, Editable { self: AbstractComponent =>
   override def register(control: Control[?]): Unit = {
     fields.get(control.name) match {
       case Some(current) if current eq control => return
-      case Some(current)                       => unregister(current)
-      case None                                => ()
+      case Some(current)                       =>
+        // Two controls cannot share one model property; the second quietly taking over is exactly
+        // the kind of mistake FormBinding exists to surface.
+        FormBinding.fail(
+          s"Form '$name' cannot register control '${control.name}': a control with that name is " +
+            "already registered."
+        )
+        unregister(current)
+      case None => ()
     }
 
     fields.put(control.name, control)
     controls += control
-    if (modelDescriptor.nonEmpty) bind(control)
+    // A FieldSet has no model property of its own: it groups controls, which register here as
+    // well and bind individually.
+    if (modelDescriptor.nonEmpty && !control.isInstanceOf[FieldSet]) bind(control)
     setControlEditable(control)
   }
 
@@ -63,18 +77,18 @@ trait Formular[M] extends FormController, Editable { self: AbstractComponent =>
   def validate(): Seq[String] =
     controls.toSeq.flatMap(_.validate(forceVisible = true))
 
-  def setErrorResponses(responses: Seq[ErrorResponse]): Unit =
-    responses
-      .filter(_.path.nonEmpty)
+  def setErrorResponses(responses: Seq[ErrorResponse]): Unit = {
+    val (own, addressed) = responses.partition(_.path.isEmpty)
+    if (own.nonEmpty) errors.setAll(own.map(_.message))
+    addressed
       .groupBy(_.path.head)
-      .foreach { case (fieldName, errors) =>
-        fields.get(fieldName).foreach {
-          case nested: FormController => nested.setErrorResponses(errors.map(_.withoutHead))
-          case control                => control.setErrors(errors.map(_.message))
-        }
+      .foreach { case (fieldName, fieldErrors) =>
+        fields.get(fieldName).foreach(ErrorResponse.deliver(_, fieldErrors.map(_.withoutHead)))
       }
+  }
 
-  override def clearErrors(): Unit =
+  override def clearErrors(): Unit = {
+    errors.clear()
     controls.foreach { control =>
       control.setErrors(Nil)
       control match {
@@ -82,8 +96,10 @@ trait Formular[M] extends FormController, Editable { self: AbstractComponent =>
         case _                      => ()
       }
     }
+  }
 
-  override def resetInteractionState(): Unit =
+  override def resetInteractionState(): Unit = {
+    errors.clear()
     controls.foreach { control =>
       control.setDirty(false)
       control.setFocused(false)
@@ -93,6 +109,7 @@ trait Formular[M] extends FormController, Editable { self: AbstractComponent =>
         case _                      => ()
       }
     }
+  }
 
   protected def setControlEditable(control: Control[?]): Unit =
     control.editableProperty.set(editableProperty.get)
@@ -121,9 +138,8 @@ trait Formular[M] extends FormController, Editable { self: AbstractComponent =>
   }
 
   private def bindNow(control: Control[?], model: M): Disposable = {
-    val descriptor = descriptorFor(model)
-    val property   = descriptor.flatMap(_.getProperty(control.name))
-    val accessor   = property.flatMap(_.accessor)
+    val property = modelDescriptor.flatMap(_.getProperty(control.name))
+    val accessor = property.flatMap(_.accessor)
 
     if (accessor.isEmpty) {
       failBinding(
@@ -158,13 +174,6 @@ trait Formular[M] extends FormController, Editable { self: AbstractComponent =>
 
   private def describe(value: Any): String =
     if (value == null) "null" else value.getClass.getSimpleName
-
-  private def descriptorFor(model: M): Option[ClassDescriptor] =
-    modelDescriptor.orElse(Option(model).flatMap { value =>
-      ClassDescriptor
-        .maybeForName(value.getClass.getName)
-        .orElse(ClassDescriptor.maybeForSimpleName(value.getClass.getSimpleName))
-    })
 
   private def addModelValidators(
       control: Control[?],

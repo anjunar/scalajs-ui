@@ -2,9 +2,11 @@ package ui.forms
 
 import ui.core.component.{AbstractComponent, Runtime}
 import ui.core.dsl.DslLayer.render
+import ui.core.i18n.{I18nLocale, I18nResolver, I18nRuntime, MessageCatalog}
 import ui.core.render.{Cursor, SsrCursor}
 import ui.core.state.Property
 import ui.forms.ImageCropper.*
+import ui.forms.validators.{NotNullValidator, ValidationI18n}
 import ui.viewport.Viewport
 import ui.viewport.Viewport.viewport
 import org.scalatest.flatspec.AnyFlatSpec
@@ -103,6 +105,96 @@ class ImageCropperSpec extends AnyFlatSpec with Matchers {
     cropper.errors shouldBe empty
 
     Runtime.unmount(root)
+  }
+
+  it should "translate validator messages like every other control" in {
+    val language = I18nRuntime(
+      Property(I18nLocale("de")),
+      I18nResolver(MessageCatalog(ValidationI18n.german*))
+    )
+    var cropper: ImageCropper = null
+    val cursor                = new SsrCursor()
+    val root                  = Runtime.mount(
+      new AbstractComponent {
+        val tagName                                = "main"
+        override def compose(cursor: Cursor): Unit = {
+          I18nRuntime.provide(language)(using this)
+          render(this, cursor) {
+            cropper = imageCropper("avatar", standalone = true) {
+              addValidator(ImageValidator("Image data is too short")(_.length >= 4))
+            }
+          }
+        }
+      },
+      cursor
+    )
+
+    try {
+      cropper.validators += NotNullValidator[Media]()
+      cropper.validate(forceVisible = true) shouldBe
+        Seq("Dieses Feld ist erforderlich", "Image data is too short")
+      cropper.errors.toSeq shouldBe Seq("Dieses Feld ist erforderlich", "Image data is too short")
+      language.setLocale(I18nLocale.En)
+      cropper.errors.toSeq shouldBe Seq("Must not be null", "Image data is too short")
+
+      cropper.valueProperty.set(new Media(data = Property("abc")))
+      cropper.errors.toSeq shouldBe Seq("Image data is too short")
+      cropper.valueProperty.set(new Media(data = Property("abcd")))
+      cropper.errors shouldBe empty
+    } finally Runtime.unmount(root)
+  }
+
+  "ImageCropper crop sessions" should "keep the original image as the source for further crops" in {
+    val original = new Media(
+      name = Property("avatar.png"),
+      contentType = Property("image/png"),
+      data = Property("original")
+    )
+    val cropped = new Media(contentType = Property("image/png"), data = Property("cropped"))
+    val cursor  = new SsrCursor()
+    var cropper: ImageCropper     = null
+    var mountedViewport: Viewport = null
+    val root                      = Runtime.mount(
+      new CropperRoot {
+        override protected def content(using AbstractComponent, Cursor): Unit =
+          mountedViewport = viewport {
+            cropper = imageCropper("avatar", standalone = true) {
+              ImageCropper.value = original
+            }
+          }
+      },
+      cursor
+    )
+
+    try {
+      cropper.sourceProperty.get should be theSameInstanceAs original
+
+      cropper.openEditor() should not be empty
+      val first = cropper.activeCropSession.get
+      cropper.previewCrop(first, new Media(data = Property("live preview")))
+      cropper.valueProperty.get.data.get shouldBe "live preview"
+      cropper.sourceProperty.get should be theSameInstanceAs original
+      cropper.applyCropSession(first, cropped)
+      cropper.valueProperty.get should be theSameInstanceAs cropped
+      cropper.committedValueProperty.get should be theSameInstanceAs cropped
+      cropper.sourceProperty.get should be theSameInstanceAs original
+
+      cropper.openEditor() should not be empty
+      val second = cropper.activeCropSession.get
+      cropper.previewCrop(second, new Media(data = Property("second preview")))
+      cropper.cancelCropSession(second)
+      cropper.closeCropWindow(second)
+      cropper.valueProperty.get should be theSameInstanceAs cropped
+      cropper.sourceProperty.get should be theSameInstanceAs original
+
+      val replacement = new Media(data = Property("replacement"))
+      cropper.valueProperty.set(replacement)
+      cropper.sourceProperty.get should be theSameInstanceAs replacement
+
+      cropper.clear()
+      cropper.valueProperty.get shouldBe null
+      cropper.sourceProperty.get shouldBe null
+    } finally Runtime.unmount(root)
   }
 
   "ImageCropper window integration" should "mount the crop dialog through Viewport" in {

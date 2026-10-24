@@ -231,6 +231,9 @@ final class ComboBox[T] private (
         } finally syncingValueAndSelection = false
       }
     })
+    // Selection changes arrive here through the sync above, so a pick after a failed
+    // `form.validate()` clears its message right away rather than on blur.
+    addDisposable(valueProperty.observeWithoutInitial(_ => validate()))
     addDisposable(itemsProperty.observeChanges(_ => reconcileSelection()))
     addDisposable(converterProperty.observeWithoutInitial(_ => bumpDisplayRevision()))
     addDisposable(selectionTextProperty.observeWithoutInitial(_ => bumpDisplayRevision()))

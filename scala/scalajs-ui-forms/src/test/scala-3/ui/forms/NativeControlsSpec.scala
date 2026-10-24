@@ -117,7 +117,7 @@ class NativeControlsSpec extends AnyFlatSpec with Matchers {
     area.editable = false
     select.editable = false
     check.editable = false
-    area.host.attribute("readOnly") shouldBe Some("readOnly")
+    area.host.attribute("readonly") shouldBe Some("readonly")
     select.host.attribute("disabled") shouldBe Some("disabled")
     check.host.attribute("disabled") shouldBe Some("disabled")
 

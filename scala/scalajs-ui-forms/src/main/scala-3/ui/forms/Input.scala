@@ -23,6 +23,13 @@ class Input(val name: String, val standalone: Boolean = false)
 
   override def compose(cursor: Cursor): Unit = {
     render(this, cursor) {
+      // While the page hydrates, the input may already hold what the user typed before the client
+      // took over. The server-rendered `value` attribute is the baseline, so a different live value
+      // is an edit to keep. It is pushed once the control is registered -- earlier, the binding's
+      // initial sync from the model would overwrite it.
+      val hydratedEdit =
+        Option.when(cursor.isHydrating)(nativeValue).filter(_ != attribute("value").getOrElse(""))
+
       setAttribute("name", name)
 
       on("input") { event =>
@@ -66,6 +73,11 @@ class Input(val name: String, val standalone: Boolean = false)
         )
         controller.register(this)
         addDisposable(() => controller.unregister(this))
+      }
+
+      hydratedEdit.foreach { value =>
+        dirtyProperty.set(true)
+        valueProperty.set(value)
       }
     }
   }

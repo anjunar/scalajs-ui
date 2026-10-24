@@ -222,7 +222,7 @@ private final class ImageCropperDialog(
     if (!session.closed && liveFrame.isEmpty) {
       liveFrame = Some(dom.window.requestAnimationFrame { _ =>
         liveFrame = None
-        if (!session.closed) cropToMedia().foreach(field.valueProperty.set)
+        if (!session.closed) cropToMedia().foreach(field.previewCrop(session, _))
       })
     }
 
@@ -511,6 +511,7 @@ private object ImageCropperDialog {
   final case class Session(
       initialValue: Media,
       initialDirty: Boolean,
+      initialSource: Media,
       var applied: Boolean = false,
       var closed: Boolean = false,
       var windowConf: Viewport.WindowConf = null

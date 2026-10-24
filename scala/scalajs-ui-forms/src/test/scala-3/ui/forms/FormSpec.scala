@@ -6,6 +6,7 @@ import ui.core.layout.TextComponent
 import ui.core.render.{Cursor, SsrCursor}
 import ui.core.state.{ListProperty, Property}
 import ui.forms.ArrayForm.*
+import ui.forms.FieldSet.fieldSet
 import ui.forms.Form.form
 import ui.forms.Input.input
 import ui.forms.InputContainer.inputContainer
@@ -101,6 +102,110 @@ class FormSpec extends AnyFlatSpec with Matchers {
 
     tagsForm.itemControls.head.asInstanceOf[Input].valueProperty.set("algebra")
     person.tags.get.toSeq shouldBe Seq("algebra", "logic", "compilers")
+
+    Runtime.unmount(root)
+  }
+
+  it should "bind the controls grouped in a FieldSet to the model and route errors to them" in {
+    val person = Person()
+    person.name.set("Ada")
+    var mountedForm: Form[Person] = null
+    var group: FieldSet           = null
+    var nameInput: Input          = null
+
+    val root = mount {
+      mountedForm = form(person) {
+        group = fieldSet("identity") {
+          nameInput = input("name") {}
+        }
+      }
+    }
+
+    mountedForm.validateBindings() shouldBe empty
+    mountedForm.fields.keySet.toSeq shouldBe Seq("identity", "name")
+    group.fields.keySet.toSeq shouldBe Seq("name")
+    nameInput.valueProperty.get shouldBe "Ada"
+    nameInput.valueProperty.set("Augusta")
+    person.name.get shouldBe "Augusta"
+
+    nameInput.valueProperty.set("")
+    mountedForm.validate() shouldBe Seq("Name is required")
+
+    mountedForm.setErrorResponses(Seq(ErrorResponse("Taken", Seq("name"))))
+    nameInput.errors.toSeq shouldBe Seq("Taken")
+    mountedForm.setErrorResponses(Seq(ErrorResponse("Taken in group", Seq("identity", "name"))))
+    nameInput.errors.toSeq shouldBe Seq("Taken in group")
+
+    group.editable = false
+    nameInput.editableProperty.get shouldBe false
+
+    Runtime.unmount(root)
+    mountedForm.fields shouldBe empty
+    group.fields shouldBe empty
+  }
+
+  it should "deliver errors addressed to containers and to the form itself" in {
+    val person = Person()
+    person.tags.setAll(Seq("math"))
+    var mountedForm: Form[Person] = null
+    var address: SubForm[Address] = null
+    var tags: ArrayForm[String]   = null
+
+    val root = mount {
+      mountedForm = form(person) {
+        address = subForm[Address]("address") {
+          input("street") {}
+        }
+        tags = arrayForm[String]("tags") {
+          controlRenderer = index => input(s"tag-$index") {}
+        }
+      }
+    }
+
+    mountedForm.setErrorResponses(
+      Seq(
+        ErrorResponse("Address incomplete", Seq("address")),
+        ErrorResponse("Too many tags", Seq("tags")),
+        ErrorResponse("Unknown tag", Seq("tags", "0")),
+        ErrorResponse("Form rejected", Seq())
+      )
+    )
+    address.errors.toSeq shouldBe Seq("Address incomplete")
+    tags.errors.toSeq shouldBe Seq("Too many tags")
+    tags.itemControls.head.errors.toSeq shouldBe Seq("Unknown tag")
+    mountedForm.errors.toSeq shouldBe Seq("Form rejected")
+
+    mountedForm.clearErrors()
+    address.errors shouldBe empty
+    tags.errors shouldBe empty
+    tags.itemControls.head.errors shouldBe empty
+    mountedForm.errors shouldBe empty
+
+    Runtime.unmount(root)
+  }
+
+  it should "keep a server error on an untouched control until the user edits it" in {
+    val person = Person()
+    person.name.set("Ada")
+    var nameInput: Input = null
+
+    val root = mount {
+      form(person) {
+        nameInput = input("name") {}
+      }
+    }
+
+    nameInput.setErrors(Seq("Already registered"))
+    nameInput.validate()
+    nameInput.errors.toSeq shouldBe Seq("Already registered")
+
+    // Focus and blur without typing is not an edit either.
+    nameInput.dirtyProperty.set(true)
+    nameInput.validate()
+    nameInput.errors.toSeq shouldBe Seq("Already registered")
+
+    nameInput.valueProperty.set("")
+    nameInput.errors.toSeq shouldBe Seq("Name is required")
 
     Runtime.unmount(root)
   }

@@ -53,7 +53,9 @@ private object ValidatorSupport {
     case number: Float if !number.isNaN && !number.isInfinite =>
       Some(BigDecimal.decimal(number.toDouble))
     case number: Double if !number.isNaN && !number.isInfinite => Some(BigDecimal(number))
-    case text: String if text.trim.nonEmpty => text.trim.toDoubleOption.map(BigDecimal(_))
+    // Exact, so a long integer keeps its digits; "NaN", "Infinity" and "1e400" are no numbers
+    // here, where the Double route would either throw or lose precision.
+    case text: String if text.trim.nonEmpty => Try(BigDecimal(text.trim)).toOption
     case _                                  => None
   }
 
@@ -75,21 +77,38 @@ private object ValidatorSupport {
   private def temporalComparison(candidate: Any): Option[Int] = candidate match {
     case value: Instant        => Some(value.compareTo(Instant.now()))
     case value: LocalDate      => Some(value.compareTo(localToday()))
-    case value: LocalDateTime  => Some(value.compareTo(LocalDateTime.now()))
+    case value: LocalDateTime  => Some(value.compareTo(localNow()))
     case value: OffsetDateTime => Some(value.compareTo(OffsetDateTime.now()))
     case value: ZonedDateTime  => Some(value.compareTo(ZonedDateTime.now()))
     case value: util.Date      => Some(value.compareTo(new util.Date()))
-    // HTML date inputs bind ISO local-date strings through Control[String].
-    case value: String => Try(LocalDate.parse(value)).toOption.map(_.compareTo(localToday()))
-    case _             => None
+    // HTML date and datetime-local inputs bind ISO local strings through Control[String]; the
+    // offset form covers a value that round-tripped through JSON.
+    case value: String =>
+      Try(LocalDate.parse(value)).toOption
+        .map(_.compareTo(localToday()))
+        .orElse(Try(LocalDateTime.parse(value)).toOption.map(_.compareTo(localNow())))
+        .orElse(
+          Try(OffsetDateTime.parse(value)).toOption.map(_.toInstant.compareTo(Instant.now()))
+        )
+    case _ => None
   }
 
-  // The JS host owns the local calendar/time zone. Reading its date components
-  // avoids requiring a separate IANA time-zone database for date-only comparisons.
-  private def localToday(): LocalDate = {
+  // The JS host owns the local calendar/time zone. Reading its components avoids requiring a
+  // separate IANA time-zone database for local-time comparisons.
+  private def localNow(): LocalDateTime = {
     val now = new js.Date()
-    LocalDate.of(now.getFullYear().toInt, now.getMonth().toInt + 1, now.getDate().toInt)
+    LocalDateTime.of(
+      now.getFullYear().toInt,
+      now.getMonth().toInt + 1,
+      now.getDate().toInt,
+      now.getHours().toInt,
+      now.getMinutes().toInt,
+      now.getSeconds().toInt,
+      now.getMilliseconds().toInt * 1000000
+    )
   }
+
+  private def localToday(): LocalDate = localNow().toLocalDate
 
   private def accepted(comparison: Int, isPast: Boolean, inclusive: Boolean): Boolean =
     if (isPast) {
