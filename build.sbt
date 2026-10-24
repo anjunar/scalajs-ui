@@ -1,6 +1,6 @@
 import org.scalajs.linker.interface.{ESVersion, ModuleKind, ModuleSplitStyle}
 import org.scalajs.sbtplugin.ScalaJSPlugin
-import sbt.url
+import sbt.uri
 
 // ---------------------------------------------------------------------------
 // sbt 2.x
@@ -23,18 +23,18 @@ import sbt.url
 version              := "1.1.6-SNAPSHOT"
 organization         := "com.anjunar"
 organizationName     := "Anjunar"
-organizationHomepage := Some(url("https://github.com/anjunar"))
+organizationHomepage := Some(uri("https://github.com/anjunar"))
 
 scalaVersion := "3.3.8"
 
-homepage := Some(url("https://github.com/anjunar/scalajs-ui"))
+homepage := Some(uri("https://github.com/anjunar/scalajs-ui"))
 description := "Reactive UI framework for Scala.js with lifecycle control, typed forms, routing, tables, and a composable DSL."
 
-licenses := Seq("MIT" -> url("https://opensource.org/licenses/MIT"))
+licenses := Seq("MIT" -> uri("https://opensource.org/licenses/MIT"))
 
 scmInfo := Some(
   ScmInfo(
-    url("https://github.com/anjunar/scalajs-ui"),
+    uri("https://github.com/anjunar/scalajs-ui"),
     "scm:git:https://github.com/anjunar/scalajs-ui.git",
     Some("scm:git:git@github.com:anjunar/scalajs-ui.git")
   )
@@ -45,7 +45,7 @@ developers := List(
     id = "anjunar",
     name = "Patrick Bittner",
     email = "anjunar@gmx.de",
-    url = url("https://github.com/anjunar")
+    url = uri("https://github.com/anjunar")
   )
 )
 
@@ -152,8 +152,10 @@ lazy val commonLibrarySettings = Seq(
 // Publish-Regel: Ein publiziertes Modul darf nur auf publizierte Module und externe
 // Artefakte haengen. Sonst verweist der erzeugte POM auf ein Artefakt, das in Maven
 // Central nie existiert, und das Modul ist fuer externe Konsumenten unaufloesbar.
-// Publiziert: core, router, viewport, json, controls, forms, editor, webauthn.
-// Nicht publiziert (`publish / skip := true`): demo.
+// Publiziert: core, router, viewport, json, controls, forms, editor, webauthn und bridge
+// (die Bridge liegt seit 1.0.0 auf Maven Central; ausgeliefert wird ihr gelinktes Bundle
+// ueber das npm-Paket @anjunar/scalajs-ui-bridge).
+// Nicht publiziert (`publish / skip := true`): demo und die beiden Browser-Testanwendungen.
 // FINAL.md Prioritaet 4 ("scalajs-ui-editor veroeffentlichen oder bewusst ausklammern")
 // ist damit entschieden: veroeffentlichen, mit einer @anjunar/scalajs-ui-editor-Fassade
 // wie jedes andere npm/scalajs-ui-*-Paket (npm-Modularisierung, Lauf 7).
