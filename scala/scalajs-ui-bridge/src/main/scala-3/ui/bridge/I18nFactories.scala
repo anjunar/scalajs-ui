@@ -11,7 +11,7 @@ private[bridge] object I18nFactories {
   def toScala(facade: MessageKeyFacade): MessageKey =
     MessageKey(
       source = facade.source,
-      context = facade.context.toOption.map(MessageContext(_)),
+      context = facade.context.toOption.map(c => MessageContext(c.value)),
       fingerprint = MessageFingerprint(facade.fingerprint),
       placeholders = facade.placeholders.toVector,
       position = facade.position.toOption.map(p => MessageSourcePosition(p.file, p.line, p.column))

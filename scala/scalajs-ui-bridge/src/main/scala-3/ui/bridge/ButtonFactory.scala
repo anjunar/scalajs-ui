@@ -20,9 +20,11 @@ private[bridge] object ButtonFactory extends ComponentFactory {
       val self        = summon[Button]
       val childCursor = summon[Cursor]
 
-      options.get("type").foreach(value => self.buttonType(value.asInstanceOf[String]))
-      options
-        .get("disabled")
+      ComponentFactory
+        .optional(options, "type")
+        .foreach(value => self.buttonType(value.asInstanceOf[String]))
+      ComponentFactory
+        .optional(options, "disabled")
         .foreach(value => self.disabled = ReactiveBridge.asProperty[Boolean](value))
 
       body(new ComponentHandleBridge(self), new ScopeHandleBridge(self, childCursor))

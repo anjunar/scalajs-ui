@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { uiCode } from "./tools/vite-plugin-ui-code.js";
 
@@ -19,6 +20,15 @@ function viteBasePath(value: string | undefined): string {
 // vite.config.js opens the same door for the same reason.
 const monorepoRoot = fileURLToPath(new URL("../..", import.meta.url));
 
+// Every package of the family this app depends on, read off package.json so a
+// dependency added there is deduplicated here without a second edit.
+const packageJson = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8")
+) as { dependencies?: Record<string, string> };
+const uiPackages = Object.keys(packageJson.dependencies ?? {}).filter((name) =>
+  name.startsWith("@anjunar/scalajs-ui")
+);
+
 export default defineConfig(({ isSsrBuild }) => ({
   base: viteBasePath(process.env.UI_BASE_PATH),
   plugins: [tailwindcss(), uiCode()],
@@ -36,15 +46,14 @@ export default defineConfig(({ isSsrBuild }) => ({
     // dedupe forces both paths onto one instance. It is the reason the entry
     // points may import by package specifier again; without it the old relative
     // import would still be load-bearing. Same argument for the bridge: two
-    // copies of the linked Scala.js bundle would be two component trees.
-    // scalajs-ui-router holds no module-level state, but deduping it too keeps every
-    // package of the family on one instance and one set of types.
-    dedupe: [
-      "@anjunar/scalajs-ui-core",
-      "@anjunar/scalajs-ui-router",
-      "@anjunar/scalajs-ui-controls",
-      "@anjunar/scalajs-ui-bridge",
-    ],
+    // copies of the linked Scala.js bundle would be two component trees. And
+    // the same again, more quietly, for scalajs-ui-forms and scalajs-ui-json: both keep
+    // decorator metadata in module-level WeakMaps (`validators.ts`, `json.ts`),
+    // so a second instance of either would simply not know the fields the first
+    // one decorated. The list is therefore every @anjunar/scalajs-ui* package this app
+    // depends on, not a hand-picked subset; scripts/verify-single-runtime.mjs
+    // counts core, forms and json in the emitted bundles.
+    dedupe: uiPackages,
   },
   server: {
     fs: {

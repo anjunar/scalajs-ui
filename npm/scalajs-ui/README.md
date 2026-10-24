@@ -24,11 +24,11 @@ Alternatively, import `@anjunar/scalajs-ui` as a JavaScript side effect when you
 
 `designs/*/tokens.css` owns the semantic roles from the neighbouring `lob-der-reinen-intuition/design` Multi Constitution. The four designs are `atlas`, `flora`, `terra` and `ember`. Set `data-design` and `data-color-scheme="light"` or `"dark"` on `<html>`. The defaults are Ember and dark, independent of the operating system.
 
-`base/Theme.css` maps these roles to the existing `--aj-*` interface shared with Lexical. `base/Tokens.css` supplies structural aliases. Cascade layers separate component patterns, design decisions, utilities and accessibility invariants. Application styles belong in `layer(patterns)` so they do not accidentally override the chosen design.
+`base/Theme.css` maps these roles to the `--aj-*` interface the components -- including the native Ember editor -- are styled against. `base/Tokens.css` supplies structural aliases. Cascade layers separate component patterns, design decisions, utilities and accessibility invariants. Application styles belong in `layer(patterns)` so they do not accidentally override the chosen design.
 
 Application CSS owns application layout and application-specific class names. Inline styles from the UI style DSL carry runtime values such as measured dimensions, transforms, or the drawer's width custom properties. Static layout belongs in CSS. Accessibility rules preserve visible keyboard focus and reduced motion across visual designs.
 
-Applications should provide an element reset; Tailwind Preflight is optional. This package contains no Tailwind directives and does not load `@anjunar/ui`. It includes Material Icons typography rules but no font binary. The currently published `@anjunar/scalajs-lexical` package still declares an `@anjunar/ui` peer dependency, so editor consumers may see that unused package in their installation tree.
+Applications should provide an element reset; Tailwind Preflight is optional. This package contains no Tailwind directives and does not load `@anjunar/ui`. It includes Material Icons typography rules but no font binary.
 
 ## Contents
 

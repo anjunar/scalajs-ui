@@ -94,6 +94,23 @@ export function withScope<T>(
 }
 
 /**
+ * Wraps a plain `() => void` DSL body into the `(scope) => void` the runtime calls back with.
+ *
+ * Every callback the bridge runs against a fresh handle -- a route loader's page, a
+ * router shell, a table cell renderer, the build handed to `mount`/`renderToString` --
+ * takes this shape: open the scope, run the consumer's ambient-scope code, close it.
+ * One helper instead of one copy per package, so a change to how a body is entered
+ * (the thenable check in {@link withScope}, say) happens in one place.
+ *
+ * `self` is `null` on purpose: the handle the runtime passes is a *scope*, not a
+ * component the body configures. `component()`'s own body (which does receive a
+ * `self`) goes through `withScope` directly.
+ */
+export function scopeBody(run: () => void): (scope: ScopeHandle) => void {
+  return (scope) => withScope(scope, null, run);
+}
+
+/**
  * Captures the current component scope so a later callback can run inside it.
  * The scope is refreshed on invocation: it claims nodes while hydration is
  * running and appends after hydration completes. Disposed scopes reject reuse.

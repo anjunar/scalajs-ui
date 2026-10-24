@@ -33,6 +33,11 @@
     "@anjunar/scalajs-ui": "^1.1.6-SNAPSHOT",
     "@anjunar/scalajs-ui-bridge": "^1.1.6-SNAPSHOT"
   },
+  "peerDependenciesMeta": {
+    "@anjunar/scalajs-ui": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@anjunar/scalajs-ui-core": "*",
     "@anjunar/scalajs-ui-forms": "*",

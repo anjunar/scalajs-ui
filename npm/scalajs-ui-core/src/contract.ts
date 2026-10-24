@@ -204,6 +204,13 @@ export interface ScopeHandle {
    * Mounts a library component by registry name -- `"combo-box"`, `"table-view"`,
    * `"window"`. One generic call keeps the boundary small; the typed wrappers
    * live in TypeScript and the name-to-class table lives in `scalajs-ui-bridge`.
+   *
+   * The returned handle is the mounted component's -- with one documented
+   * exception: `"window"` and `"notification"` mount nothing at the call site
+   * (the viewport inserts them into its own layer; see `ViewportFactories.scala`
+   * for why the call site's cursor cannot be used), so they return the handle of
+   * the component the call was made from. Nothing should configure a window
+   * through that handle; `scalajs-ui-viewport`'s wrappers return `void` for both.
    */
   component(
     name: string,

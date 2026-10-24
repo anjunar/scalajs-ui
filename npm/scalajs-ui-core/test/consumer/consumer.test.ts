@@ -129,6 +129,10 @@ beforeAll(() => {
   // --legacy-peer-deps: @anjunar/scalajs-ui-core declares a peer on the CSS package,
   // which this probe deliberately does not install -- it imports no stylesheet,
   // and pulling @anjunar/scalajs-ui in behind it would test npm's network, not us.
+  // The peer is marked optional (peerDependenciesMeta), which is what a real consumer
+  // without the stylesheet needs; the flag stays because this probe's range
+  // (`^<version>-SNAPSHOT`) is not what the registry publishes, and npm resolves an
+  // optional peer against the registry as soon as two packages in the tree share it.
   npm(["install", "--no-audit", "--no-fund", "--legacy-peer-deps", "--silent"], consumer);
 });
 

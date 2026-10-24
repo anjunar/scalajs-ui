@@ -147,6 +147,11 @@ abstract class AbstractComponent
 
   def addDisposable(d: Disposable): Unit = disposables.add(d)
 
+  /** Takes back a registration made with `addDisposable`, without disposing it -- for work whose
+    * cleanup is no longer this component's to run, such as a window that already closed itself.
+    */
+  def removeDisposable(d: Disposable): Unit = disposables.remove(d)
+
   def dispose(): Unit = {
     if (disposed) return
     physicalHosts.foreach(HostMutationGuard.checkRemoval)

@@ -12,8 +12,7 @@
  * content to) is not projected here -- nothing importing this package needs it
  * yet, and it has an obvious trigger to add later if one shows up.
  */
-import { component } from "@anjunar/scalajs-ui-core";
-import { defined } from "./internal.js";
+import { component, defined } from "@anjunar/scalajs-ui-core";
 
 export interface OverlayOptions {
   /** A fixed width in pixels. Omit it to match the anchor's own width. */

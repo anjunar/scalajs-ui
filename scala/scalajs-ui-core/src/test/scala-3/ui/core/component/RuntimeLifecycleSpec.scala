@@ -97,6 +97,22 @@ class RuntimeLifecycleSpec extends AnyFlatSpec with Matchers {
     root.isBound shouldBe false
   }
 
+  "AbstractComponent.removeDisposable" should "take a registration back without running it" in {
+    val root    = Runtime.mount(new EmptyRoot, new SsrCursor())
+    var removed = 0
+    var kept    = 0
+    val taken   = Disposable { removed += 1 }
+    root.addDisposable(taken)
+    root.addDisposable(Disposable { kept += 1 })
+
+    root.removeDisposable(taken)
+    removed shouldBe 0
+
+    root.dispose()
+    removed shouldBe 0
+    kept shouldBe 1
+  }
+
   it should "dispose the component tree when HTML serialization fails" in {
     var disposed = false
 

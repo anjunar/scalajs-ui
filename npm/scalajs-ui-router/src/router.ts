@@ -15,7 +15,7 @@
  * DSL. {@link toFacadeRoute} bridges the two by resolving the page body into a
  * `(scope) => void` the bridge can turn into a component.
  */
-import { component, currentScope, withScope } from "@anjunar/scalajs-ui-core";
+import { component, currentScope, defined, scopeBody, withScope } from "@anjunar/scalajs-ui-core";
 import type { ReadOnlyProperty, ScopeHandle } from "@anjunar/scalajs-ui-core";
 
 export interface RouteContext {
@@ -157,7 +157,7 @@ export function router(
 type ScopeBody = (scope: ScopeHandle) => void;
 
 function toFacadeRoute(route: RouteDefinition): Record<string, unknown> {
-  const wrap = (body: PageBody): ScopeBody => (scope) => withScope(scope, null, body);
+  const wrap = (body: PageBody): ScopeBody => scopeBody(body);
 
   return {
     path: route.path,
@@ -190,5 +190,5 @@ export function routerLink(
   options: LinkOptions = {},
   body: () => void = () => {}
 ): void {
-  component("router-link", { href, label, ...options }, body);
+  component("router-link", defined({ href, label, ...options }), body);
 }

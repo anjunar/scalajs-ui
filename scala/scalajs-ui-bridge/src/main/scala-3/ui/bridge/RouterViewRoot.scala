@@ -44,7 +44,10 @@ private[bridge] final class RouterViewRoot(
           composeLayout(outlet, new ScopeHandleBridge(this, cursor))
 
         case None =>
-          // Raw bridge callers predating the layout callback keep the original sibling shape.
+          // The raw-bridge path: a `component("router", { routes, config }, shell)` call with no
+          // `layout` callback -- which `router.ts` always supplies, so only a direct bridge caller
+          // lands here. It keeps the original sibling shape: the shell's chrome first, the routed
+          // page as its next sibling.
           shell(new ComponentHandleBridge(this), new ScopeHandleBridge(this, cursor))
           DslLayer.child(routerComponent) {}
       }

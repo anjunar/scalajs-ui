@@ -16,7 +16,7 @@ import { editorApi } from "@anjunar/scalajs-ui-bridge/editor-api";
 import type { Command } from "./commands.js";
 import type { Markdown } from "./editor.js";
 import type { EditorExtension } from "./extensions.js";
-import { defined } from "./internal.js";
+import { defined } from "@anjunar/scalajs-ui-core";
 
 declare const sessionBrand: unique symbol;
 

@@ -5,6 +5,9 @@ const output = new URL('../../target/core-browser-tests/', import.meta.url);
 // Fail loudly if the actual Scala.js test application has not been linked.
 await readFile(new URL('main.js', output));
 const editorOutput = new URL('../../target/editor-browser-tests/', import.meta.url);
+// Same for the editor test application: without it, every editor spec would wait on a 404'd
+// module import until Playwright's timeout instead of failing at startup.
+await readFile(new URL('main.js', editorOutput));
 const editorHtml = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/ui-css/index.css"><style>@font-face {font-family: 'Material Icons'; src: url('/material.ttf')} .scalajs-ui-editor__surface {min-height: 6rem}</style></head><body><div id="root"></div><script type="module">
 import { editorFixtures } from '/editor/main.js';
 window.fixtures = editorFixtures;

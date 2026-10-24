@@ -43,6 +43,14 @@ beforeAll(() => {
         `Expected: ${linkedArtifact}`
     );
   }
+  // An overlay observes its own size in the browser so that late content re-positions it, the
+  // same browser baseline the controls rely on; jsdom ships no ResizeObserver. A no-op is enough
+  // for mount/hydrate to run -- the tests here do not assert layout.
+  (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  };
 });
 
 beforeEach(() => {

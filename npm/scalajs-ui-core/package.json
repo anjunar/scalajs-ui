@@ -33,6 +33,11 @@
   "peerDependencies": {
     "@anjunar/scalajs-ui": "^1.1.6-SNAPSHOT"
   },
+  "peerDependenciesMeta": {
+    "@anjunar/scalajs-ui": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@anjunar/scalajs-ui": "*",
     "@anjunar/scalajs-ui-bridge": "*",

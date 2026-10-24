@@ -1,4 +1,5 @@
 import { Base64Url } from "./base64-url.js";
+import { defined } from "./internal.js";
 import {
   authenticatorSelectionCriteria,
   publicKeyCredentialCreationOptions,
@@ -409,14 +410,6 @@ function jsonSafe(value: unknown): unknown {
     return result;
   }
   return value;
-}
-
-function defined(entries: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(entries)) {
-    if (value !== undefined) out[key] = value;
-  }
-  return out;
 }
 
 function missingField(field: string): TypeError {

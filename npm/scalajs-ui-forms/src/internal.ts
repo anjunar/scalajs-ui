@@ -8,40 +8,28 @@
  * runs against a fresh handle, the same wrap `@anjunar/scalajs-ui-controls`'s own
  * `internal.ts` applies to a cell renderer.
  */
-import { withScope } from "@anjunar/scalajs-ui-core";
+import { scopeBody } from "@anjunar/scalajs-ui-core";
 import type { ReadOnlyProperty, ScopeHandle } from "@anjunar/scalajs-ui-core";
+
+// `defined` drops `undefined` option entries before they cross to the bridge, which reads
+// top-level options by key presence (`options.get("model")`). One implementation, in core, shared
+// with every other facade.
+export { defined } from "@anjunar/scalajs-ui-core";
 
 /** A body the bridge runs: it opens the ambient scope and calls the consumer's callback. */
 export type ScopeBody = (scope: ScopeHandle) => void;
 
 /** Wraps a plain `() => void` DSL body. */
-export function body(run: () => void): ScopeBody {
-  return (scope) => withScope(scope, null, run);
-}
+export const body: (run: () => void) => ScopeBody = scopeBody;
 
 /** Wraps an `(index) => void` array-item renderer into `(index) => ScopeBody`. */
 export function indexBody(render: (index: number) => void): (index: number) => ScopeBody {
-  return (index) => (scope) => withScope(scope, null, () => render(index));
+  return (index) => scopeBody(() => render(index));
 }
 
 /** Wraps an `(item, selected) => void` combo-box item renderer into its curried bridge shape. */
 export function itemSelectedBody<T>(
   render: (item: T, selected: ReadOnlyProperty<boolean>) => void
 ): (item: T, selected: ReadOnlyProperty<boolean>) => ScopeBody {
-  return (item, selected) => (scope) => withScope(scope, null, () => render(item, selected));
-}
-
-/**
- * Drops `undefined` entries.
- *
- * The bridge reads top-level options by key presence (`options.get("model")`),
- * so an explicit `model: undefined` would be seen as "set to undefined"
- * instead of falling back to the Scala-side default.
- */
-export function defined(entries: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(entries)) {
-    if (value !== undefined) out[key] = value;
-  }
-  return out;
+  return (item, selected) => scopeBody(() => render(item, selected));
 }

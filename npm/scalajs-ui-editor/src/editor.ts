@@ -6,8 +6,7 @@
  * draggable cell-range selection. The Markdown view preserves documents with
  * features outside the native model (raw HTML, extra text marks).
  */
-import { component, type Property } from "@anjunar/scalajs-ui-core";
-import { defined } from "./internal.js";
+import { component, defined, type Property } from "@anjunar/scalajs-ui-core";
 import type { EditorSession } from "./session.js";
 
 /** The only public value representation of an editor document. */

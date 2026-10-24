@@ -30,7 +30,7 @@ export {
   runtime,
 } from "./runtime.js";
 
-export { capture, currentComponent, currentScope, hasScope, withScope } from "./scope.js";
+export { capture, currentComponent, currentScope, hasScope, scopeBody, withScope } from "./scope.js";
 
 export * from "./dsl.js";
 export * from "./document.js";

@@ -7,8 +7,8 @@
  * of sessions. Options are validated when the handle is made, so a wrong option
  * throws at the call that passed it.
  */
+import { defined } from "@anjunar/scalajs-ui-core";
 import { editorApi } from "@anjunar/scalajs-ui-bridge/editor-api";
-import { defined } from "./internal.js";
 
 declare const extensionBrand: unique symbol;
 

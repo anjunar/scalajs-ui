@@ -2,7 +2,6 @@ package ui.bridge
 
 import ui.core.component.AbstractComponent
 import ui.core.render.Cursor
-import ui.core.state.Disposable
 import ui.viewport.{Overlay, Viewport, Window}
 
 import scala.scalajs.js
@@ -25,7 +24,7 @@ private[bridge] object NotificationFactory extends ComponentFactory {
     val durationMs = options.get("durationMs").map(ControlFactories.int).getOrElse(3000)
 
     val conf = Viewport.notify(message, kind, durationMs)(using parent)
-    parent.addDisposable(Disposable(Viewport.closeNotification(conf)))
+    ViewportFactories.closeWhenDisposed(parent, conf.visible)(Viewport.closeNotification(conf))
     parent
   }
 }

@@ -2,7 +2,6 @@ package ui.bridge
 
 import ui.core.component.AbstractComponent
 import ui.core.render.Cursor
-import ui.core.state.Disposable
 import ui.viewport.{Overlay, Viewport, Window}
 
 import scala.scalajs.js
@@ -45,7 +44,7 @@ private[bridge] object WindowFactory extends ComponentFactory {
     }
 
     Viewport.addWindow(conf)(using parent)
-    parent.addDisposable(Disposable(Viewport.closeWindow(conf)))
+    ViewportFactories.closeWhenDisposed(parent, conf.visible)(Viewport.closeWindow(conf))
     parent
   }
 }

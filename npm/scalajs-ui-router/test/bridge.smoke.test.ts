@@ -28,7 +28,15 @@ import {
 } from "@anjunar/scalajs-ui-core";
 import { classes, div, heading, text } from "@anjunar/scalajs-ui-core";
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
-import { errorRoute, router, routerLink, routerOutlet, view, type PageBody } from "../src/index.js";
+import {
+  errorRoute,
+  router,
+  routerLink,
+  routerOutlet,
+  view,
+  type LinkOptions,
+  type PageBody,
+} from "../src/index.js";
 
 const linkedArtifact = resolve(
   process.cwd(),
@@ -85,6 +93,20 @@ describe("renderToString", () => {
     expect(result.status).toBe(200);
     expect(withoutAnchors(result.html)).toContain("router shell");
     expect(withoutAnchors(result.html)).toContain("detail page");
+  });
+
+  it("keeps the default active class when activeClass is explicitly undefined", async () => {
+    // Legal for a consumer without exactOptionalPropertyTypes (TypeScript's default); this
+    // harness has it on, hence the cast. The spread in `routerLink()` used to pass the
+    // `undefined` through, and the active link rendered as `class="ui-link undefined"`.
+    const options = { activeClass: undefined } as unknown as LinkOptions;
+    const result = await renderToString(() =>
+      router([view("/", () => () => routerLink("/", "Home", options))], { url: "/" })
+    );
+
+    expect(withoutAnchors(result.html)).toContain("Home");
+    expect(result.html).toContain("ui-link active");
+    expect(result.html).not.toContain("undefined");
   });
 
   it("carries the error route's status when a path does not match", async () => {

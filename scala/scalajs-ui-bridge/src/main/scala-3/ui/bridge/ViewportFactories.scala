@@ -2,7 +2,7 @@ package ui.bridge
 
 import ui.core.component.AbstractComponent
 import ui.core.render.Cursor
-import ui.core.state.Disposable
+import ui.core.state.{Disposable, ReadOnlyProperty}
 import ui.viewport.{Overlay, Viewport, Window}
 
 import scala.scalajs.js
@@ -54,6 +54,38 @@ import scala.scalajs.js.JSConverters.*
   * of this facade needs them yet, and each has an obvious trigger to add later if one shows up.
   */
 private[bridge] object ViewportFactories {
+
+  /** Hangs `close` off `parent` for exactly as long as the window or notification it closes is
+    * still showing.
+    *
+    * `parent` is the component the `window`/`notification` call was made from -- under the
+    * bare-`onClick` idiom described above, that is the *button*, which outlives every window it
+    * opens. A plain `parent.addDisposable(Disposable(close))` would therefore pile one closure per
+    * click onto the button, each retaining its `WindowConf` (title binding, body closure) until the
+    * button itself is torn down, long after the user dismissed the window. So the registration is
+    * taken back once `visible` flips to `false` -- the first thing both `Viewport.closeWindow` and
+    * `Viewport.closeNotification` (and the notification's own timer) do, before the fade-out
+    * removes the conf for good. After that `close` would be a no-op anyway (`Viewport.closeWindow`
+    * is guarded by ownership), so nothing is lost by forgetting it.
+    *
+    * The subscription on `visible` is the one thing that must not outlive the conf either: it
+    * releases itself on that same flip, and when `parent` goes first, its `close` sets `visible` to
+    * `false` and the subscription releases through the same path.
+    */
+  def closeWhenDisposed(parent: AbstractComponent, visible: ReadOnlyProperty[Boolean])(
+      close: => Unit
+  ): Unit = {
+    val closing = Disposable(close)
+    parent.addDisposable(closing)
+
+    var watching: Disposable = Disposable.empty
+    watching = visible.observeWithoutInitial { shown =>
+      if (!shown) {
+        parent.removeDisposable(closing)
+        watching.dispose()
+      }
+    }
+  }
 
   def notificationKind(value: String): Viewport.NotificationKind =
     value match {

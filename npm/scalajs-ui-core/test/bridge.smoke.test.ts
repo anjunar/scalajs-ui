@@ -25,15 +25,21 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   capture,
   button,
+  catalogEntry,
+  documentHead,
   drawer,
   drawerContent,
   drawerNavigation,
   element,
   forEach,
   hbox,
+  head,
   hydrate,
+  i18nProvider,
+  i18nc,
   installRuntime,
   listProperty,
+  meta,
   mount,
   onClick,
   property,
@@ -41,8 +47,10 @@ import {
   resetRuntime,
   runtime,
   text,
+  title,
   vbox,
 } from "../src/index.js";
+import type { ButtonOptions } from "../src/index.js";
 import { bridgeRuntime } from "@anjunar/scalajs-ui-bridge";
 
 // vitest runs with npm/scalajs-ui-core as the working directory (vitest.config.ts
@@ -196,6 +204,56 @@ describe("renderToString", () => {
     const result = await renderToString(() => vbox(() => text(label)));
     expect(result.html).toContain("second");
     expect(result.html).not.toContain("first");
+  });
+
+  it("fills a head group from set(...entries) with every entry, not only the first", async () => {
+    // `HeadGroupHandle.set` is variadic in the contract; the bridge used to declare it as one
+    // array parameter, so this very call -- the demo's per-page title + description -- received
+    // the title object as "the array", read it as empty, and cleared the group instead.
+    const result = await renderToString(() => {
+      head();
+      element("main")(() => {
+        const group = documentHead()!.handle();
+        group.set(title("Page title"), meta("description", "Page summary"));
+        text("body");
+      });
+    });
+
+    expect(result.html).toContain(">Page title</title>");
+    expect(result.html).toContain('name="description"');
+    expect(result.html).toContain('content="Page summary"');
+  });
+
+  it("translates a contextual (i18nc) message through the bridge", async () => {
+    // `context` crosses as `{ value }`; the bridge used to wrap that object whole, so the
+    // catalog's own `{ value }` never compared equal and every i18nc message fell back to source.
+    const message = i18nc`date`("fruit");
+    const result = await renderToString(() =>
+      i18nProvider(
+        {
+          catalog: [catalogEntry(message, { de: "Dattel" })],
+          supportedLocales: ["en", "de"],
+          defaultLocale: "en",
+          initialUrl: "/de/",
+        },
+        () => text(message)
+      )
+    );
+
+    expect(withoutAnchors(result.html)).toContain("Dattel");
+    expect(withoutAnchors(result.html)).not.toContain("date");
+  });
+
+  it("renders a button whose type option is explicitly undefined without a type attribute", async () => {
+    // Legal for a consumer without exactOptionalPropertyTypes (TypeScript's default); this
+    // harness has it on, hence the cast. The spread in `button()` used to pass the `undefined`
+    // through to `setAttribute("type", undefined)`, which the SSR host rejects.
+    const options = { type: undefined } as unknown as ButtonOptions;
+    const result = await renderToString(() => button("Go", options));
+
+    expect(withoutAnchors(result.html)).toContain("<button");
+    expect(result.html).not.toContain("type=");
+    expect(result.html).not.toContain("undefined");
   });
 });
 

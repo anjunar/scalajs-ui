@@ -1,3 +1,5 @@
+import { defined } from "./internal.js";
+
 export type AuthenticationExtensionsClientInputs = Record<string, unknown>;
 
 export interface PublicKeyCredentialRpEntity {
@@ -196,14 +198,6 @@ export interface CurrentUserDetailsOptions {
   readonly userId: string;
   readonly name: string;
   readonly displayName: string;
-}
-
-function defined(entries: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(entries)) {
-    if (value !== undefined) out[key] = value;
-  }
-  return out;
 }
 
 // Upper-case aliases mirror the Scala companion-object names while the

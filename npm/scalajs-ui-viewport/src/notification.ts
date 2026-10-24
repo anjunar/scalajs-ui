@@ -8,8 +8,7 @@
  * from an event handler (`onClick(() => notify("Saved"))`), the same way the
  * Scala demo calls `Viewport.notify` from `onClick`.
  */
-import { component } from "@anjunar/scalajs-ui-core";
-import { defined } from "./internal.js";
+import { component, defined } from "@anjunar/scalajs-ui-core";
 
 export type NotificationKind = "info" | "success" | "warning" | "error";
 

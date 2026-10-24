@@ -48,7 +48,7 @@
     "forms.js",
     "editor.js",
     "editor-api.js",
-    "dist",
+    "dist/fullopt",
     "types",
     "README.md"
   ],

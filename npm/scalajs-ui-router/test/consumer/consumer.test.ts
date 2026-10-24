@@ -106,7 +106,8 @@ beforeAll(() => {
   );
 
   // --legacy-peer-deps: scalajs-ui-core declares a peer on the CSS package this probe
-  // does not install (it renders no stylesheet).
+  // does not install (it renders no stylesheet). Optional or not, npm resolves a peer
+  // two packages share against the registry, where the SNAPSHOT range does not exist.
   npm(["install", "--no-audit", "--no-fund", "--legacy-peer-deps", "--silent"], consumer);
 });
 

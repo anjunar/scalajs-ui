@@ -1,6 +1,7 @@
 package ui.bridge
 
 import ui.core.request.RequestContext
+import ui.core.state.Property
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -122,6 +123,65 @@ class UiRuntimeBridgeSpec extends AsyncFlatSpec with Matchers {
       result.html should include("<button")
       result.html should include("Go")
       result.html should include("disabled")
+    }
+  }
+
+  it should "treat an option that is present but undefined like an absent one" in {
+    // `dsl.ts` spreads `{ label, ...options }`: a consumer without `exactOptionalPropertyTypes`
+    // (TypeScript's default) legitimately writes `{ type: cond ? "submit" : undefined }`, which
+    // arrives here as a key holding `undefined`, not as a missing key. That must not become
+    // `setAttribute("type", undefined)`.
+    def button(options: js.Dictionary[js.Any]): Future[SsrResultHandle] =
+      render { scope =>
+        scope.component("button", options, (_, _) => ())
+        ()
+      }
+
+    for {
+      absent   <- button(js.Dictionary[js.Any]("label" -> "Go", "type" -> js.undefined))
+      explicit <- button(js.Dictionary[js.Any]("label" -> "Go", "type" -> "submit"))
+    } yield {
+      absent.html should include("<button")
+      absent.html should not include "type="
+      absent.html should not include "undefined"
+      explicit.html should include("type=\"submit\"")
+    }
+  }
+
+  "the document head facade" should "fill a head group from the variadic set() call TypeScript makes" in {
+    // `contract.ts` declares `HeadGroupHandle.set(...entries)`, so `document.ts` consumers call it
+    // positionally -- `set(title(...), meta(...))` -- which is what `js.Dynamic` reproduces here:
+    // a JS-level call through the rest parameter, not a Scala varargs call that could paper over a
+    // mismatch in how the parameter is declared.
+    val build: ScopeBody = { scope =>
+      scope.head((_, _) => ())
+      scope.child(
+        "main",
+        (_, mainScope) => {
+          val group = mainScope.documentHead().handle()
+          group
+            .asInstanceOf[js.Dynamic]
+            .set(
+              js.Dynamic.literal(key = "title", tagName = "title", text = "Page title"),
+              js.Dynamic.literal(
+                key = "meta:name=description",
+                tagName = "meta",
+                attributes = js.Array(
+                  js.Array("name", "description"),
+                  js.Array("content", "Page summary")
+                )
+              )
+            )
+          mainScope.text("body")
+        }
+      )
+      ()
+    }
+
+    render(build).map { result =>
+      result.html should include(">Page title</title>")
+      result.html should include("name=\"description\"")
+      result.html should include("content=\"Page summary\"")
     }
   }
 
@@ -448,6 +508,37 @@ class UiRuntimeBridgeSpec extends AsyncFlatSpec with Matchers {
     }
   }
 
+  it should "keep the default active class when activeClass arrives as an explicit undefined" in {
+    // `router.ts` spreads `{ href, label, ...options }`; `{ activeClass: undefined }` used to render
+    // as `class="ui-link undefined"` on the active link.
+    val home: ScopeBody = { scope =>
+      scope.component(
+        "router-link",
+        js.Dictionary[js.Any]("href" -> "/", "label" -> "Home", "activeClass" -> js.undefined),
+        (_, _) => ()
+      )
+      ()
+    }
+
+    val build: ScopeBody = { scope =>
+      scope.component(
+        "router",
+        js.Dictionary(
+          "routes" -> js.Array[js.Any](jsRoute("/", home)),
+          "config" -> js.Dictionary[js.Any]("initialUrl" -> "/")
+        ),
+        (_, _) => ()
+      )
+      ()
+    }
+
+    render(build).map { result =>
+      result.html should include("Home")
+      result.html should include("ui-link active")
+      result.html should not include "undefined"
+    }
+  }
+
   // --- the viewport facade (JAVASCRIPT_API.md §9, step 7) --------------------
 
   "the viewport facade" should "mount a window that stays open while present in the tree" in {
@@ -527,6 +618,35 @@ class UiRuntimeBridgeSpec extends AsyncFlatSpec with Matchers {
       result.html should include("scalajs-ui-viewport-overlay")
       result.html should include("overlay body")
     }
+  }
+
+  // `window`/`notification` hang their "close if unmounted early" disposable off the component the
+  // call was made from -- the button, under the bare-onClick idiom. Both halves of the coupling
+  // are observable through what runs when that parent is disposed.
+  "the viewport facade's close-on-dispose coupling" should "close a window that is still showing when its parent goes" in {
+    val parent  = new GenericElement("div")
+    val visible = Property(true)
+    var closed  = 0
+
+    ViewportFactories.closeWhenDisposed(parent, visible) { closed += 1 }
+    parent.dispose()
+
+    closed shouldBe 1
+  }
+
+  it should "forget a window that already closed, so a long-lived button retains nothing per click" in {
+    val parent  = new GenericElement("div")
+    val visible = Property(true)
+    var closed  = 0
+
+    ViewportFactories.closeWhenDisposed(parent, visible) { closed += 1 }
+    visible.set(false)
+    // The subscription on `visible` is released with the registration: a later flip is nobody's
+    // business any more.
+    visible.set(true)
+    parent.dispose()
+
+    closed shouldBe 0
   }
 
   "the component registry" should "reject an unregistered name" in {

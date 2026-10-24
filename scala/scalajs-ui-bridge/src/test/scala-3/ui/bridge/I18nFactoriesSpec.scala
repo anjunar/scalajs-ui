@@ -100,6 +100,43 @@ class I18nFactoriesSpec extends AsyncFlatSpec with Matchers {
     render(build).map(_.html should include("Hallo Mira"))
   }
 
+  it should "match a contextual (i18nc) message against its catalog entry" in {
+    // `i18n.ts` crosses `context` as `contract.ts`'s `MessageContext` -- an object `{ value }`, not
+    // the bare string. `MessageCatalog.entryFor` compares contexts by equality, so the crossing has
+    // to read the string inside; wrapping the object itself left two `{ value: "fruit" }` unequal
+    // and no `i18nc` message ever translated. The fingerprint is a fixture both sides share: the
+    // lookup is by fingerprint, then context, and the algorithm is `i18n.test.ts`'s business.
+    def contextualKey(): js.Dictionary[js.Any] =
+      js.Dictionary(
+        "source"       -> "date",
+        "context"      -> js.Dictionary("value" -> "fruit"),
+        "fingerprint"  -> "ctx-date-fruit",
+        "placeholders" -> js.Array[String]()
+      )
+    val message = js.Dictionary[js.Any]("key" -> contextualKey(), "args" -> js.Array[js.Any]())
+    val entry   = js.Dictionary[js.Any](
+      "key"          -> contextualKey(),
+      "translations" -> js.Dictionary("de" -> "Dattel")
+    )
+
+    val build: js.Function1[ScopeHandleBridge, Unit] = { scope =>
+      scope.component(
+        "i18n-provider",
+        jsProviderOptions(catalog = js.Array[js.Any](entry), initialUrl = "/de/"),
+        (_, inner) => {
+          inner.text(inner.i18nText(message.asInstanceOf[RuntimeMessageFacade]))
+          ()
+        }
+      )
+      ()
+    }
+
+    render(build).map { result =>
+      result.html should include("Dattel")
+      result.html should not include "date"
+    }
+  }
+
   it should "expose the resolved locale and let i18nSetLocale change what i18nText resolves" in {
     val catalog          = js.Array[js.Any](jsCatalogEntry("de" -> "Hallo {name}"))
     var seenBeforeSwitch = ""

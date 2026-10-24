@@ -22,6 +22,14 @@
  * else in the library. Counting it in the emitted bundle counts copies of the
  * module. A bundler that duplicated scalajs-ui-core would duplicate the literal with
  * it; minification does not touch string contents.
+ *
+ * scalajs-ui-forms and scalajs-ui-json are counted the same way. Each keeps decorator
+ * metadata in a module-level WeakMap (`validators.ts`, `json.ts`); a second
+ * package instance would hold an empty one and silently lose every decorated
+ * field. Vite's `dedupe` is per package, so any literal unique to the package
+ * and reached by the app counts its instances -- the two chosen sit in code
+ * paths the demo pages call (`form()`, `JsonSchema`), so tree-shaking keeps
+ * them.
  */
 import { spawn } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
@@ -30,8 +38,15 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
-/** From `runtime.ts`'s installRuntime() guard. */
-const MARKER = "A UI runtime is already installed";
+/** One literal per package whose module-level state must exist exactly once. */
+const MARKERS = {
+  /** From `runtime.ts`'s installRuntime() guard. */
+  "scalajs-ui-core": "A UI runtime is already installed",
+  /** From `form.ts`'s content-callback guard. */
+  "scalajs-ui-forms": "form requires a content callback",
+  /** From `json.ts`'s `JsonSchema.abstractType` default factory. */
+  "scalajs-ui-json": "An abstract JsonSchema cannot be instantiated without a matching subtype",
+};
 
 const failures = [];
 
@@ -54,6 +69,17 @@ function occurrences(haystack, needle) {
   return count;
 }
 
+function checkMarkers(label, sources) {
+  for (const [pkg, marker] of Object.entries(MARKERS)) {
+    const found = sources.reduce((total, source) => total + occurrences(source, marker), 0);
+    check(
+      `${label}: one ${pkg}`,
+      found === 1,
+      `expected exactly 1 copy of ${pkg} across ${sources.length} chunk(s), found ${found}`
+    );
+  }
+}
+
 async function countInBundle(label, file) {
   let source;
   try {
@@ -63,8 +89,7 @@ async function countInBundle(label, file) {
     return;
   }
 
-  const found = occurrences(source, MARKER);
-  check(label, found === 1, `expected exactly 1 copy of the runtime module, found ${found}`);
+  checkMarkers(label, [source]);
 }
 
 async function clientBundle() {
@@ -81,13 +106,8 @@ async function clientBundle() {
   const sources = await Promise.all(
     scripts.map((name) => readFile(join(assets, name), "utf8"))
   );
-  const found = sources.reduce((total, source) => total + occurrences(source, MARKER), 0);
 
-  check(
-    "client build",
-    found === 1,
-    `expected exactly 1 copy of the runtime module across ${scripts.length} chunk(s), found ${found}`
-  );
+  checkMarkers("client build", sources);
 }
 
 async function devServer() {

@@ -14,8 +14,7 @@
  * so `onClick(() => floatingWindow(...))` opens one at click time, matching the
  * Scala idiom exactly.
  */
-import { component } from "@anjunar/scalajs-ui-core";
-import { defined } from "./internal.js";
+import { component, defined } from "@anjunar/scalajs-ui-core";
 
 export interface WindowOptions {
   readonly title: string;

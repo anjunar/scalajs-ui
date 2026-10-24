@@ -66,7 +66,7 @@ Bodies are synchronous. Use `fetchInto` for asynchronous work registered with th
 - [`@anjunar/scalajs-ui-viewport`](scalajs-ui-viewport/README.md) — windows, anchored overlays, and notifications.
 - [`@anjunar/scalajs-ui-controls`](scalajs-ui-controls/README.md) — tabs, carousel, and virtualized collections.
 - [`@anjunar/scalajs-ui-forms`](scalajs-ui-forms/README.md) — model-bound controls and validators.
-- [`@anjunar/scalajs-ui-editor`](scalajs-ui-editor/README.md) — Markdown editor with optional Lexical plugins.
+- [`@anjunar/scalajs-ui-editor`](scalajs-ui-editor/README.md) — the native Ember Markdown editor, with toolbar capabilities selected per instance (`plugins`).
 - [`@anjunar/scalajs-ui-json`](scalajs-ui-json/README.md) — schema and decorator based JSON mapping.
 - [`@anjunar/scalajs-ui-webauthn`](scalajs-ui-webauthn/README.md) — browser WebAuthn and passkey ceremonies.
 - [`@anjunar/scalajs-ui-bridge`](scalajs-ui-bridge/README.md) — the linked Scala.js runtime entry point.

@@ -20,8 +20,11 @@ private[bridge] object RouterLinkFactory extends ComponentFactory {
       body: js.Function2[ComponentHandleBridge, ScopeHandleBridge, Unit]
   )(using parent: AbstractComponent, cursor: Cursor): AbstractComponent = {
     val href        = options.getOrElse("href", "").asInstanceOf[String]
-    val activeClass = options.get("activeClass").map(_.asInstanceOf[String]).getOrElse("active")
-    val label       = options.get("label")
+    val activeClass = ComponentFactory
+      .optional(options, "activeClass")
+      .map(_.asInstanceOf[String])
+      .getOrElse("active")
+    val label = ComponentFactory.optional(options, "label")
 
     RouterLink.routerLink(href, activeClass) {
       val link       = summon[Anchor]

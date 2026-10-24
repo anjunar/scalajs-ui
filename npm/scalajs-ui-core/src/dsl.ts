@@ -99,6 +99,27 @@ export function documentHead(): DocumentHeadHandle | null {
 /* -------------------------------------------------------- library components */
 
 /**
+ * Drops `undefined` entries from an options object before it crosses to the bridge.
+ *
+ * TypeScript's optional `type?: ...` is *missing* from an object literal when omitted,
+ * but *present as `undefined`* when it came from a variable -- `{ label, ...options }`
+ * with `options = { type: cond ? "submit" : undefined }` is legal without
+ * `exactOptionalPropertyTypes` (TypeScript's default) and spreads the `undefined`
+ * straight through. The Scala factories read options by key, and a key holding
+ * `undefined` is not an absent key: it became `setAttribute("type", undefined)` (an
+ * SSR error) or `class="ui-link undefined"`. Every wrapper that spreads caller options
+ * passes them through here; `scalajs-ui-controls`, `-forms`, `-viewport` and `-editor`
+ * import this one rather than keeping a copy each.
+ */
+export function defined(entries: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(entries)) {
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+/**
  * Mounts a component from the runtime's registry.
  *
  * The typed wrappers below are thin: they exist so that `vbox()` reads like the
@@ -128,7 +149,7 @@ export function button(
   options: ButtonOptions = {},
   body: Body = noBody
 ): ComponentHandle {
-  return component("button", { label: resolveTextLike(label), ...options }, body);
+  return component("button", defined({ label: resolveTextLike(label), ...options }), body);
 }
 
 /** Imperative view of the nearest Drawer, handed to its composition body. */

@@ -7,7 +7,7 @@ import type {
   SsrOptions,
   SsrResult,
 } from "./contract.js";
-import { withScope } from "./scope.js";
+import { scopeBody } from "./scope.js";
 
 let installed: UiRuntime | null = null;
 
@@ -70,5 +70,5 @@ export function renderToString(
 }
 
 function asBuild(body: () => void): Build {
-  return (scope) => withScope(scope, null, body);
+  return scopeBody(body);
 }
