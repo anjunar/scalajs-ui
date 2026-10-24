@@ -4,7 +4,7 @@ import ui.core.component.{AbstractComponent, Runtime}
 import ui.core.dsl.DslLayer
 import ui.core.layout.Div.div
 import ui.core.layout.TextComponent.text
-import ui.core.render.{Cursor, SsrCursor}
+import ui.core.render.{Cursor, HostMutationGuard, HostWriteBlocked, SsrCursor}
 import ui.core.state.ListProperty
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -65,6 +65,32 @@ class ForeachChildOwnershipSpec extends AnyFlatSpec with Matchers {
 
     foreach.children should contain(stranger)
   }
+
+  it should "leave its bookkeeping untouched when a guarded removal is refused" in {
+    val items   = ListProperty[String](js.Array("a", "b", "c"))
+    val cursor  = new SsrCursor()
+    val root    = Runtime.mount(new OwnershipRoot(items), cursor)
+    val foreach = root.children.head
+    val lease   = HostMutationGuard.protect(foreach.children.head.children.head.host)
+    try {
+      intercept[HostWriteBlocked](items.remove(0))
+      foreach.children.size shouldBe 3
+      childTexts(root) shouldBe Seq("a", "b", "c")
+      htmlTexts(cursor) shouldBe Seq("a", "b", "c")
+    } finally lease.dispose()
+
+    // The list already dropped "a" while Foreach still shows it. Later structural changes must
+    // still place a component at the same position logically and physically: before, the refused
+    // item had already left Foreach's own bookkeeping, so this insert landed before "b" in the
+    // children list but before "c" in the host tree.
+    items.insert(1, "x")
+
+    childTexts(root) shouldBe Seq("a", "x", "b", "c")
+    htmlTexts(cursor) shouldBe Seq("a", "x", "b", "c")
+  }
+
+  private def htmlTexts(cursor: SsrCursor): Seq[String] =
+    "<div>([^<]*)</div>".r.findAllMatchIn(cursor.collectHtml()).map(_.group(1)).toSeq
 
   private def childTexts(root: AbstractComponent): Seq[String] =
     root.children.head.children.map { item =>

@@ -1,12 +1,5 @@
 package ui.core.i18n
 
-import ui.core.component.AbstractComponent
-import ui.core.di.Context
-import ui.core.state.{Property, ReadOnlyProperty}
-import ui.core.text.TextValue
-
-import java.util.regex.Matcher
-
 final class MessageCatalog private (entries: Map[MessageFingerprint, CatalogEntry]) {
   def entryFor(key: MessageKey): Option[CatalogEntry] =
     entries.get(key.fingerprint).filter(_.key.context == key.context)

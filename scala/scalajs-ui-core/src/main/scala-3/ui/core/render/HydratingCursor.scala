@@ -25,8 +25,10 @@ final class HydratingCursor private (
   override def isHydrating: Boolean =
     true
 
-  override def browserUrl: Option[String] =
-    Some(s"${dom.window.location.pathname}${dom.window.location.search}")
+  override def browserUrl: Option[String] = {
+    val location = dom.window.location
+    Some(s"${location.pathname}${location.search}${location.hash}")
+  }
 
   override def asyncContext: Option[AsyncRenderContext] =
     currentAsyncContext
@@ -78,7 +80,7 @@ final class HydratingCursor private (
       if (mode == HydrationMode.Head)
         takeExpectedElementInHead(tag)
       else
-        take()
+        take(skipWhitespace = true)
 
     node match {
       case element: dom.Element if element.tagName.equalsIgnoreCase(tag) =>
@@ -122,7 +124,7 @@ final class HydratingCursor private (
   }
 
   def claimText(initial: String): TextNode = {
-    val node = take()
+    val node = take(skipWhitespace = false)
     node match {
       case text: dom.Text => new DomTextNode(text)
 
@@ -145,7 +147,7 @@ final class HydratingCursor private (
   }
 
   override def claimComment(text: String): CommentNode = {
-    val node = take()
+    val node = take(skipWhitespace = true)
     node match {
       case comment: dom.Comment => new DomCommentNode(comment)
       case other                =>
@@ -230,7 +232,12 @@ final class HydratingCursor private (
   override def before(node: HostNode): Cursor =
     insertion.before(node)
 
-  private def take(): dom.Node =
+  /** The next server node. `skipWhitespace` passes over whitespace-only text nodes, which stand for
+    * no component: an element or comment claim skips them the way the root start and the unclaimed
+    * check do. A text claim never does -- a whitespace-only text node may be exactly the text the
+    * client built.
+    */
+  private def take(skipWhitespace: Boolean): dom.Node =
     nextNode match {
       case Some(node) if stopBefore.contains(node) =>
         throw hydrationFault(
@@ -243,7 +250,11 @@ final class HydratingCursor private (
       // inter-element whitespace, never returned as a node any claim call would consume.
       case Some(comment: dom.Comment) if comment.data == SsrTextNode.BoundaryLabel =>
         nextNode = Option(comment.nextSibling).filter(next => !stopBefore.contains(next))
-        take()
+        take(skipWhitespace)
+
+      case Some(text: dom.Text) if skipWhitespace && HydratingCursor.isIgnorableWhitespace(text) =>
+        nextNode = Option(text.nextSibling).filter(next => !stopBefore.contains(next))
+        take(skipWhitespace)
 
       case Some(node) =>
         nextNode = Option(node.nextSibling).filter(next => !stopBefore.contains(next))
@@ -258,7 +269,7 @@ final class HydratingCursor private (
     }
 
   private def takeComment(expected: String): dom.Comment = {
-    val node = take()
+    val node = take(skipWhitespace = true)
     node match {
       case comment: dom.Comment if comment.data == expected =>
         comment

@@ -19,8 +19,10 @@ final class DomCursor private (
   override def isBrowser: Boolean =
     true
 
-  override def browserUrl: Option[String] =
-    Some(s"${dom.window.location.pathname}${dom.window.location.search}")
+  override def browserUrl: Option[String] = {
+    val location = dom.window.location
+    Some(s"${location.pathname}${location.search}${location.hash}")
+  }
 
   override def asyncContext: Option[AsyncRenderContext] =
     currentAsyncContext

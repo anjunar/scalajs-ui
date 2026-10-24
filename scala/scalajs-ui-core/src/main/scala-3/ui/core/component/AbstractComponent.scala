@@ -101,9 +101,6 @@ abstract class AbstractComponent
     case _                 => None
   }
 
-  private def virtualAnchorCount: Int =
-    virtualStart.size + virtualEnd.size
-
   def compose(cursor: Cursor): Unit = ()
 
   /** Runs after claiming a host, before bindings can overwrite server values. */

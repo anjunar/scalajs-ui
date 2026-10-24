@@ -24,11 +24,16 @@ final class SsrHostElement(val tagName: String) extends HostElement, SsrNode {
   def setProperty(name: String, value: Any): Unit = {
     HostMutationGuard.checkRemoval(this)
     properties(name) = value
-    value match {
-      case boolean: Boolean if boolean => attrs(name) = name
-      case _: Boolean                  => attrs.remove(name)
-      case null                        => attrs.remove(name)
-      case other                       => attrs(name) = other.toString
+    // Only a property with a content attribute reaches the HTML. The rest -- selectedIndex,
+    // textContent -- has no attribute form; serializing it would add a bogus attribute the client
+    // never set.
+    SsrHostElement.reflectedAttributes.get(name).foreach { attribute =>
+      value match {
+        case boolean: Boolean if boolean => attrs(attribute) = attribute
+        case _: Boolean                  => attrs.remove(attribute)
+        case null                        => attrs.remove(attribute)
+        case other                       => attrs(attribute) = other.toString
+      }
     }
   }
 
@@ -98,6 +103,14 @@ final class SsrHostElement(val tagName: String) extends HostElement, SsrNode {
     HostMutationGuard.checkWrite(this)
     HostMutationGuard.checkRemoval(child)
     children.remove(index)
+    // Every later sibling moved back by one. Their hints would now point past them, and a lookup
+    // would scan forward in vain before falling back to a full search -- see SsrNode.indexIn.
+    // Re-hinting costs no more than the shift the removal itself just performed.
+    var shifted = index
+    while (shifted < children.length) {
+      SsrNode.setHint(children(shifted), shifted)
+      shifted += 1
+    }
     SsrNode.setHint(child, -1)
     child.asInstanceOf[SsrNode].parentElement = None
   }
@@ -114,9 +127,12 @@ final class SsrHostElement(val tagName: String) extends HostElement, SsrNode {
   def childCount: Int = children.length
 
   def renderHtml(): String = {
+    // The style string is attribute text like any other: a quoted font-family or an `&` in a
+    // url() would otherwise end the attribute early, and the client would read back a different
+    // value than the server set.
     val styleStr =
       if (styles.isEmpty) ""
-      else s""" style="${styles.map { case (k, v) => s"$k: $v" }.mkString("; ")}""""
+      else s""" style="${escapeAttr(styles.map { case (k, v) => s"$k: $v" }.mkString("; "))}""""
 
     val attrStr = attrs.map { case (k, v) => s""" $k="${escapeAttr(v)}"""" }.mkString
     val open    = s"<$tagName$attrStr$styleStr>"
@@ -170,4 +186,24 @@ final class SsrHostElement(val tagName: String) extends HostElement, SsrNode {
     // Most values need no escaping; the replacements would still build three new strings.
     if (value.indexOf('&') < 0 && value.indexOf('"') < 0 && value.indexOf('<') < 0) value
     else value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;")
+}
+
+object SsrHostElement {
+
+  /** DOM properties that components set during SSR and that have a content attribute to carry them
+    * into the HTML, keyed by property name. The attribute name differs in case for `readOnly`; HTML
+    * attributes are lowercase.
+    */
+  private val reflectedAttributes: Map[String, String] =
+    Map(
+      "value"    -> "value",
+      "checked"  -> "checked",
+      "selected" -> "selected",
+      "disabled" -> "disabled",
+      "readOnly" -> "readonly",
+      "required" -> "required",
+      "multiple" -> "multiple",
+      "open"     -> "open",
+      "hidden"   -> "hidden"
+    )
 }

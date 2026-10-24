@@ -122,6 +122,27 @@ class RuntimeLifecycleSpec extends AnyFlatSpec with Matchers {
     parentCursor.subCalls shouldBe 1
   }
 
+  "DslLayer.renderInto" should "insert through the resolved content cursor once hydration completed" in {
+    val ssr    = new SsrCursor()
+    val cursor = new HydrationLikeCursor(ssr)
+    val root   = Runtime.mount(new EmptyRoot(), cursor)
+
+    cursor.completeHydration()
+
+    // The raw composition cursor has no server nodes left to claim; only its `fresh` resolution
+    // may insert now.
+    DslLayer.renderInto(root) {
+      Runtime.mount(new Label("span", "late"), summon[Cursor], Some(summon[AbstractComponent]))
+    }
+
+    ssr.collectHtml() shouldBe "<main><span>late</span></main>"
+  }
+
+  it should "reject a component that is not mounted" in {
+    val error = intercept[IllegalStateException](DslLayer.renderInto(new EmptyRoot()) {})
+    error.getMessage should include("has no mounted content cursor")
+  }
+
   private def htmlText(html: String): String =
     html.replaceAll("<[^>]+>", "")
 
@@ -201,6 +222,40 @@ class RuntimeLifecycleSpec extends AnyFlatSpec with Matchers {
         }
       )
     }
+  }
+
+  /** Stands in for HydratingCursor, which needs a DOM the test environment lacks. Claims come from
+    * the delegate until the session completes; afterwards a claim faults like an exhausted
+    * hydration range, and only `fresh`/`insertion` may insert.
+    */
+  private final class HydrationLikeCursor(delegate: Cursor, session: HydrationLikeSession)
+      extends Cursor {
+    def this(delegate: Cursor) = this(delegate, new HydrationLikeSession)
+
+    override def supportsAnchors: Boolean        = delegate.supportsAnchors
+    override def isHydrating: Boolean            = !session.completed
+    override def parentHost: Option[HostElement] = delegate.parentHost
+    override def completeHydration(): Unit       = session.completed = true
+    override def insertion: Cursor               = delegate
+    override def fresh: Cursor                   = if (session.completed) insertion else this
+
+    override def claimElement(tag: String): HostElement  = claim(delegate.claimElement(tag))
+    override def claimText(initial: String): TextNode    = claim(delegate.claimText(initial))
+    override def claimComment(text: String): CommentNode = claim(delegate.claimComment(text))
+
+    override def sub(host: HostElement): Cursor =
+      new HydrationLikeCursor(delegate.sub(host), session)
+
+    override def before(node: HostNode): Cursor = delegate.before(node)
+
+    private def claim[N](node: => N): N =
+      if (session.completed)
+        throw new IllegalStateException("Hydration fault: There is no further DOM node.")
+      else node
+  }
+
+  private final class HydrationLikeSession {
+    var completed = false
   }
 
   private final class CountingCursor(delegate: Cursor) extends Cursor {

@@ -1,12 +1,5 @@
 package ui.core.i18n
 
-import ui.core.component.AbstractComponent
-import ui.core.di.Context
-import ui.core.state.{Property, ReadOnlyProperty}
-import ui.core.text.TextValue
-
-import java.util.regex.Matcher
-
 final case class I18nConfig(
     resolver: I18nResolver,
     supportedLocales: Seq[I18nLocale],

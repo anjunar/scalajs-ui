@@ -69,6 +69,26 @@ class StyleDslSpec extends AnyFlatSpec with Matchers {
     cursor.collectHtml() shouldBe "<main style=\"padding: 8px\"></main>"
   }
 
+  it should "escape the inline style like any other attribute" in {
+    val html = Runtime.renderToString { cursor =>
+      Runtime.mount(
+        new StyleRoot {
+          override protected def content(using AbstractComponent, Cursor): Unit =
+            style {
+              css("font-family", "\"Inter\", sans-serif")
+              css("background-image", "url(/a?x=1&y=2)")
+            }
+        },
+        cursor
+      )
+    }
+
+    // Unescaped, the quote would end the attribute after `font-family: ` and the client would read
+    // back a different value than the server set.
+    html shouldBe "<main style=\"font-family: &quot;Inter&quot;, sans-serif; " +
+      "background-image: url(/a?x=1&amp;y=2)\"></main>"
+  }
+
   it should "remove a property by its CSS name" in {
     val html = Runtime.renderToString { cursor =>
       Runtime.mount(

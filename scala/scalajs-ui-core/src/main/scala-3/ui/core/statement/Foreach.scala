@@ -102,9 +102,12 @@ class Foreach[V](
 
   private def unmountAt(index: Int): Unit =
     if (index >= 0 && index < mounted.length) {
-      val item = mounted.remove(index)
-      // Runtime.unmount removes the child from the children list itself.
-      Runtime.unmount(item)
+      // Runtime.unmount removes the child from the children list itself. It can also refuse -- a
+      // mutation guard on one of the item's hosts throws HostWriteBlocked -- so the bookkeeping
+      // here changes only once the item is really gone, or `mounted`, `_children` and the host
+      // tree would describe three different lists.
+      Runtime.unmount(mounted(index))
+      mounted.remove(index)
     } else {
       resetAll()
     }

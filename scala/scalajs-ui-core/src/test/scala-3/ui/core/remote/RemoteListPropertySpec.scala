@@ -1,6 +1,6 @@
 package ui.core.remote
 
-import ui.core.state.{ListDataSource, ListProperty}
+import ui.core.state.{Disposable, ListDataSource, ListProperty}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -558,6 +558,160 @@ class RemoteListPropertySpec extends AnyFlatSpec with Matchers {
     completed shouldBe 1
   }
 
+  it should "skip indexed listeners disposed earlier in the same notification" in {
+    val remote            = pagedMembers(total = 100, pageSize = 10)
+    val observed          = mutable.ArrayBuffer.empty[String]
+    var later: Disposable = Disposable.empty
+    remote.observeIndexedChanges(_ => later.dispose())
+    later = remote.observeIndexedChanges(_ => observed += "later")
+    remote.observeIndexedChanges(_ => observed += "last")
+
+    remote.reload()
+
+    observed.toSeq shouldBe Seq("last")
+  }
+
+  "A failing observer" should "not leave the request pending or deduplicate onto it forever" in {
+    val loader   = new ControllableLoader(total = 1000)
+    val remote   = remoteWith(loader)
+    var failures = 1
+    remote.observeIndexedChanges { _ =>
+      if (failures > 0) {
+        failures -= 1
+        throw new IllegalStateException("listener failed")
+      }
+    }
+
+    val first = remote.loadMore(PageQuery(100, 10))
+    loader.completeNext()
+
+    first.value match {
+      case Some(Failure(error)) => error.getMessage shouldBe "listener failed"
+      case other                => fail(s"Failure erwartet, war $other")
+    }
+    remote.loadingProperty.get shouldBe false
+    // The page itself was installed before the listener ran.
+    remote.isRangeLoaded(100, 110) shouldBe true
+
+    // An identical request starts again instead of joining a Future that never completes.
+    val second = remote.loadMore(PageQuery(100, 10))
+    second should not be theSameInstanceAs(first)
+    loader.requestCount shouldBe 2
+    loader.completeNext()
+    second.value.map(_.isSuccess) shouldBe Some(true)
+    remote.loadingProperty.get shouldBe false
+  }
+
+  it should "release a failed request even when an error observer throws" in {
+    var requests = 0
+    val remote   = RemoteListProperty[String, PageQuery](
+      loader = RemoteLoader { _ =>
+        requests += 1
+        Future.failed(new IllegalStateException("request failed"))
+      },
+      initialQuery = PageQuery(0, 10),
+      executionContext = ExecutionContext.parasitic
+    )
+    remote.errorProperty.observeWithoutInitial { error =>
+      if (error.nonEmpty) throw new IllegalArgumentException("observer failed")
+    }
+
+    val first = remote.reload()
+
+    first.value.map(_.isFailure) shouldBe Some(true)
+    remote.loadingProperty.get shouldBe false
+    remote.errorProperty.get.map(_.getMessage) shouldBe Some("request failed")
+
+    remote.reload()
+    requests shouldBe 2
+    remote.loadingProperty.get shouldBe false
+  }
+
+  "An unknown total" should "stay unknown across local mutations and later pages" in {
+    val remote = pagedMembers(total = 1000, pageSize = 10, reportTotal = false)
+
+    remote.reload()
+    remote.remove(0)
+    remote.totalCountProperty.get shouldBe None
+    remote.totalLength shouldBe 9
+
+    // Previously the removal turned the unknown total into Some(9); the appended page carried no
+    // count, so totalLength stayed at 9 while 19 items were loaded.
+    remote.loadMore()
+    remote.loadedLength shouldBe 19
+    remote.totalCountProperty.get shouldBe None
+    remote.totalLength should be >= remote.loadedLength
+
+    // ... and addOne then picked absolute index 9, which was already loaded.
+    remote.addOne("appended")
+    remote.totalCountProperty.get shouldBe None
+    remote.loadedLength shouldBe 20
+    remote.itemAt(remote.totalLength - 1) shouldBe Some("appended")
+    remote.get.toSeq.last shouldBe "appended"
+    remote.get.toSeq.take(19) shouldBe ((1 until 10) ++ (10 until 20)).map(index =>
+      s"Member $index"
+    )
+  }
+
+  it should "grow a stale known total to the end of an appended page" in {
+    val remote = RemoteListProperty[String, PageQuery](
+      loader = RemoteLoader { query =>
+        val from = math.max(0, query.index)
+        val to   = from + query.limit
+        Future.successful(
+          RemotePage[String, PageQuery](
+            items = (from until to).map(index => s"Member $index"),
+            offset = Some(from),
+            nextQuery = Some(PageQuery(to, query.limit)),
+            totalCount = Option.when(from == 0)(10)
+          )
+        )
+      },
+      initialQuery = PageQuery(0, 10),
+      executionContext = ExecutionContext.parasitic
+    )
+
+    remote.reload()
+    remote.totalCountProperty.get shouldBe Some(10)
+    remote.remove(0)
+    remote.totalCountProperty.get shouldBe Some(9)
+
+    remote.loadMore()
+
+    remote.loadedLength shouldBe 19
+    remote.totalCountProperty.get shouldBe Some(20)
+    remote.totalLength shouldBe 20
+  }
+
+  "loadMore" should "append a page without an offset at the sequential end, not after a range" in {
+    val remote = RemoteListProperty[String, PageQuery](
+      loader = RemoteLoader { query =>
+        val from = math.max(0, query.index)
+        Future.successful(
+          RemotePage[String, PageQuery](
+            items = (from until from + query.limit).map(index => s"Member $index"),
+            nextQuery = Some(PageQuery(from + query.limit, query.limit))
+          )
+        )
+      },
+      initialQuery = PageQuery(0, 10),
+      executionContext = ExecutionContext.parasitic,
+      rangeQueryUpdater = Some((query, index, limit) => query.copy(index = index, limit = limit))
+    )
+
+    remote.reload()
+    remote.ensureRangeLoaded(500, 510)
+    remote.loadedLength shouldBe 20
+
+    // The dense loaded count is 20, but the paging cursor stands at 10.
+    remote.loadMore()
+
+    remote.isRangeLoaded(0, 20) shouldBe true
+    remote.itemAt(10) shouldBe Some("Member 10")
+    remote.itemAt(20) shouldBe None
+    remote.get.toSeq.take(20) shouldBe (0 until 20).map(index => s"Member $index")
+  }
+
   private def collectRejections(result: Future[?]): Promise[Seq[Throwable]] = {
     val collected = Promise[Seq[Throwable]]()
     result.onComplete {
@@ -626,7 +780,11 @@ class RemoteListPropertySpec extends AnyFlatSpec with Matchers {
 
   private final case class PageQuery(index: Int, limit: Int)
 
-  private def pagedMembers(total: Int, pageSize: Int): RemoteListProperty[String, PageQuery] =
+  private def pagedMembers(
+      total: Int,
+      pageSize: Int,
+      reportTotal: Boolean = true
+  ): RemoteListProperty[String, PageQuery] =
     RemoteListProperty[String, PageQuery](
       loader = RemoteLoader { query =>
         val from = math.max(0, query.index)
@@ -637,7 +795,7 @@ class RemoteListPropertySpec extends AnyFlatSpec with Matchers {
             items = (from until to).map(index => s"Member $index"),
             offset = Some(from),
             nextQuery = Option.when(next < total)(PageQuery(next, pageSize)),
-            totalCount = Some(total),
+            totalCount = Option.when(reportTotal)(total),
             hasMore = Some(next < total)
           )
         )

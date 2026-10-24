@@ -1,16 +1,15 @@
 package ui.core.component
 
-import ui.core.async.AsyncRenderContext
-import ui.core.di.Context
-import ui.core.layout.TextComponent
-import ui.core.render.{Cursor, HostElement, SsrCursor, VirtualHost}
-import ui.core.render.*
+import scala.scalajs.js.annotation.JSExport
 
-import scala.annotation.tailrec
-import scala.concurrent.{ExecutionContext, Future, Promise}
-import scala.scalajs.js.timers.{clearTimeout, setTimeout}
-
-final class SsrTimeoutException(val timeoutMs: Int)
+/** Raised when `Runtime.renderToStringAsync` exceeds its deadline.
+  *
+  * It crosses the JavaScript boundary as it is: `Future.toJSPromise` rejects with the Throwable
+  * itself, and the SSR servers (`server/server.mjs`, `npm/scalajs-ui-demo/server.mjs`) read
+  * `error.status === 504` on it to answer with a gateway timeout instead of a generic 500. Without
+  * the exports the fields would be name-mangled and invisible from JavaScript.
+  */
+final class SsrTimeoutException(@JSExport val timeoutMs: Int)
     extends RuntimeException(s"SSR render timed out after $timeoutMs ms") {
-  val status: Int = 504
+  @JSExport val status: Int = 504
 }

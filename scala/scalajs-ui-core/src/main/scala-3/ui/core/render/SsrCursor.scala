@@ -5,19 +5,21 @@ import ui.core.async.AsyncRenderContext
 final class SsrCursor private (
     parent: Option[SsrHostElement],
     beforeNode: Option[HostNode],
-    emitAnchors: Boolean,
     root: SsrHostElement,
     currentAsyncContext: Option[AsyncRenderContext]
 ) extends Cursor {
 
   def this() =
-    this(None, None, true, new SsrHostElement(""), None)
+    this(None, None, new SsrHostElement(""), None)
 
   def this(asyncContext: AsyncRenderContext) =
-    this(None, None, true, new SsrHostElement(""), Some(asyncContext))
+    this(None, None, new SsrHostElement(""), Some(asyncContext))
 
+  /** Server output always carries the anchors: hydration needs them to find a virtual component's
+    * range again.
+    */
   override def supportsAnchors: Boolean =
-    emitAnchors
+    true
 
   override def asyncContext: Option[AsyncRenderContext] =
     currentAsyncContext
@@ -53,7 +55,6 @@ final class SsrCursor private (
     new SsrCursor(
       Some(host.asInstanceOf[SsrHostElement]),
       None,
-      emitAnchors,
       root,
       currentAsyncContext
     )
@@ -62,7 +63,6 @@ final class SsrCursor private (
     new SsrCursor(
       parent,
       Some(node),
-      emitAnchors,
       root,
       currentAsyncContext
     )

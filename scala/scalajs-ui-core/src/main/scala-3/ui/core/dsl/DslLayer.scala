@@ -13,13 +13,15 @@ object DslLayer {
   def renderInto[A <: AbstractComponent](target: A)(
       body: A ?=> Cursor ?=> Unit
   ): Unit = {
-    val cursor = Option(target._contentCursor).getOrElse {
+    if (!target.isBound || target.isDisposed) {
       throw new IllegalStateException(
         s"Component '${target.getClass.getSimpleName}' has no mounted content cursor."
       )
     }
-
-    body(using target)(using cursor)
+    // Not the raw composition cursor: once hydration has completed, that one has no server nodes
+    // left to claim and the next claim faults. Runtime resolves the cursor for resumed work --
+    // `fresh` after hydration, before the end anchor of a virtual component.
+    body(using target)(using Runtime.contentCursor(target))
   }
 
   def child[A <: AbstractComponent](component: A)(

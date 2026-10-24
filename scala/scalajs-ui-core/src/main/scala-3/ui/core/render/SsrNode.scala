@@ -26,9 +26,11 @@ private[render] object SsrNode {
 
   /** Position of `node` in `nodes`, accelerated by the hint.
     *
-    * The hint is set during insertion, when the position is known anyway. It becomes stale only
-    * forward -- inserts before a node move it onward, never backward -- so it is a lower bound. A
-    * forward search from there over the few positions it has moved since is therefore sufficient.
+    * The hint is set during insertion, when the position is known anyway, and corrected for the
+    * shifted siblings when a child is removed (see `SsrHostElement.removeChild`). It therefore
+    * becomes stale only forward -- inserts before a node move it onward, never backward -- so it is
+    * a lower bound. A forward search from there over the few positions it has moved since is
+    * therefore sufficient.
     *
     * Lookup uses the actual list; if the forward search fails, a full search follows.
     */

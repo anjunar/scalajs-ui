@@ -1,13 +1,9 @@
 package ui.core.remote
 
-import ui.core.state.ListProperty
 import org.scalajs.dom
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.scalajs.js
-import scala.scalajs.js.JSConverters.*
-import scala.scalajs.js.timers.{clearTimeout, setTimeout}
-import scala.util.Try
+
 final case class RestRequest(
     url: String,
     method: String = "GET",
@@ -32,11 +28,19 @@ final case class RestRequest(
     if (normalizedParams.isEmpty) {
       url
     } else {
-      val separator   = if (url.contains("?")) "&" else "?"
+      // The query belongs before a fragment, and a fragment is never part of the query.
+      val (base, fragment) = url.indexOf('#') match {
+        case -1    => (url, "")
+        case index => (url.substring(0, index), url.substring(index))
+      }
+      val separator =
+        if (!base.contains("?")) "?"
+        else if (base.endsWith("?") || base.endsWith("&")) ""
+        else "&"
       val queryString = normalizedParams
         .map { case (key, value) => s"${encodeURIComponent(key)}=${encodeURIComponent(value)}" }
         .mkString("&")
-      s"$url$separator$queryString"
+      s"$base$separator$queryString$fragment"
     }
   }
 

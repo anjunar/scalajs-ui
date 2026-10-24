@@ -66,6 +66,43 @@ class HostEditingSpec extends AnyFlatSpec with Matchers {
     parent.renderHtml() shouldBe "<div><p></p></div>"
   }
 
+  "SSR removal" should "re-hint the siblings it shifts so hints stay lower bounds" in {
+    val parent = new SsrHostElement("ul")
+    val nodes  = (0 until 6).map(index => new SsrHostElement("li"))
+    nodes.foreach(parent.insertBefore(_, None))
+
+    parent.removeChild(nodes(1))
+
+    // A hint pointing past its node would make SsrNode.indexIn scan forward in vain and fall back
+    // to a full search; see the comment there.
+    nodes.drop(2).zipWithIndex.foreach { case (node, offset) =>
+      SsrNode.hintOf(node) shouldBe 1 + offset
+    }
+    SsrNode.hintOf(nodes(1)) shouldBe -1
+
+    parent.insertBefore(nodes(1), Some(nodes(5)))
+    parent.renderHtml() shouldBe "<ul>" + "<li></li>" * 6 + "</ul>"
+    SsrNode.hintOf(nodes(1)) shouldBe 4
+    SsrNode.hintOf(nodes(5)) shouldBe 5
+  }
+
+  "SSR properties" should "reflect only properties that have a content attribute" in {
+    val select = new SsrHostElement("select")
+    select.setProperty("selectedIndex", 2)
+    select.setProperty("value", "x")
+    select.setProperty("readOnly", true)
+    select.setProperty("textContent", "ignored")
+
+    // Still readable as properties, just not serialized.
+    select.property[Int]("selectedIndex") shouldBe Some(2)
+    select.property[String]("textContent") shouldBe Some("ignored")
+    select.renderHtml() shouldBe "<select value=\"x\" readonly=\"readonly\"></select>"
+
+    select.setProperty("readOnly", false)
+    select.setProperty("value", null)
+    select.renderHtml() shouldBe "<select></select>"
+  }
+
   "Runtime.move" should "preserve physical children and later updates across parents" in {
     val (cursor, root) = fixture()
     val left           = child(root, new Box("section"))

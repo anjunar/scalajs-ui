@@ -373,8 +373,9 @@ object Runtime {
   private def renderMountedRoot(component: AbstractComponent, cursor: SsrCursor): String =
     component._host match {
       case host: HostElement => host.renderHtml()
-      case _: VirtualHost    => cursor.collectHtml()
-      case _                 => cursor.collectHtml()
+      // A virtual or text root has no element of its own; the cursor's nameless root holds
+      // whatever it inserted.
+      case _ => cursor.collectHtml()
     }
 
   private[ui] def nearestPhysicalParent(component: AbstractComponent): Option[AbstractComponent] =

@@ -1,13 +1,7 @@
 package ui.core.state
 
-import org.scalajs.dom
-
 import scala.collection.mutable
-import scala.compiletime.uninitialized
-import scala.concurrent.{ExecutionContext, Future}
 import scala.scalajs.js
-import scala.scalajs.js.JSConverters.*
-import scala.util.control.NonFatal
 
 class ListProperty[V](initialValue: js.Array[V] = js.Array[V]())
     extends ReadOnlyProperty[js.Array[V]],
@@ -30,6 +24,12 @@ class ListProperty[V](initialValue: js.Array[V] = js.Array[V]())
   }
 
   def isDirty: Boolean = !arrayEquals(underlying, defaultValue)
+
+  /** Back to the elements the property was built with, or the ones last given to `setDefaultValue`.
+    * Like `Property.reset()`, a list that already holds its default notifies nobody.
+    */
+  def reset(): Unit =
+    if (isDirty) setAll(defaultValue.toSeq)
 
   private def arrayEquals[A](left: js.Array[A], right: js.Array[A]): Boolean =
     (left eq right) ||
@@ -58,20 +58,22 @@ class ListProperty[V](initialValue: js.Array[V] = js.Array[V]())
   }
 
   override def observe(listener: js.Array[V] => Unit): Disposable = {
-    listeners += listener
-    listener(get)
-    () => listeners -= listener
+    val subscription = subscribe(listeners, listener)
+    // Like Property: a listener whose initial callback fails must not stay registered.
+    try listener(get)
+    catch {
+      case error: Throwable =>
+        subscription.dispose()
+        throw error
+    }
+    subscription
   }
 
-  override def observeWithoutInitial(listener: js.Array[V] => Unit): Disposable = {
-    listeners += listener
-    () => listeners -= listener
-  }
+  override def observeWithoutInitial(listener: js.Array[V] => Unit): Disposable =
+    subscribe(listeners, listener)
 
-  override def observeChanges(listener: Change[V] => Unit): Disposable = {
-    changeListeners += listener
-    () => changeListeners -= listener
-  }
+  override def observeChanges(listener: Change[V] => Unit): Disposable =
+    subscribe(changeListeners, listener)
 
   override def prepend(elem: V): this.type = {
     insert(0, elem)
@@ -199,6 +201,23 @@ object ListProperty {
       underlying: js.Array[V] = js.Array[V]()
   ): ListProperty[V] =
     new ListProperty[V](underlying).registerDisposableOwner(owner)
+
+  /** Registers `listener` in `buffer` the way `Property` does: notifications iterate a snapshot, so
+    * a bare `buffer -= listener` would still let a listener run after another listener disposed it
+    * in the same round. The guard makes the disposal take effect immediately.
+    */
+  private[ui] def subscribe[A](
+      buffer: mutable.ArrayBuffer[A => Unit],
+      listener: A => Unit
+  ): Disposable = {
+    var active             = true
+    val guarded: A => Unit = next => if (active) listener(next)
+    buffer += guarded
+    Disposable {
+      active = false
+      buffer -= guarded
+    }
+  }
 
   def subscribeBidirectional[V](a: ListProperty[V], b: ListProperty[V]): Disposable = {
     if (a.eq(b)) return () => ()

@@ -6,7 +6,7 @@ import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 final class RemoteListProperty[V, Query](
     val loader: RemoteLoader[V, Query],
@@ -26,6 +26,12 @@ final class RemoteListProperty[V, Query](
   private val loadedRanges = new LoadedRanges[V]
   if (initialItems.length > 0) loadedRanges.put(math.max(0, initialOffset), initialItems.toSeq)
 
+  // Where the next sequential page goes when the server does not say: the end of the last
+  // sequentially loaded page. The dense loaded count is not that -- a range loaded far ahead of
+  // the paging cursor would otherwise push the next page past the gap.
+  private var sequentialEnd =
+    if (initialItems.length > 0) math.max(0, initialOffset) + initialItems.length else 0
+
   // One load per request rather than a global lock. Overlapping requests are deduplicated rather
   // than rejected. See loadQuery.
   private val pendingLoads = mutable.Map.empty[LoadKey, PendingLoad]
@@ -38,10 +44,8 @@ final class RemoteListProperty[V, Query](
 
   override def isUpdatingItems: Boolean = updatingItems
 
-  override def observeIndexedChanges(listener: RemoteListChange[V] => Unit): Disposable = {
-    indexedListeners += listener
-    Disposable { indexedListeners -= listener }
-  }
+  override def observeIndexedChanges(listener: RemoteListChange[V] => Unit): Disposable =
+    ListProperty.subscribe(indexedListeners, listener)
 
   /** Legacy property callbacks may observe intermediate metadata. Indexed consumers receive one
     * completed event instead, and must not trigger nested mutations from intermediate callbacks.
@@ -137,7 +141,7 @@ final class RemoteListProperty[V, Query](
         loadQuery(
           nextQuery,
           replaceExisting = false,
-          expectedOffset = Some(length),
+          expectedOffset = sequentialEnd,
           sequential = true
         )
       case None => Future.successful(get)
@@ -162,7 +166,7 @@ final class RemoteListProperty[V, Query](
             // queryProperty or the paging cursor. See CHANGE.md P2-6.
             updateRange(queryProperty.get, normalizedFrom, normalizedCount),
             replaceExisting = false,
-            expectedOffset = Some(normalizedFrom),
+            expectedOffset = normalizedFrom,
             sequential = false
           )
         case None =>
@@ -173,17 +177,19 @@ final class RemoteListProperty[V, Query](
     }
 
   def addOne(elem: V): RemoteListProperty.this.type = {
-    val previousTotalLength = totalLength
-    val absoluteIndex       =
+    // The element goes after every known position: the reported total, and never before an
+    // already loaded range, or the new absolute index would collide with a loaded one.
+    val absoluteIndex =
       totalCountProperty.get match {
-        case Some(count) => math.max(0, count)
+        case Some(count) => math.max(count, nextSequentialAbsoluteIndex)
         case None        => nextSequentialAbsoluteIndex
       }
 
     indexedUpdate(RemoteListChange.Structural(ListDataSource.Insert(absoluteIndex, elem, this))) {
       loadedRanges.update(absoluteIndex, elem)
       loadedItems.addOne(elem)
-      totalCountProperty.set(Some(previousTotalLength + 1))
+      // An unknown total stays unknown: a local mutation adds no knowledge about the remote size.
+      totalCountProperty.set(totalCountProperty.get.map(_ => absoluteIndex + 1))
     }
     this
   }
@@ -201,15 +207,16 @@ final class RemoteListProperty[V, Query](
   }
 
   def remove(idx: Int): V = {
-    val previousTotalLength = totalLength
-    val absoluteIndex       = absoluteIndexForLoadedPosition(idx)
-    val removed             = loadedItems(idx)
+    val absoluteIndex = absoluteIndexForLoadedPosition(idx)
+    val removed       = loadedItems(idx)
     indexedUpdate(
       RemoteListChange.Structural(ListDataSource.RemoveAt(absoluteIndex, removed, this))
     ) {
       loadedRanges.removeAt(absoluteIndex)
       loadedItems.remove(idx)
-      totalCountProperty.set(Some(math.max(0, previousTotalLength - 1)))
+      // Every later position moves down by one, the end of the sequential prefix with them.
+      if (absoluteIndex < sequentialEnd) sequentialEnd -= 1
+      totalCountProperty.set(totalCountProperty.get.map(count => math.max(0, count - 1)))
       removed
     }
   }
@@ -219,6 +226,7 @@ final class RemoteListProperty[V, Query](
     refreshLoadingState()
     loadedRanges.clear()
     loadedItems.clear()
+    sequentialEnd = 0
     totalCountProperty.set(Some(0))
     nextQueryProperty.set(None)
     hasMoreProperty.set(false)
@@ -228,7 +236,7 @@ final class RemoteListProperty[V, Query](
     loadQuery(
       query,
       replaceExisting = !append,
-      expectedOffset = if (append) Some(length) else Some(0),
+      expectedOffset = if (append) sequentialEnd else 0,
       sequential = true
     )
 
@@ -244,7 +252,7 @@ final class RemoteListProperty[V, Query](
   private def loadQuery(
       query: Query,
       replaceExisting: Boolean,
-      expectedOffset: Option[Int],
+      expectedOffset: Int,
       sequential: Boolean
   ): Future[js.Array[V]] = {
     val key = LoadKey(query, replaceExisting, sequential)
@@ -286,17 +294,22 @@ final class RemoteListProperty[V, Query](
 
           val isCurrent = startedGeneration == loadGeneration
 
-          result match {
+          // Installing the page or publishing the error runs observers, and an observer may throw.
+          // The pending entry is released regardless: otherwise loading stays true forever and
+          // every identical request joins a Future that never completes.
+          //
+          // A loading=false observer must see the accepted page, not request the same missing
+          // range again in the interval before it is installed -- so apply first, release second.
+          val outcome = result match {
             case Success(page) =>
-              if (isCurrent) applyPage(page, replaceExisting, expectedOffset, sequential)
-              // A loading=false observer must see the accepted page, not request the same missing
-              // range again in the interval before it is installed.
-              releasePending()
-              completion.success(get)
+              Try(if (isCurrent) applyPage(page, replaceExisting, expectedOffset, sequential))
             case Failure(error) =>
-              if (isCurrent) errorProperty.set(Some(error))
-              releasePending()
-              completion.failure(error)
+              Try(if (isCurrent) errorProperty.set(Some(error))).flatMap(_ => Failure(error))
+          }
+          releasePending()
+          outcome match {
+            case Success(_)     => completion.success(get)
+            case Failure(error) => completion.failure(error)
           }
         }
 
@@ -321,20 +334,15 @@ final class RemoteListProperty[V, Query](
   private def applyPage(
       page: RemotePage[V, Query],
       replaceExisting: Boolean,
-      expectedOffset: Option[Int],
+      expectedOffset: Int,
       sequential: Boolean
   ): Unit = {
-    val pageOffset =
-      page.offset
-        .orElse(expectedOffset)
-        .getOrElse {
-          if (replaceExisting) 0
-          else loadedRanges.size
-        }
+    val pageOffset = page.offset.getOrElse(expectedOffset)
+    val pageEnd    = pageOffset + page.items.length
 
     val indexedChange =
       if (replaceExisting) RemoteListChange.Reset[V]()
-      else RemoteListChange.RangeLoaded[V](pageOffset, pageOffset + page.items.length)
+      else RemoteListChange.RangeLoaded[V](pageOffset, pageEnd)
     indexedUpdate(indexedChange) {
       if (replaceExisting) {
         // A real reload produces a different list. Reset is the correct change here, and Foreach
@@ -349,7 +357,6 @@ final class RemoteListProperty[V, Query](
         // list. The dense position of an absolute index is the number of loaded indices before it.
         // Since the page range is contiguous in absolute indices, positions of entries already loaded
         // within it are also contiguous, starting at insertPosition.
-        val pageEnd        = pageOffset + page.items.length
         val insertPosition = loadedRanges.countBefore(pageOffset)
         val replacedCount  = loadedRanges.countIn(pageOffset, pageEnd)
 
@@ -361,11 +368,21 @@ final class RemoteListProperty[V, Query](
 
       // A reload redefines the list and may therefore change a previously known total to unknown.
       // For derived range and paging loads, a missing count is not new information; an explicitly
-      // supplied count may still correct the known value.
+      // supplied count may still correct the known value. A known count that the page itself
+      // outgrows -- stale since a local removal -- is at least as large as the page's end, or an
+      // append would pick an absolute index that is already loaded.
       if (replaceExisting) totalCountProperty.set(page.totalCount)
-      else page.totalCount.foreach(count => totalCountProperty.set(Some(count)))
+      else
+        page.totalCount match {
+          case Some(count) => totalCountProperty.set(Some(count))
+          case None        =>
+            totalCountProperty.get
+              .filter(_ < pageEnd)
+              .foreach(_ => totalCountProperty.set(Some(pageEnd)))
+        }
 
       if (sequential) {
+        sequentialEnd = pageEnd
         nextQueryProperty.set(page.nextQuery)
         hasMoreProperty.set(page.hasMore.getOrElse(page.nextQuery.nonEmpty))
       }
