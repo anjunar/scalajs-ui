@@ -3,6 +3,7 @@ import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/pro
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { siteConfig } from "./site-config.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pagesDir = resolve(projectRoot, "dist", "pages");
@@ -11,9 +12,12 @@ const scalaStaticDir = resolve(projectRoot, "dist", "static");
 const typescriptRoot = resolve(projectRoot, "npm", "scalajs-ui-demo");
 const typescriptStaticDir = resolve(typescriptRoot, "dist", "static");
 
-const scalaBasePath = "/scalajs-ui/scala";
-const typescriptBasePath = "/scalajs-ui/typescript";
-const siteUrl = "https://anjunar.github.io/scalajs-ui";
+// site.config.json is the one source of the deploy path and URL (tools/site-config.mjs).
+// The two demos live one level below it.
+const sitePath = siteConfig.basePath;
+const siteUrl = siteConfig.siteUrl;
+const scalaBasePath = `${sitePath}/scala`;
+const typescriptBasePath = `${sitePath}/typescript`;
 
 await rm(pagesDir, { recursive: true, force: true });
 await mkdir(pagesDir, { recursive: true });
@@ -104,7 +108,7 @@ async function generatePagesMetadata() {
     if (/<meta\b[^>]*\bname="robots"[^>]*\bcontent="[^"]*noindex/i.test(html)) continue;
     const canonical = html.match(/<link\b[^>]*\brel="canonical"[^>]*\bhref="([^"]+)"/i)?.[1];
     const url = new URL(canonical ?? path.replace(/index\.html$/, ""), `${siteUrl}/`);
-    if (url.origin !== new URL(siteUrl).origin || !url.pathname.startsWith("/scalajs-ui/")) {
+    if (url.origin !== new URL(siteUrl).origin || !url.pathname.startsWith(`${sitePath}/`)) {
       throw new Error(`Pages HTML has an invalid canonical URL: ${file} -> ${url.href}`);
     }
     urls.add(url.href);
@@ -225,7 +229,7 @@ async function validatePages() {
 }
 
 function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function filesUnder(directory) {
@@ -273,9 +277,9 @@ function notFoundPage() {
       <p>404</p>
       <h1>This Scala JS UI 1.0 page does not exist.</h1>
       <nav aria-label="Available destinations">
-        <a href="/scalajs-ui/">Showcase home</a>
-        <a href="/scalajs-ui/scala/">Scala.js demo</a>
-        <a href="/scalajs-ui/typescript/">TypeScript demo</a>
+        <a href="${sitePath}/">Showcase home</a>
+        <a href="${scalaBasePath}/">Scala.js demo</a>
+        <a href="${typescriptBasePath}/">TypeScript demo</a>
       </nav>
     </main>
   </body>

@@ -34,7 +34,7 @@ if (!isProduction) {
     app.use(vite.middlewares)
 } else {
     app.use(
-        `${siteConfig.basePath}/assets` || "/assets",
+        `${siteConfig.basePath}/assets`,
         express.static(resolve(clientDist, "assets"), {
             immutable: true,
             maxAge: "1y"
@@ -75,8 +75,11 @@ app.use(async (req, res, next) => {
 
     // Alles, was wie eine Datei aussieht (Assets, Quelltexte, Sourcemaps, ...),
     // NICHT per SSR rendern - an Vite/static-Handler bzw. 404 durchreichen.
-    const isFileRequest = /\.[a-zA-Z0-9]+$/.test(url.split("?")[0])
-    if (isFileRequest && !url.endsWith(".html")) {
+    // Entschieden wird am Pfad, nicht an der ganzen URL: `/seite.html?x=1`
+    // ist genauso eine HTML-Anfrage wie `/seite.html`.
+    const path = url.split("?")[0]
+    const isFileRequest = /\.[a-zA-Z0-9]+$/.test(path)
+    if (isFileRequest && !path.endsWith(".html")) {
         return next()
     }
 
@@ -113,6 +116,17 @@ app.use(async (req, res, next) => {
     }
 })
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
     console.log(`http://localhost:${port}`)
 })
+
+// Ein Container-Stopp schickt SIGTERM. Ohne Handler stirbt der Prozess sofort und
+// laufende Antworten brechen ab; so werden offene Verbindungen erst zu Ende bedient.
+for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.once(signal, () => {
+        server.close(async () => {
+            if (vite) await vite.close()
+            process.exit(0)
+        })
+    })
+}

@@ -49,8 +49,10 @@ async function clientAssets() {
 
 app.use(async (req, res, next) => {
   const url = req.originalUrl;
-  const isFileRequest = /\.[a-zA-Z0-9]+$/.test(url.split("?")[0]);
-  if (isFileRequest && !url.endsWith(".html")) return next();
+  // Decided on the path, not the whole URL: `/page.html?x=1` is still an HTML request.
+  const path = url.split("?")[0];
+  const isFileRequest = /\.[a-zA-Z0-9]+$/.test(path);
+  if (isFileRequest && !path.endsWith(".html")) return next();
 
   try {
     let render;
@@ -79,6 +81,16 @@ app.use(async (req, res, next) => {
   }
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`http://localhost:${port}`);
 });
+
+// A container stop sends SIGTERM; finish the open responses instead of dying mid-request.
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    server.close(async () => {
+      if (vite) await vite.close();
+      process.exit(0);
+    });
+  });
+}

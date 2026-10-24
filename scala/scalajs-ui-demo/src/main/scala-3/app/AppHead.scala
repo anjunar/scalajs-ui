@@ -1,5 +1,6 @@
 package app
 
+import scala.scalajs.js
 import ui.core.component.AbstractComponent
 import ui.core.document.{DocumentHead, HeadEntry}
 import ui.core.i18n.{I18nLocale, I18nRuntime}
@@ -51,9 +52,14 @@ final class AppHead(
       HeadEntry.link("icon", "favicon.svg", "type" -> "image/svg+xml"),
       HeadEntry.property("og:type", "website"),
       HeadEntry.property("og:site_name", SiteConfig.name),
-      HeadEntry.property("og:image", s"${SiteConfig.siteUrl}/og-image.svg"),
+      // Link-preview scrapers (Facebook, X, LinkedIn, Slack) ignore SVG images, so the
+      // preview card is a PNG rendered from the same og-image.svg; the SVG stays the favicon source.
+      HeadEntry.property("og:image", s"${SiteConfig.siteUrl}/og-image.png"),
+      HeadEntry.property("og:image:type", "image/png"),
+      HeadEntry.property("og:image:width", "1200"),
+      HeadEntry.property("og:image:height", "630"),
       HeadEntry.meta("twitter:card", "summary_large_image"),
-      HeadEntry.meta("twitter:image", s"${SiteConfig.siteUrl}/og-image.svg"),
+      HeadEntry.meta("twitter:image", s"${SiteConfig.siteUrl}/og-image.png"),
       HeadEntry.jsonLd("ld:software", softwareSourceCode),
       HeadEntry.inlineScript("theme-init", themeInitScript)
     )
@@ -132,23 +138,27 @@ final class AppHead(
   private def baseHref: String =
     if (SiteConfig.basePath.isEmpty) "/" else s"${SiteConfig.basePath}/"
 
+  // Encoded by JSON.stringify rather than string interpolation: a quote or backslash in
+  // site.config.json must not be able to break the document out of the script element.
   private def softwareSourceCode: String =
-    s"""{
-       |  "@context": "https://schema.org",
-       |  "@type": "SoftwareSourceCode",
-       |  "name": "${SiteConfig.name}",
-       |  "description": "${SiteConfig.shortDescription}",
-       |  "programmingLanguage": "Scala",
-       |  "runtimePlatform": "Scala.js",
-       |  "license": "https://opensource.org/licenses/MIT",
-       |  "codeRepository": "${SiteConfig.codeRepository}",
-       |  "url": "${SiteConfig.siteUrl}/",
-       |  "author": {
-       |    "@type": "Person",
-       |    "name": "${SiteConfig.author}",
-       |    "url": "${SiteConfig.authorUrl}"
-       |  }
-       |}""".stripMargin
+    js.JSON.stringify(
+      js.Dynamic.literal(
+        "@context"            -> "https://schema.org",
+        "@type"               -> "SoftwareSourceCode",
+        "name"                -> SiteConfig.name,
+        "description"         -> SiteConfig.shortDescription,
+        "programmingLanguage" -> "Scala",
+        "runtimePlatform"     -> "Scala.js",
+        "license"             -> "https://opensource.org/licenses/MIT",
+        "codeRepository"      -> SiteConfig.codeRepository,
+        "url"                 -> s"${SiteConfig.siteUrl}/",
+        "author"              -> js.Dynamic.literal(
+          "@type" -> "Person",
+          "name"  -> SiteConfig.author,
+          "url"   -> SiteConfig.authorUrl
+        )
+      )
+    )
 
   private def themeInitScript: String =
     DesignPreferences.bootstrapScript(SiteConfig.themeStorageKey)

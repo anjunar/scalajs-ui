@@ -53,4 +53,8 @@ build/
 .bsp/
 
 ### Generated static site internals ###
-docs/.ssr/
+# Output of `node tools/build-pages.mjs`; GitHub Pages deploys the workflow artifact.
+/docs/
+# Written by tools/generate-site-metadata.mjs before every client build.
+/scala/scalajs-ui-demo/src/main/webapp/public/sitemap.xml
+/scala/scalajs-ui-demo/src/main/webapp/public/robots.txt
