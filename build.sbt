@@ -257,8 +257,10 @@ lazy val uiControls = Project(id = "scalajs-ui-controls", base = file("scala/sca
   // in seiner compose bereitstellt. Siehe CLAUDE_REVIEW_1.md P1-4.
   .dependsOn(uiCore, uiViewport)
   .settings(
-    name       := "scalajs-ui-controls",
-    moduleName := "scalajs-ui-controls"
+    name                                       := "scalajs-ui-controls",
+    moduleName                                 := "scalajs-ui-controls",
+    // The calendar works with java.time dates in the browser as well.
+    libraryDependencies += "io.github.cquiroz" %% "scala-java-time" % "2.6.0"
   )
   .settings(commonLibrarySettings)
   .settings(commonJsSettings)

@@ -37,6 +37,7 @@ object AppI18n {
       ImageCropperPageTranslations.entries,
       EditorPageTranslations.entries,
       TabsPageTranslations.entries,
+      CalendarPageTranslations.entries,
       CarouselPageTranslations.entries,
       ComboBoxPageTranslations.entries,
       TableViewPageTranslations.entries,

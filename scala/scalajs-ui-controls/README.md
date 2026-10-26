@@ -1,6 +1,6 @@
 # scalajs-ui-controls
 
-Higher-level Scala JS UI 1.0 controls for tabs, carousels, and virtualized collections: `TableView`, `DataGrid`, and `VirtualListView`.
+Higher-level Scala JS UI 1.0 controls for tabs, carousels, calendars, and virtualized collections: `TableView`, `DataGrid`, and `VirtualListView`.
 
 ## Overview
 
@@ -35,6 +35,7 @@ tableView(books) {
 
 - `Tabs` mounts one selected panel by default. Its keep-mounted mode retains inactive panel components.
 - `Carousel` renders slides from a `ListProperty`, can auto-advance in the browser, and supports `sidePreviewCount` from 1 to 3 per side.
+- `Calendar` shows a month as six weeks and binds the chosen day to a `Property[Option[LocalDate]]`. Bounds (`minDate`, `maxDate`), the days that can be chosen (`enabled`) and the days that carry a mark (`marked`) are the application's; names come from `Intl.DateTimeFormat` in the given `locale` or from a replaced `CalendarFormat`. The grid follows the WAI-ARIA date picker pattern: one focusable day, arrow keys by a day or a week, Home and End to the ends of the week, Page Up and Page Down by a month and, with Shift, by a year, Enter and Space to choose.
 - `TableView` renders rows and columns, including sortable headers.
 - `DataGrid` renders a two-dimensional cell layout.
 - `VirtualListView` renders one variable-height item per row.
@@ -49,6 +50,7 @@ SSR renders a stable paged slice of a collection. With crawlability enabled, the
 
 - `ui.control.tabs.Tabs` and `TabPanel`
 - `ui.control.carousel.Carousel`
+- `ui.control.calendar.Calendar` and `CalendarFormat`
 - `ui.control.table.TableView` and `TableColumn`
 - `ui.control.datagrid.DataGrid`
 - `ui.control.virtuallist.VirtualListView`

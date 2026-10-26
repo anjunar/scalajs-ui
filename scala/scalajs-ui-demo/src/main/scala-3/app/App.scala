@@ -79,6 +79,12 @@ class App(
       ),
       NavEntry(
         i18n"Composition",
+        i18n"Calendar",
+        i18n"Months, days and keyboard selection",
+        "/calendar"
+      ),
+      NavEntry(
+        i18n"Composition",
         i18n"Carousel",
         i18n"Looping slides and lifecycle-bound autoplay",
         "/carousel"

@@ -24,6 +24,10 @@ private[control] object KeyboardEvents {
       case value if js.typeOf(value) == "string" => value.asInstanceOf[String]
     }
 
+  /** Whether Shift was held, e.g. to move a calendar by a year instead of a month. */
+  def shift(event: UiEvent): Boolean =
+    raw(event).exists(flag(_, "shiftKey"))
+
   /** False for a key press that belongs to someone else: already handled, part of an IME
     * composition, or carrying Ctrl, Meta or Alt.
     */

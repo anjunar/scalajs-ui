@@ -123,6 +123,11 @@ object AppRoutes {
           TabsPage.render()
         })
       },
+      Route.view("/calendar") { _ =>
+        Future.successful(Route.component {
+          CalendarPage.render()
+        })
+      },
       Route.view("/carousel") { _ =>
         Future.successful(Route.component {
           CarouselPage.render()
