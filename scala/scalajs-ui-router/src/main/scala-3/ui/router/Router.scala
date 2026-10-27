@@ -278,6 +278,14 @@ class Router private[router] (
         finishPage(renderContext.token)
       }
 
+    // While hydrating, the server's render is the answer to this request. A load that fails only in
+    // the browser keeps it: an error page in its place would show a failure the request never had,
+    // and a crawler that renders the page would index that error page.
+    def failedWhileHydrating(error: Throwable): Unit = {
+      target.set(RoutedComponent.adoptingServerRender(renderContext))
+      ec.reportFailure(error)
+    }
+
     try {
       val loaded = route.load(context)
 
@@ -290,7 +298,8 @@ class Router private[router] (
 
         case Some(Failure(error)) =>
           if (renderContext.token == renderToken) {
-            handleRouteFailure(error, context, hydrating)
+            if (hydrating) failedWhileHydrating(error)
+            else handleRouteFailure(error, context, hydrating)
           }
           completed()
 
@@ -312,6 +321,10 @@ class Router private[router] (
                   case Success(component) =>
                     target.set(new RoutedComponent(component, renderContext))
 
+                  // The placeholder set above already holds the server render.
+                  case Failure(error) if hydrating =>
+                    ec.reportFailure(error)
+
                   case Failure(error) =>
                     handleRouteFailure(error, context, hydrating)
                 }
@@ -326,7 +339,8 @@ class Router private[router] (
     } catch {
       case error: Throwable =>
         if (renderContext.token == renderToken) {
-          handleRouteFailure(error, context, hydrating)
+          if (hydrating) failedWhileHydrating(error)
+          else handleRouteFailure(error, context, hydrating)
           completed()
         }
     }

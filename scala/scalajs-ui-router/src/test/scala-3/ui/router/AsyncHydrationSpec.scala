@@ -18,6 +18,7 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
   *
   * The router now adopts the server-rendered tree without validation and replaces it when the
   * loader completes. The cost is a second load -- deliberately chosen instead of an SSR data cache.
+  * If that second load fails, the server render stays: it answered the request successfully.
   */
 class AsyncHydrationSpec extends AnyFlatSpec with Matchers {
 
@@ -100,14 +101,28 @@ class AsyncHydrationSpec extends AnyFlatSpec with Matchers {
     Runtime.unmount(router)
   }
 
-  it should "show the error component when an async loader fails" in {
+  it should "keep the server render when an async loader fails only in the browser" in {
     val pending = Promise[AbstractComponent]()
     val cursor  = new HydrationTestCursor
+    val router  = routerFor(pending.future)
 
-    Runtime.mount(routerFor(pending.future), cursor)
+    Runtime.mount(router, cursor)
     pending.failure(new RuntimeException("Laden fehlgeschlagen"))
 
-    cursor.texts should contain("Route could not be loaded")
+    cursor.adopted should contain("RoutedComponent")
+    cursor.texts should not contain "Route could not be loaded"
+    router.loading.get shouldBe false
+  }
+
+  it should "keep the server render when a loader fails at once" in {
+    val cursor = new HydrationTestCursor
+    val router = routerFor(Future.failed(new RuntimeException("Laden fehlgeschlagen")))
+
+    Runtime.mount(router, cursor)
+
+    cursor.adopted should contain("RoutedComponent")
+    cursor.texts should not contain "Route could not be loaded"
+    router.loading.get shouldBe false
   }
 
   it should "hydrate the parent while adopting an unresolved child route" in {
